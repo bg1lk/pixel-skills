@@ -1,0 +1,866 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>老板雷达 - Boss Radar</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: #0f380f;
+  font-family: 'Courier New', Consolas, monospace;
+  color: #9bbc0f;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 8px;
+  image-rendering: pixelated;
+}
+
+.app {
+  width: 100%;
+  max-width: 520px;
+  background: #0f380f;
+}
+
+/* Title */
+.title-bar {
+  background: #306230;
+  border: 3px solid #8bac0f;
+  padding: 8px 12px;
+  text-align: center;
+  font-size: 18px;
+  font-weight: bold;
+  color: #9bbc0f;
+  text-shadow: 2px 2px 0 #0f380f;
+  letter-spacing: 3px;
+}
+
+/* Status panel */
+.status-panel {
+  background: #0f380f;
+  border: 3px solid #306230;
+  margin-top: 6px;
+  padding: 10px;
+  text-align: center;
+}
+.status-icon {
+  font-size: 48px;
+  line-height: 1;
+  margin: 4px 0;
+}
+.status-text {
+  font-size: 14px;
+  font-weight: bold;
+  letter-spacing: 2px;
+  margin-top: 4px;
+}
+
+/* Camera view */
+.cam-wrap {
+  position: relative;
+  margin-top: 6px;
+  border: 3px solid #306230;
+  background: #000;
+  overflow: hidden;
+  aspect-ratio: 4/3;
+}
+.cam-wrap video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.cam-wrap canvas {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.cam-label {
+  position: absolute;
+  top: 6px; left: 8px;
+  font-size: 9px;
+  color: #8bac0f;
+  background: rgba(15,56,15,0.7);
+  padding: 2px 6px;
+  border: 1px solid #306230;
+  letter-spacing: 1px;
+}
+.cam-rec {
+  position: absolute;
+  top: 6px; right: 8px;
+  font-size: 9px;
+  color: #e63946;
+  font-weight: bold;
+  animation: blink-rec 1s steps(1) infinite;
+}
+@keyframes blink-rec { 0%,49%{opacity:1} 50%,100%{opacity:0} }
+
+/* Radar display */
+.radar-wrap {
+  margin-top: 6px;
+  border: 3px solid #306230;
+  background: #0a2a0a;
+  padding: 10px;
+}
+.radar-title {
+  font-size: 10px;
+  color: #306230;
+  letter-spacing: 2px;
+  margin-bottom: 6px;
+}
+.motion-bar {
+  height: 24px;
+  background: #0f380f;
+  border: 2px solid #306230;
+  position: relative;
+  overflow: hidden;
+}
+.motion-fill {
+  height: 100%;
+  background: #8bac0f;
+  width: 0%;
+  transition: width 0.15s steps(8);
+}
+.motion-fill.warn { background: #f4d03f; }
+.motion-fill.danger { background: #e63946; }
+.motion-threshold {
+  position: absolute;
+  top: 0; bottom: 0;
+  width: 2px;
+  background: #e63946;
+}
+.motion-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 8px;
+  color: #306230;
+  margin-top: 2px;
+}
+
+/* History graph */
+.history-canvas {
+  width: 100%;
+  height: 50px;
+  margin-top: 6px;
+  border: 2px solid #306230;
+  background: #0a2a0a;
+  display: block;
+}
+
+/* Controls */
+.controls {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+  flex-wrap: wrap;
+}
+.btn {
+  flex: 1;
+  min-width: 80px;
+  background: #8bac0f;
+  color: #0f380f;
+  border: 3px solid #0f380f;
+  box-shadow: 3px 3px 0 #306230;
+  font-family: monospace;
+  font-size: 11px;
+  font-weight: bold;
+  padding: 8px 6px;
+  cursor: pointer;
+  text-transform: uppercase;
+  text-align: center;
+  letter-spacing: 1px;
+}
+.btn:hover { background: #9bbc0f; transform: translate(1px,1px); box-shadow: 2px 2px 0 #306230; }
+.btn:active { transform: translate(3px,3px); box-shadow: none; }
+.btn.active { background: #e63946; color: #fff; }
+.btn.off { background: #306230; color: #8bac0f; }
+
+/* Settings */
+.settings {
+  margin-top: 6px;
+  border: 3px solid #306230;
+  padding: 8px;
+  display: none;
+}
+.settings.open { display: block; }
+.setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 4px 0;
+  font-size: 10px;
+}
+.setting-row input[type=range] {
+  width: 120px;
+  accent-color: #8bac0f;
+}
+.setting-row select {
+  background: #306230;
+  color: #9bbc0f;
+  border: 2px solid #8bac0f;
+  font-family: monospace;
+  font-size: 10px;
+  padding: 2px 4px;
+}
+
+/* Alert overlay */
+.alert-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(230,57,70,0.15);
+  z-index: 999;
+  pointer-events: none;
+  animation: alert-flash 0.3s steps(1) infinite;
+}
+.alert-overlay.active { display: block; }
+@keyframes alert-flash { 0%,49%{opacity:1} 50%,100%{opacity:0.3} }
+
+/* Pixel decoration */
+.sep {
+  color: #306230;
+  font-size: 8px;
+  text-align: center;
+  margin: 6px 0 2px;
+  letter-spacing: 2px;
+}
+
+/* Log */
+.log {
+  margin-top: 6px;
+  border: 3px solid #306230;
+  background: #0a2a0a;
+  padding: 6px;
+  max-height: 80px;
+  overflow-y: auto;
+  font-size: 9px;
+  color: #306230;
+}
+.log div { margin: 1px 0; }
+.log .alert-log { color: #e63946; }
+.log .safe-log { color: #8bac0f; }
+
+/* Responsive */
+@media (max-width: 400px) {
+  .title-bar { font-size: 14px; }
+  .status-icon { font-size: 36px; }
+  .btn { font-size: 9px; padding: 6px 4px; }
+}
+
+/* ===== MOBILE ===== */
+@media(max-width:600px){
+  body{overflow-y:auto!important;min-height:100vh;}
+  video{width:100%!important;max-width:100%!important;height:auto!important;}
+  canvas{max-width:100%!important;}
+  #app,.app,.container,.main,.wrapper,[id*="app"],[class*="container"]{width:100%!important;max-width:100%!important;margin:0!important;border-radius:0!important;}
+  button,.btn,.action-btn,[class*="btn"]{min-height:44px;font-size:13px!important;touch-action:manipulation;}
+  input,textarea,select{font-size:16px!important;}
+  .controls,.toolbar,.actions,.panel,.buttons,[class*="controls"],[class*="toolbar"]{flex-wrap:wrap!important;}
+  [style*="width:"][style*="px"]{max-width:100%!important;}
+}
+</style>
+</head>
+<body>
+
+<div class="app">
+  <div class="title-bar">&#9733; &#32; 老板雷达 &#32; &#9733;</div>
+
+  <!-- Status -->
+  <div class="status-panel" id="statusPanel">
+    <div class="status-icon" id="statusIcon">&#128564;</div>
+    <div class="status-text" id="statusText">&#9632; 待机中 &#9632;</div>
+  </div>
+
+  <!-- Camera -->
+  <div class="cam-wrap" id="camWrap">
+    <video id="camVideo" playsinline muted></video>
+    <canvas id="diffCanvas"></canvas>
+    <div class="cam-label" id="camLabel">CAM OFF</div>
+    <div class="cam-rec" id="camRec" style="display:none">&#9679; REC</div>
+  </div>
+
+  <!-- Motion bar -->
+  <div class="radar-wrap">
+    <div class="radar-title">&#9650; 运动检测强度</div>
+    <div class="motion-bar">
+      <div class="motion-fill" id="motionFill"></div>
+      <div class="motion-threshold" id="motionThreshold" style="left:20%"></div>
+    </div>
+    <div class="motion-labels">
+      <span>安全</span>
+      <span>警戒</span>
+      <span>危险!!!</span>
+    </div>
+    <canvas class="history-canvas" id="historyCanvas"></canvas>
+  </div>
+
+  <div class="sep">&#9617;&#9618;&#9619;&#9608;&#9619;&#9618;&#9617;&#9608;&#9617;&#9618;&#9619;&#9608;&#9619;&#9618;&#9617;&#9608;&#9617;&#9618;&#9619;&#9608;&#9619;&#9618;&#9617;</div>
+
+  <!-- Controls -->
+  <div class="controls">
+    <div class="btn" id="btnStart" onclick="toggleMonitor()">&#9658; 开始监控</div>
+    <div class="btn off" id="btnPanic" onclick="panicMode()">&#9888; 紧急切换</div>
+    <div class="btn off" id="btnSettings" onclick="toggleSettings()">&#9881; 设置</div>
+  </div>
+
+  <!-- Settings -->
+  <div class="settings" id="settingsPanel">
+    <div class="setting-row">
+      <span>灵敏度:</span>
+      <input type="range" id="sensitivity" min="5" max="80" value="20" oninput="updateSensitivity(this.value)">
+      <span id="sensVal">20%</span>
+    </div>
+    <div class="setting-row">
+      <span>警报方式:</span>
+      <select id="alertMode" onchange="alertModeChanged()">
+        <option value="sound">8-bit音效</option>
+        <option value="visual">仅闪屏</option>
+        <option value="both" selected>音效+闪屏</option>
+        <option value="silent">静默(仅图标)</option>
+      </select>
+    </div>
+    <div class="setting-row">
+      <span>伪装页面:</span>
+      <select id="panicScreen">
+        <option value="excel">Excel表格</option>
+        <option value="code">VS Code</option>
+        <option value="email">邮件客户端</option>
+        <option value="meeting">会议纪要</option>
+      </select>
+    </div>
+    <div class="setting-row">
+      <span>冷却时间:</span>
+      <select id="cooldown">
+        <option value="2000">2秒</option>
+        <option value="5000" selected>5秒</option>
+        <option value="10000">10秒</option>
+      </select>
+    </div>
+    <div class="setting-row">
+      <span>显示差异:</span>
+      <select id="showDiff" onchange="toggleDiffView()">
+        <option value="off">关闭</option>
+        <option value="on" selected>开启</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- Log -->
+  <div class="log" id="logPanel">
+    <div class="safe-log">[系统] 老板雷达 v1.0 就绪</div>
+    <div>[提示] 将摄像头对准身后，点击开始监控</div>
+  </div>
+</div>
+
+<!-- Alert overlay -->
+<div class="alert-overlay" id="alertOverlay"></div>
+
+<!-- Panic screen (hidden) -->
+<div id="panicOverlay" style="display:none; position:fixed; inset:0; z-index:9999; background:#fff; overflow:auto;"></div>
+
+<script src="../cam-core/cam-core.js"></script>
+<script>
+// ===== STATE =====
+let monitoring = false;
+let bgFrame = null;       // background reference frame (slowly updated)
+let prevFrame = null;      // previous frame for frame-diff fallback
+let frameCount = 0;        // frames since start, used to build initial bg
+let motionLevel = 0;
+let threshold = 20;
+let cooldownMs = 5000;
+let lastAlertTime = 0;
+let alertActive = false;
+let history = new Array(100).fill(0);
+let histIdx = 0;
+let stream = null;
+const alertState = new CamCore.StateFilter(6, 0.5, 0.2);
+
+const video = document.getElementById('camVideo');
+const diffCanvas = document.getElementById('diffCanvas');
+const diffCtx = diffCanvas.getContext('2d', { willReadFrequently: true });
+const histCanvas = document.getElementById('historyCanvas');
+const histCtx = histCanvas.getContext('2d');
+const captureCanvas = document.createElement('canvas');
+const captureCtx = captureCanvas.getContext('2d', { willReadFrequently: true });
+
+// ===== CAMERA =====
+async function startCamera() {
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'environment', width: { ideal: 320 }, height: { ideal: 240 } },
+      audio: false
+    });
+    video.srcObject = stream;
+    await video.play();
+    captureCanvas.width = video.videoWidth || 320;
+    captureCanvas.height = video.videoHeight || 240;
+    diffCanvas.width = captureCanvas.width;
+    diffCanvas.height = captureCanvas.height;
+    document.getElementById('camLabel').textContent = 'CAM ON';
+    document.getElementById('camRec').style.display = 'block';
+    addLog('safe-log', '[摄像头] 已启动 (' + captureCanvas.width + 'x' + captureCanvas.height + ')');
+    return true;
+  } catch(e) {
+    addLog('alert-log', '[错误] 摄像头启动失败: ' + e.message);
+    // Try front camera as fallback
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'user', width: { ideal: 320 }, height: { ideal: 240 } },
+        audio: false
+      });
+      video.srcObject = stream;
+      await video.play();
+      captureCanvas.width = video.videoWidth || 320;
+      captureCanvas.height = video.videoHeight || 240;
+      diffCanvas.width = captureCanvas.width;
+      diffCanvas.height = captureCanvas.height;
+      document.getElementById('camLabel').textContent = 'CAM ON (FRONT)';
+      document.getElementById('camRec').style.display = 'block';
+      addLog('safe-log', '[摄像头] 前置摄像头已启动');
+      return true;
+    } catch(e2) {
+      addLog('alert-log', '[错误] 无法访问任何摄像头');
+      // If in iframe, offer to open in new window (file:// iframe blocks camera)
+      if (window !== window.top) {
+        addLog('alert-log', '[提示] iframe 中摄像头受限，正在新窗口打开...');
+        window.open(location.href, '_blank');
+      } else {
+        addLog('', '[提示] 请在浏览器设置中允许摄像头权限');
+      }
+      return false;
+    }
+  }
+}
+
+function stopCamera() {
+  if (stream) {
+    stream.getTracks().forEach(t => t.stop());
+    stream = null;
+  }
+  video.srcObject = null;
+  document.getElementById('camLabel').textContent = 'CAM OFF';
+  document.getElementById('camRec').style.display = 'none';
+  prevFrame = null;
+  bgFrame = null;
+  frameCount = 0;
+}
+
+// ===== MOTION DETECTION =====
+// Strategy:
+// 1. Calibration phase (first 2 seconds / ~60 frames): learn the scene including the user
+// 2. Only monitor the TOP 60% of the frame (behind the user), ignore bottom 40% (user body)
+// 3. Fast background adaptation for small changes (user fidgeting) — slow for large changes (intruder)
+// 4. Only trigger alarm when a large NEW area changes (someone entering the scene)
+const CALIBRATION_FRAMES = 60;
+const ROI_TOP_RATIO = 0.65; // only analyze top 65% of frame (background behind user)
+const PIXEL_THRESHOLD = 20; // per-pixel change threshold
+const LARGE_CHANGE_THRESHOLD = 30; // large change = likely intruder, don't absorb into bg
+
+function detectMotion() {
+  if (!monitoring || !stream) return;
+
+  captureCtx.drawImage(video, 0, 0, captureCanvas.width, captureCanvas.height);
+  const currentFrame = captureCtx.getImageData(0, 0, captureCanvas.width, captureCanvas.height);
+  // CamCore: normalize light for stability across lighting changes
+  CamCore.normalize(currentFrame);
+  frameCount++;
+
+  // First frame: init background
+  if (!bgFrame) {
+    bgFrame = currentFrame;
+    prevFrame = currentFrame;
+    addLog('', '[校准] 正在学习场景，请保持不动...');
+    updateStatus('\u{1F4F7}', '\u25A0 校准中... \u25A0', '#f4d03f');
+    requestAnimationFrame(detectMotion);
+    return;
+  }
+
+  // Calibration phase: blend aggressively to build stable background (including user)
+  if (frameCount <= CALIBRATION_FRAMES) {
+    const data = currentFrame.data;
+    const bg = bgFrame.data;
+    const blendRate = 0.15; // fast blend during calibration
+    for (let i = 0; i < data.length; i += 4) {
+      bg[i]   = bg[i]   + (data[i]   - bg[i])   * blendRate;
+      bg[i+1] = bg[i+1] + (data[i+1] - bg[i+1]) * blendRate;
+      bg[i+2] = bg[i+2] + (data[i+2] - bg[i+2]) * blendRate;
+    }
+    prevFrame = currentFrame;
+    if (frameCount === CALIBRATION_FRAMES) {
+      addLog('safe-log', '[校准] 完成! 开始监控');
+      updateStatus('\u{1F440}', '\u25A0 监控中 \u25A0', '#8bac0f');
+    }
+    requestAnimationFrame(detectMotion);
+    return;
+  }
+
+  const w = captureCanvas.width;
+  const h = captureCanvas.height;
+  const data = currentFrame.data;
+  const bg = bgFrame.data;
+  const prev = prevFrame.data;
+  const diffData = diffCtx.createImageData(diffCanvas.width, diffCanvas.height);
+  const dd = diffData.data;
+
+  // Only analyze top portion of frame (ROI = region of interest = behind user)
+  const roiMaxRow = Math.floor(h * ROI_TOP_RATIO);
+  const step = 4; // sample every 4th pixel
+  let roiChanged = 0;
+  let roiSampled = 0;
+
+  for (let y = 0; y < roiMaxRow; y++) {
+    for (let x = 0; x < w; x += step) {
+      const i = (y * w + x) * 4;
+      roiSampled++;
+
+      // Diff vs background
+      const bdr = Math.abs(data[i] - bg[i]);
+      const bdg = Math.abs(data[i+1] - bg[i+1]);
+      const bdb = Math.abs(data[i+2] - bg[i+2]);
+      const bgDelta = (bdr + bdg + bdb) / 3;
+
+      if (bgDelta > PIXEL_THRESHOLD) {
+        roiChanged++;
+        dd[i] = 0; dd[i+1] = 255; dd[i+2] = 0; dd[i+3] = Math.min(255, bgDelta * 4);
+      }
+    }
+  }
+
+  // Draw a dim line showing the ROI boundary
+  const roiBoundaryY = roiMaxRow;
+  for (let x = 0; x < w; x++) {
+    const i = (roiBoundaryY * w + x) * 4;
+    dd[i] = 255; dd[i+1] = 255; dd[i+2] = 0; dd[i+3] = 60;
+  }
+
+  // Show diff overlay if enabled
+  if (document.getElementById('showDiff').value === 'on') {
+    diffCtx.putImageData(diffData, 0, 0);
+  } else {
+    diffCtx.clearRect(0, 0, diffCanvas.width, diffCanvas.height);
+  }
+
+  // Calculate motion level from ROI only
+  motionLevel = Math.min(100, Math.floor((roiChanged / roiSampled) * 600));
+
+  updateMotionBar();
+  recordHistory();
+
+  // CamCore: temporal state filter for stable alert triggering
+  const isAlert = alertState.update(motionLevel >= threshold);
+  if (isAlert) {
+    const now = Date.now();
+    if (now - lastAlertTime > cooldownMs) {
+      triggerAlert();
+      lastAlertTime = now;
+    }
+  } else if (alertActive && !alertState.update(motionLevel >= threshold * 0.5)) {
+    clearAlert();
+  }
+
+  // Adaptive background update:
+  // - Small changes (< PIXEL_THRESHOLD): blend fast (8%) — absorbs user fidgeting
+  // - Medium changes (20-30): blend slowly (1%) — gradual lighting shifts
+  // - Large changes (> 30): DON'T blend — this is likely the intruder, keep them visible
+  for (let i = 0; i < data.length; i += 4) {
+    const bdr = Math.abs(data[i] - bg[i]);
+    const bdg = Math.abs(data[i+1] - bg[i+1]);
+    const bdb = Math.abs(data[i+2] - bg[i+2]);
+    const delta = (bdr + bdg + bdb) / 3;
+
+    let blendRate = 0;
+    if (delta < PIXEL_THRESHOLD) {
+      blendRate = 0.08; // fast adapt — user fidgeting, lighting
+    } else if (delta < LARGE_CHANGE_THRESHOLD) {
+      blendRate = 0.01; // slow adapt — moderate change
+    }
+    // delta >= LARGE_CHANGE_THRESHOLD: blendRate = 0, don't absorb intruder
+
+    if (blendRate > 0) {
+      bg[i]   = bg[i]   + (data[i]   - bg[i])   * blendRate;
+      bg[i+1] = bg[i+1] + (data[i+1] - bg[i+1]) * blendRate;
+      bg[i+2] = bg[i+2] + (data[i+2] - bg[i+2]) * blendRate;
+    }
+  }
+
+  prevFrame = currentFrame;
+  requestAnimationFrame(detectMotion);
+}
+
+// ===== UI UPDATES =====
+function updateMotionBar() {
+  const fill = document.getElementById('motionFill');
+  fill.style.width = motionLevel + '%';
+  fill.className = 'motion-fill' + (motionLevel >= threshold ? ' danger' : motionLevel >= threshold * 0.6 ? ' warn' : '');
+}
+
+function recordHistory() {
+  history[histIdx % 100] = motionLevel;
+  histIdx++;
+  drawHistory();
+}
+
+function drawHistory() {
+  const w = histCanvas.width = histCanvas.offsetWidth;
+  const h = histCanvas.height = histCanvas.offsetHeight;
+  histCtx.fillStyle = '#0a2a0a';
+  histCtx.fillRect(0, 0, w, h);
+
+  // Threshold line
+  histCtx.fillStyle = '#e63946';
+  histCtx.globalAlpha = 0.3;
+  const thY = h - (threshold / 100) * h;
+  histCtx.fillRect(0, thY, w, 1);
+  histCtx.globalAlpha = 1;
+
+  // History bars
+  const barW = w / 100;
+  for (let i = 0; i < 100; i++) {
+    const idx = (histIdx - 100 + i + 10000) % 100;
+    const val = history[idx] || 0;
+    const bh = (val / 100) * h;
+    histCtx.fillStyle = val >= threshold ? '#e63946' : val >= threshold * 0.6 ? '#f4d03f' : '#8bac0f';
+    histCtx.fillRect(i * barW, h - bh, Math.max(1, barW - 1), bh);
+  }
+}
+
+function updateStatus(icon, text, color) {
+  document.getElementById('statusIcon').textContent = icon;
+  document.getElementById('statusText').textContent = text;
+  document.getElementById('statusPanel').style.borderColor = color || '#306230';
+}
+
+function addLog(cls, msg) {
+  const log = document.getElementById('logPanel');
+  const d = document.createElement('div');
+  d.className = cls;
+  const t = new Date();
+  d.textContent = String(t.getHours()).padStart(2,'0') + ':' + String(t.getMinutes()).padStart(2,'0') + ':' + String(t.getSeconds()).padStart(2,'0') + ' ' + msg;
+  log.appendChild(d);
+  log.scrollTop = log.scrollHeight;
+  // Keep max 50 entries
+  while (log.children.length > 50) log.removeChild(log.firstChild);
+}
+
+// ===== ALERT =====
+function triggerAlert() {
+  alertActive = true;
+  updateStatus('\u{1F6A8}', '\u25A0 !!! \u8001\u677F\u6765\u4E86 !!! \u25A0', '#e63946');
+  document.getElementById('statusPanel').style.background = '#3a0a0a';
+
+  const mode = document.getElementById('alertMode').value;
+  if (mode === 'sound' || mode === 'both') playAlarm();
+  if (mode === 'visual' || mode === 'both') {
+    document.getElementById('alertOverlay').classList.add('active');
+  }
+
+  addLog('alert-log', '[!!!警报!!!] 检测到运动! 强度: ' + motionLevel + '%');
+
+  // Auto-activate panic mode — instantly show fake work screen
+  panicMode();
+}
+
+function clearAlert() {
+  alertActive = false;
+  updateStatus('\u{1F440}', '\u25A0 \u76D1\u63A7\u4E2D \u25A0', '#8bac0f');
+  document.getElementById('statusPanel').style.background = '#0f380f';
+  document.getElementById('alertOverlay').classList.remove('active');
+}
+
+function playAlarm() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    // Urgent 8-bit alarm pattern
+    const notes = [880, 0, 880, 0, 1100, 0, 1100, 0, 880, 0, 660];
+    let t = ctx.currentTime;
+    notes.forEach((f, i) => {
+      if (f === 0) { t += 0.06; return; }
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = 'square';
+      o.frequency.setValueAtTime(f, t);
+      g.gain.setValueAtTime(0.08, t);
+      g.gain.linearRampToValueAtTime(0, t + 0.08);
+      o.connect(g).connect(ctx.destination);
+      o.start(t);
+      o.stop(t + 0.08);
+      t += 0.08;
+    });
+  } catch(e) {}
+}
+
+// ===== CONTROLS =====
+async function toggleMonitor() {
+  const btn = document.getElementById('btnStart');
+  if (!monitoring) {
+    const ok = await startCamera();
+    if (!ok) return;
+    monitoring = true;
+    btn.textContent = '\u25A0 \u505C\u6B62\u76D1\u63A7';
+    btn.classList.add('active');
+    updateStatus('\u{1F440}', '\u25A0 \u76D1\u63A7\u4E2D \u25A0', '#8bac0f');
+    addLog('safe-log', '[\u7CFB\u7EDF] \u6B63\u5728\u542F\u52A8, \u8BF7\u4FDD\u6301\u4E0D\u52A82\u79D2\u8FDB\u884C\u6821\u51C6...');
+    requestAnimationFrame(detectMotion);
+  } else {
+    monitoring = false;
+    stopCamera();
+    clearAlert();
+    btn.textContent = '\u25B6 \u5F00\u59CB\u76D1\u63A7';
+    btn.classList.remove('active');
+    updateStatus('\u{1F4A4}', '\u25A0 \u5F85\u673A\u4E2D \u25A0', '#306230');
+    motionLevel = 0;
+    updateMotionBar();
+    addLog('', '[\u7CFB\u7EDF] \u76D1\u63A7\u5DF2\u505C\u6B62');
+  }
+}
+
+function panicMode() {
+  // Instantly show a fake work screen
+  const type = document.getElementById('panicScreen').value;
+  const overlay = document.getElementById('panicOverlay');
+  overlay.style.display = 'block';
+  overlay.innerHTML = getPanicHTML(type);
+  addLog('alert-log', '[\u7D27\u6025] \u4F2A\u88C5\u9875\u9762\u5DF2\u6FC0\u6D3B (' + type + ')');
+
+  // Click anywhere to dismiss + reset detection
+  overlay.onclick = () => {
+    overlay.style.display = 'none';
+    overlay.innerHTML = '';
+    // Reset: re-capture background from current frame, clear alert, zero out motion
+    clearAlert();
+    motionLevel = 0;
+    updateMotionBar();
+    bgFrame = null;
+    frameCount = 0;
+    lastAlertTime = 0;
+    addLog('safe-log', '[\u7D27\u6025] \u4F2A\u88C5\u5DF2\u53D6\u6D88, \u91CD\u65B0\u6821\u51C6\u4E2D...');
+  };
+}
+
+function getPanicHTML(type) {
+  if (type === 'excel') return `<div style="font-family:Calibri,Arial,sans-serif;font-size:12px;background:#217346;padding:4px;">
+    <div style="background:#fff;border:1px solid #d0d0d0;padding:0;">
+      <div style="background:#217346;color:#fff;padding:6px 12px;font-size:14px;">Microsoft Excel - Q1_2026_Revenue_Report.xlsx</div>
+      <div style="background:#f3f3f3;padding:4px 8px;border-bottom:1px solid #d0d0d0;font-size:11px;">File  Edit  View  Insert  Format  Data  Tools  Help</div>
+      <table style="width:100%;border-collapse:collapse;font-size:11px;">
+        <tr style="background:#e8e8e8;"><td style="border:1px solid #ccc;padding:3px 8px;width:30px;text-align:center;font-weight:bold;"></td><td style="border:1px solid #ccc;padding:3px 8px;text-align:center;font-weight:bold;">A</td><td style="border:1px solid #ccc;padding:3px 8px;text-align:center;font-weight:bold;">B</td><td style="border:1px solid #ccc;padding:3px 8px;text-align:center;font-weight:bold;">C</td><td style="border:1px solid #ccc;padding:3px 8px;text-align:center;font-weight:bold;">D</td><td style="border:1px solid #ccc;padding:3px 8px;text-align:center;font-weight:bold;">E</td></tr>
+        <tr><td style="border:1px solid #ccc;padding:3px;text-align:center;background:#e8e8e8;">1</td><td style="border:1px solid #ccc;padding:3px 8px;font-weight:bold;">Department</td><td style="border:1px solid #ccc;padding:3px 8px;font-weight:bold;">Q1 Target</td><td style="border:1px solid #ccc;padding:3px 8px;font-weight:bold;">Q1 Actual</td><td style="border:1px solid #ccc;padding:3px 8px;font-weight:bold;">Variance</td><td style="border:1px solid #ccc;padding:3px 8px;font-weight:bold;">% Complete</td></tr>
+        ${['Sales,850000,920000,+70000,108%','Marketing,320000,298000,-22000,93%','Engineering,500000,485000,-15000,97%','Operations,210000,215000,+5000,102%','HR,150000,148000,-2000,99%','Finance,180000,182000,+2000,101%','Support,120000,125000,+5000,104%','R&D,400000,380000,-20000,95%'].map((r,i)=>{
+          const c=r.split(',');
+          return `<tr><td style="border:1px solid #ccc;padding:3px;text-align:center;background:#e8e8e8;">${i+2}</td><td style="border:1px solid #ccc;padding:3px 8px;">${c[0]}</td><td style="border:1px solid #ccc;padding:3px 8px;text-align:right;">$${c[1]}</td><td style="border:1px solid #ccc;padding:3px 8px;text-align:right;">$${c[2]}</td><td style="border:1px solid #ccc;padding:3px 8px;text-align:right;color:${c[3].startsWith('+')?'green':'red'}">${c[3]}</td><td style="border:1px solid #ccc;padding:3px 8px;text-align:right;">${c[4]}</td></tr>`;
+        }).join('')}
+        <tr><td style="border:1px solid #ccc;padding:3px;text-align:center;background:#e8e8e8;">10</td><td style="border:1px solid #ccc;padding:3px 8px;font-weight:bold;">Total</td><td style="border:1px solid #ccc;padding:3px 8px;text-align:right;font-weight:bold;">$2,730,000</td><td style="border:1px solid #ccc;padding:3px 8px;text-align:right;font-weight:bold;">$2,753,000</td><td style="border:1px solid #ccc;padding:3px 8px;text-align:right;color:green;font-weight:bold;">+$23,000</td><td style="border:1px solid #ccc;padding:3px 8px;text-align:right;font-weight:bold;">101%</td></tr>
+      </table>
+      <div style="padding:8px;color:#666;font-size:10px;">Sheet1 / Sheet2 / Sheet3 &nbsp;&nbsp;&nbsp; Ready</div>
+    </div></div><p style="text-align:center;color:#999;font-size:11px;margin-top:40vh;">[ \u70B9\u51FB\u4EFB\u610F\u4F4D\u7F6E\u8FD4\u56DE ]</p>`;
+  if (type === 'code') return `<div style="font-family:'Consolas','Courier New',monospace;font-size:13px;background:#1e1e1e;color:#d4d4d4;padding:0;min-height:100vh;">
+    <div style="background:#323233;color:#ccc;padding:4px 12px;font-size:11px;">File  Edit  Selection  View  Go  Run  Terminal  Help</div>
+    <div style="display:flex;">
+      <div style="width:240px;background:#252526;padding:8px;font-size:11px;color:#888;border-right:1px solid #333;">
+        <div style="color:#ccc;margin-bottom:8px;">EXPLORER</div>
+        <div>&#128193; src/</div>
+        <div style="padding-left:16px;">&#128196; index.ts</div>
+        <div style="padding-left:16px;">&#128196; api.ts</div>
+        <div style="padding-left:16px;">&#128196; utils.ts</div>
+        <div style="padding-left:16px;">&#128193; components/</div>
+        <div>&#128196; package.json</div>
+        <div>&#128196; tsconfig.json</div>
+      </div>
+      <div style="flex:1;padding:8px;">
+        <div style="color:#888;font-size:11px;margin-bottom:8px;border-bottom:1px solid #333;padding-bottom:4px;">api.ts &times;</div>
+        <pre style="margin:0;line-height:1.5;"><span style="color:#569cd6">import</span> { <span style="color:#9cdcfe">Router</span> } <span style="color:#569cd6">from</span> <span style="color:#ce9178">'express'</span>;
+<span style="color:#569cd6">import</span> { <span style="color:#9cdcfe">db</span> } <span style="color:#569cd6">from</span> <span style="color:#ce9178">'./database'</span>;
+
+<span style="color:#569cd6">const</span> <span style="color:#4fc1ff">router</span> = <span style="color:#dcdcaa">Router</span>();
+
+<span style="color:#6a9955">// GET /api/reports - Fetch Q1 reports</span>
+<span style="color:#4fc1ff">router</span>.<span style="color:#dcdcaa">get</span>(<span style="color:#ce9178">'/api/reports'</span>, <span style="color:#569cd6">async</span> (<span style="color:#9cdcfe">req</span>, <span style="color:#9cdcfe">res</span>) => {
+  <span style="color:#569cd6">const</span> <span style="color:#4fc1ff">reports</span> = <span style="color:#569cd6">await</span> <span style="color:#9cdcfe">db</span>.<span style="color:#dcdcaa">query</span>(
+    <span style="color:#ce9178">'SELECT * FROM reports WHERE quarter = $1'</span>,
+    [<span style="color:#9cdcfe">req</span>.query.q || <span style="color:#ce9178">'Q1'</span>]
+  );
+  <span style="color:#9cdcfe">res</span>.<span style="color:#dcdcaa">json</span>({ <span style="color:#9cdcfe">data</span>: <span style="color:#4fc1ff">reports</span>.rows });
+});
+
+<span style="color:#6a9955">// POST /api/reports - Create new report|</span></pre>
+      </div>
+    </div></div><p style="text-align:center;color:#555;font-size:11px;margin-top:20px;">[ \u70B9\u51FB\u4EFB\u610F\u4F4D\u7F6E\u8FD4\u56DE ]</p>`;
+  if (type === 'email') return `<div style="font-family:Segoe UI,Arial,sans-serif;font-size:13px;background:#f5f5f5;min-height:100vh;padding:0;">
+    <div style="background:#0078d4;color:#fff;padding:10px 20px;font-size:15px;">Outlook - \u6536\u4EF6\u7BB1</div>
+    <div style="max-width:800px;margin:0 auto;padding:16px;">
+      ${['Re: Q1\u5B63\u5EA6\u62A5\u544A\u5BA1\u6838 - \u674E\u7ECF\u7406 10:32','FW: \u5468\u4E09\u4F1A\u8BAE\u5BA4\u9884\u5B9A\u786E\u8BA4 - \u884C\u653F\u90E8 10:15','\u3010\u91CD\u8981\u3011\u5BA2\u6237\u53CD\u9988\u5904\u7406\u8FDB\u5EA6 - \u738B\u6653\u660E 09:48','Re: \u65B0\u4EA7\u54C1\u53D1\u5E03\u65F6\u95F4\u8868\u8C03\u6574 - \u5F20\u4E3D 09:30','\u5468\u62A5: \u5F00\u53D1\u56E2\u961F\u8FDB\u5EA6\u66F4\u65B0 - \u9648\u6D77 09:15'].map(e => {
+        const p = e.split(' - ');
+        return `<div style="background:#fff;border:1px solid #e0e0e0;padding:10px 14px;margin-bottom:4px;cursor:pointer;"><strong style="color:#333;">${p[0]}</strong><span style="float:right;color:#888;font-size:11px;">${p[1]}</span></div>`;
+      }).join('')}
+    </div></div><p style="text-align:center;color:#999;font-size:11px;margin-top:30vh;">[ \u70B9\u51FB\u4EFB\u610F\u4F4D\u7F6E\u8FD4\u56DE ]</p>`;
+  // meeting
+  return `<div style="font-family:Segoe UI,Arial,sans-serif;font-size:13px;background:#fff;min-height:100vh;padding:20px;max-width:700px;margin:0 auto;">
+    <h2 style="color:#333;border-bottom:2px solid #0078d4;padding-bottom:8px;">\u4F1A\u8BAE\u7EAA\u8981 - Q1\u5B63\u5EA6\u56DE\u987E</h2>
+    <p style="color:#666;font-size:12px;">\u65E5\u671F: 2026-03-16 14:00 | \u5730\u70B9: \u4F1A\u8BAE\u5BA4A | \u4E3B\u6301: \u674E\u7ECF\u7406</p>
+    <h3 style="color:#0078d4;margin-top:16px;">1. Q1\u4E1A\u7EE9\u56DE\u987E</h3>
+    <ul style="color:#444;line-height:2;">
+      <li>\u603B\u8425\u6536\u8FBE\u6210\u7387 101%, \u8D85\u989D\u5B8C\u6210\u76EE\u6807</li>
+      <li>\u65B0\u5BA2\u6237\u8F6C\u5316\u7387\u63D0\u5347 15%</li>
+      <li>\u7814\u53D1\u56E2\u961F\u6309\u65F6\u4EA4\u4ED8\u7387 95%</li>
+    </ul>
+    <h3 style="color:#0078d4;margin-top:16px;">2. Q2\u91CD\u70B9\u8BA1\u5212</h3>
+    <ul style="color:#444;line-height:2;">
+      <li>\u542F\u52A8\u65B0\u4EA7\u54C1\u7EBF\u8C03\u7814</li>
+      <li>\u5B8C\u6210\u6280\u672F\u67B6\u6784\u5347\u7EA7</li>
+      <li>\u62DB\u8058 3 \u540D\u9AD8\u7EA7\u5DE5\u7A0B\u5E08</li>
+    </ul>
+    <h3 style="color:#0078d4;margin-top:16px;">3. \u884C\u52A8\u9879</h3>
+    <ul style="color:#444;line-height:2;">
+      <li>[\u5F20\u4E3D] 3/20\u524D\u63D0\u4EA4\u5E02\u573A\u8C03\u7814\u62A5\u544A</li>
+      <li>[\u738B\u6653\u660E] \u672C\u5468\u5185\u5B8C\u6210\u5BA2\u6237\u53CD\u9988\u6574\u7406</li>
+      <li>[\u9648\u6D77] \u4E0B\u5468\u4E00\u63D0\u4EA4\u6280\u672F\u65B9\u6848</li>
+    </ul>
+  </div><p style="text-align:center;color:#999;font-size:11px;margin-top:40px;">[ \u70B9\u51FB\u4EFB\u610F\u4F4D\u7F6E\u8FD4\u56DE ]</p>`;
+}
+
+function toggleSettings() {
+  document.getElementById('settingsPanel').classList.toggle('open');
+}
+
+function updateSensitivity(val) {
+  threshold = parseInt(val);
+  document.getElementById('sensVal').textContent = val + '%';
+  document.getElementById('motionThreshold').style.left = val + '%';
+  if (monitoring) addLog('', '[\u8BBE\u7F6E] \u7075\u654F\u5EA6\u8C03\u6574\u4E3A ' + val + '%');
+}
+
+function alertModeChanged() {
+  const mode = document.getElementById('alertMode').value;
+  addLog('', '[\u8BBE\u7F6E] \u8B66\u62A5\u65B9\u5F0F: ' + mode);
+}
+
+function toggleDiffView() {
+  if (document.getElementById('showDiff').value === 'off') {
+    diffCtx.clearRect(0, 0, diffCanvas.width, diffCanvas.height);
+  }
+}
+
+// Update cooldown from settings
+setInterval(() => {
+  cooldownMs = parseInt(document.getElementById('cooldown').value);
+}, 2000);
+
+// Keyboard shortcut: Escape for panic, Space for toggle
+document.addEventListener('keydown', e => {
+  if (document.getElementById('panicOverlay').style.display === 'block') {
+    document.getElementById('panicOverlay').style.display = 'none';
+    return;
+  }
+  if (e.key === 'Escape') panicMode();
+  if (e.key === ' ' && e.target === document.body) { e.preventDefault(); toggleMonitor(); }
+});
+
+// Draw initial history
+drawHistory();
+</script>
+</body>
+</html>

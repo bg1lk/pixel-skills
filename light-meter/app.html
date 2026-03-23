@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Light Meter - 光线检测器</title>
+<style>
+  @font-face {
+    font-family: 'PixelFont';
+    src: local('Courier New'), local('Consolas'), local('monospace');
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0f380f;
+    color: #9bbc0f;
+    font-family: 'Courier New', Consolas, monospace;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    image-rendering: pixelated;
+    overflow-x: hidden;
+  }
+  h1 {
+    font-size: 28px;
+    text-align: center;
+    margin: 16px 0 8px;
+    color: #9bbc0f;
+    text-shadow: 2px 2px 0 #306230;
+    letter-spacing: 4px;
+  }
+  .subtitle {
+    font-size: 12px;
+    color: #8bac0f;
+    text-align: center;
+    margin-bottom: 12px;
+  }
+  .main-container {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 16px;
+    padding: 0 16px 16px;
+    max-width: 960px;
+    width: 100%;
+  }
+  .panel {
+    background: #306230;
+    border: 3px solid #8bac0f;
+    padding: 12px;
+    position: relative;
+  }
+  .panel-title {
+    font-size: 13px;
+    color: #9bbc0f;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    border-bottom: 2px solid #8bac0f;
+    padding-bottom: 4px;
+  }
+  /* Camera panel */
+  .camera-panel {
+    width: 200px;
+  }
+  #cameraPreview {
+    width: 160px;
+    height: 120px;
+    background: #0f380f;
+    border: 2px solid #8bac0f;
+    display: block;
+    transform: scaleX(-1);
+    image-rendering: pixelated;
+  }
+  #startBtn {
+    display: block;
+    width: 100%;
+    margin-top: 8px;
+    padding: 8px;
+    background: #8bac0f;
+    color: #0f380f;
+    border: 2px solid #9bbc0f;
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: bold;
+    cursor: pointer;
+    letter-spacing: 2px;
+  }
+  #startBtn:hover { background: #9bbc0f; }
+  #startBtn:active { background: #306230; color: #9bbc0f; }
+  #startBtn.running { background: #306230; color: #8bac0f; border-color: #8bac0f; }
+  /* Meter panel */
+  .meter-panel {
+    width: 180px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .meter-wrapper {
+    display: flex;
+    align-items: flex-end;
+    gap: 6px;
+    height: 220px;
+    margin: 8px 0;
+  }
+  .meter-scale {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    height: 200px;
+    font-size: 10px;
+    color: #8bac0f;
+    text-align: right;
+    padding: 2px 0;
+  }
+  .meter-bar-container {
+    width: 60px;
+    height: 200px;
+    background: #0f380f;
+    border: 2px solid #8bac0f;
+    position: relative;
+    display: flex;
+    flex-direction: column-reverse;
+  }
+  .meter-segment {
+    width: 100%;
+    flex: 1;
+    border-top: 1px solid #0f380f;
+    transition: opacity 0.15s;
+  }
+  .lux-display {
+    font-size: 32px;
+    color: #9bbc0f;
+    text-shadow: 2px 2px 0 #0f380f;
+    margin-top: 4px;
+  }
+  .lux-label { font-size: 11px; color: #8bac0f; }
+  /* Recommendation panel */
+  .rec-panel {
+    width: 280px;
+  }
+  .rec-text {
+    font-size: 18px;
+    text-align: center;
+    padding: 16px 8px;
+    min-height: 60px;
+    line-height: 1.5;
+  }
+  .stats-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 4px;
+    margin-top: 10px;
+  }
+  .stat-box {
+    background: #0f380f;
+    border: 1px solid #8bac0f;
+    padding: 6px 4px;
+    text-align: center;
+  }
+  .stat-label { font-size: 9px; color: #8bac0f; }
+  .stat-value { font-size: 16px; color: #9bbc0f; margin-top: 2px; }
+  .warning-indicator {
+    text-align: center;
+    font-size: 14px;
+    margin-top: 8px;
+    min-height: 20px;
+    color: #9bbc0f;
+  }
+  .warning-indicator.flash { animation: flashWarn 0.5s infinite; }
+  @keyframes flashWarn {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
+  }
+  /* Chart panel */
+  .chart-panel {
+    width: 100%;
+    max-width: 920px;
+  }
+  #historyChart {
+    width: 100%;
+    height: 150px;
+    background: #0f380f;
+    border: 2px solid #8bac0f;
+    display: block;
+  }
+  .chart-legend {
+    display: flex;
+    justify-content: center;
+    gap: 16px;
+    margin-top: 6px;
+    font-size: 10px;
+    color: #8bac0f;
+  }
+  .legend-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    margin-right: 4px;
+    vertical-align: middle;
+  }
+  /* Settings panel */
+  .settings-panel {
+    width: 100%;
+    max-width: 920px;
+  }
+  .settings-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 6px 0;
+    flex-wrap: wrap;
+  }
+  .settings-row label {
+    font-size: 12px;
+    color: #8bac0f;
+    min-width: 120px;
+  }
+  .settings-row input[type="range"] {
+    flex: 1;
+    min-width: 100px;
+    max-width: 200px;
+    accent-color: #8bac0f;
+  }
+  .settings-row .val {
+    font-size: 14px;
+    color: #9bbc0f;
+    min-width: 30px;
+  }
+  .zone-bar {
+    display: flex;
+    height: 12px;
+    width: 100%;
+    max-width: 400px;
+    border: 1px solid #8bac0f;
+    margin-top: 8px;
+  }
+  .zone-bar div { height: 100%; }
+  footer {
+    font-size: 10px;
+    color: #306230;
+    padding: 12px;
+    text-align: center;
+  }
+
+/* ===== MOBILE ===== */
+@media(max-width:600px){
+  body{overflow-y:auto!important;min-height:100vh;}
+  video{width:100%!important;max-width:100%!important;height:auto!important;}
+  canvas{max-width:100%!important;}
+  #app,.app,.container,.main,.wrapper,[id*="app"],[class*="container"]{width:100%!important;max-width:100%!important;margin:0!important;border-radius:0!important;}
+  button,.btn,.action-btn,[class*="btn"]{min-height:44px;font-size:13px!important;touch-action:manipulation;}
+  input,textarea,select{font-size:16px!important;}
+  [style*="width:"][style*="px"]{max-width:100%!important;}
+}
+</style>
+</head>
+<body>
+
+<h1>LIGHT METER</h1>
+<div class="subtitle">-- 环境光线检测器 --</div>
+
+<div class="main-container">
+  <!-- Camera Preview -->
+  <div class="panel camera-panel">
+    <div class="panel-title">CAMERA</div>
+    <video id="cameraPreview" autoplay playsinline muted></video>
+    <canvas id="analysisCanvas" width="160" height="120" style="display:none;"></canvas>
+    <button id="startBtn" onclick="toggleCamera()">START</button>
+  </div>
+
+  <!-- Meter Gauge -->
+  <div class="panel meter-panel">
+    <div class="panel-title">BRIGHTNESS</div>
+    <div class="meter-wrapper">
+      <div class="meter-scale">
+        <span>100</span><span>80</span><span>60</span><span>40</span><span>20</span><span>0</span>
+      </div>
+      <div class="meter-bar-container" id="meterBar"></div>
+    </div>
+    <div class="lux-display" id="luxValue">--</div>
+    <div class="lux-label">BRIGHTNESS</div>
+  </div>
+
+  <!-- Recommendation & Stats -->
+  <div class="panel rec-panel">
+    <div class="panel-title">STATUS</div>
+    <div class="rec-text" id="recText">按 START 开始检测</div>
+    <div class="warning-indicator" id="warningIndicator"></div>
+    <div class="stats-grid">
+      <div class="stat-box">
+        <div class="stat-label">MIN</div>
+        <div class="stat-value" id="statMin">--</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">AVG</div>
+        <div class="stat-value" id="statAvg">--</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">MAX</div>
+        <div class="stat-value" id="statMax">--</div>
+      </div>
+    </div>
+    <div class="zone-bar" id="zoneBar"></div>
+  </div>
+
+  <!-- History Chart -->
+  <div class="panel chart-panel">
+    <div class="panel-title">HISTORY (30 MIN)</div>
+    <canvas id="historyChart"></canvas>
+    <div class="chart-legend">
+      <span><span class="legend-dot" style="background:#ff0000;"></span>DANGER</span>
+      <span><span class="legend-dot" style="background:#ffff00;"></span>WARNING</span>
+      <span><span class="legend-dot" style="background:#00ff00;"></span>IDEAL</span>
+    </div>
+  </div>
+
+  <!-- Settings -->
+  <div class="panel settings-panel">
+    <div class="panel-title">SETTINGS</div>
+    <div class="settings-row">
+      <label>TOO DARK &lt;</label>
+      <input type="range" id="threshDarkLow" min="5" max="40" value="20" oninput="updateSettings()">
+      <span class="val" id="valDarkLow">20</span>
+    </div>
+    <div class="settings-row">
+      <label>DIM &lt;</label>
+      <input type="range" id="threshDimLow" min="15" max="55" value="40" oninput="updateSettings()">
+      <span class="val" id="valDimLow">40</span>
+    </div>
+    <div class="settings-row">
+      <label>IDEAL &lt;</label>
+      <input type="range" id="threshIdealHigh" min="50" max="85" value="70" oninput="updateSettings()">
+      <span class="val" id="valIdealHigh">70</span>
+    </div>
+    <div class="settings-row">
+      <label>BRIGHT &lt;</label>
+      <input type="range" id="threshBrightHigh" min="60" max="95" value="85" oninput="updateSettings()">
+      <span class="val" id="valBrightHigh">85</span>
+    </div>
+  </div>
+</div>
+
+<footer>LIGHT METER v1.0 | Retro Pixel Edition</footer>
+
+<script src="../cam-core/cam-core.js"></script>
+<script>
+  // State
+  let running = false;
+  let stream = null;
+  let animFrame = null;
+  let brightness = 0;
+  let history = []; // {time, value}
+  let stats = { min: 100, max: 0, sum: 0, count: 0 };
+  let outsideIdealStart = null;
+  let warningActive = false;
+  let lastBeepZone = 'ideal';
+  let audioCtx = null;
+
+  // Thresholds
+  let TH = { darkLow: 20, dimLow: 40, idealHigh: 70, brightHigh: 85 };
+
+  // Elements
+  const video = document.getElementById('cameraPreview');
+  const canvas = document.getElementById('analysisCanvas');
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  const btn = document.getElementById('startBtn');
+  const meterBar = document.getElementById('meterBar');
+  const luxDisplay = document.getElementById('luxValue');
+  const recText = document.getElementById('recText');
+  const warningEl = document.getElementById('warningIndicator');
+  const historyCanvas = document.getElementById('historyChart');
+  const hCtx = historyCanvas.getContext('2d');
+
+  // Build meter segments (20 segments)
+  const SEGMENTS = 20;
+  for (let i = 0; i < SEGMENTS; i++) {
+    const seg = document.createElement('div');
+    seg.className = 'meter-segment';
+    seg.style.opacity = '0.15';
+    meterBar.appendChild(seg);
+  }
+  const segments = meterBar.querySelectorAll('.meter-segment');
+
+  function updateSettings() {
+    TH.darkLow = +document.getElementById('threshDarkLow').value;
+    TH.dimLow = +document.getElementById('threshDimLow').value;
+    TH.idealHigh = +document.getElementById('threshIdealHigh').value;
+    TH.brightHigh = +document.getElementById('threshBrightHigh').value;
+    document.getElementById('valDarkLow').textContent = TH.darkLow;
+    document.getElementById('valDimLow').textContent = TH.dimLow;
+    document.getElementById('valIdealHigh').textContent = TH.idealHigh;
+    document.getElementById('valBrightHigh').textContent = TH.brightHigh;
+    updateZoneBar();
+  }
+
+  function updateZoneBar() {
+    const bar = document.getElementById('zoneBar');
+    bar.innerHTML = '';
+    const zones = [
+      { w: TH.darkLow, c: '#880000' },
+      { w: TH.dimLow - TH.darkLow, c: '#888800' },
+      { w: TH.idealHigh - TH.dimLow, c: '#008800' },
+      { w: TH.brightHigh - TH.idealHigh, c: '#888800' },
+      { w: 100 - TH.brightHigh, c: '#880000' }
+    ];
+    zones.forEach(z => {
+      const d = document.createElement('div');
+      d.style.width = z.w + '%';
+      d.style.background = z.c;
+      bar.appendChild(d);
+    });
+  }
+  updateZoneBar();
+
+  function getZone(v) {
+    if (v < TH.darkLow) return 'too-dark';
+    if (v < TH.dimLow) return 'dim';
+    if (v <= TH.idealHigh) return 'ideal';
+    if (v <= TH.brightHigh) return 'bright';
+    return 'too-bright';
+  }
+
+  function zoneColor(zone) {
+    switch (zone) {
+      case 'too-dark': case 'too-bright': return '#ff0000';
+      case 'dim': case 'bright': return '#ffff00';
+      default: return '#00ff00';
+    }
+  }
+
+  function segmentColor(idx) {
+    const v = (idx + 0.5) / SEGMENTS * 100;
+    return zoneColor(getZone(v));
+  }
+
+  function playBeep() {
+    try {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      // 8-bit style beep: square wave, short
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'square';
+      osc.frequency.value = 440;
+      gain.gain.setValueAtTime(0.12, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.2);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.2);
+      // Second beep
+      setTimeout(() => {
+        const o2 = audioCtx.createOscillator();
+        const g2 = audioCtx.createGain();
+        o2.type = 'square';
+        o2.frequency.value = 330;
+        g2.gain.setValueAtTime(0.12, audioCtx.currentTime);
+        g2.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.25);
+        o2.connect(g2);
+        g2.connect(audioCtx.destination);
+        o2.start();
+        o2.stop(audioCtx.currentTime + 0.25);
+      }, 200);
+    } catch (e) {}
+  }
+
+  async function toggleCamera() {
+    if (running) {
+      running = false;
+      if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+      if (animFrame) cancelAnimationFrame(animFrame);
+      btn.textContent = 'START';
+      btn.classList.remove('running');
+      video.srcObject = null;
+      return;
+    }
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: { width: 160, height: 120, facingMode: 'user' }
+      });
+      video.srcObject = stream;
+      running = true;
+      btn.textContent = 'STOP';
+      btn.classList.add('running');
+      stats = { min: 100, max: 0, sum: 0, count: 0 };
+      history = [];
+      outsideIdealStart = null;
+      warningActive = false;
+      lastBeepZone = 'ideal';
+      loop();
+    } catch (e) {
+      recText.textContent = '无法访问摄像头';
+    }
+  }
+
+  let lastSample = 0;
+  function loop() {
+    if (!running) return;
+    animFrame = requestAnimationFrame(loop);
+
+    const now = Date.now();
+    if (now - lastSample < 1000) return; // 1 sample per second
+    lastSample = now;
+
+    // Draw frame to analysis canvas
+    ctx.drawImage(video, 0, 0, 160, 120);
+    const imgData = ctx.getImageData(0, 0, 160, 120);
+    // CamCore: normalize to compensate for color temperature shifts
+    CamCore.normalize(imgData);
+    // CamCore: use analyzeBrightness for robust luminance calculation
+    const bResult = CamCore.analyzeBrightness(imgData, 160, 120, null);
+    brightness = Math.round(bResult.avg / 255 * 100);
+
+    // Update stats
+    stats.min = Math.min(stats.min, brightness);
+    stats.max = Math.max(stats.max, brightness);
+    stats.sum += brightness;
+    stats.count++;
+
+    // Push to history (keep 30 min = 1800 samples at 1/sec)
+    history.push({ time: now, value: brightness });
+    const cutoff = now - 30 * 60 * 1000;
+    while (history.length > 0 && history[0].time < cutoff) history.shift();
+
+    // Update UI
+    updateMeter(brightness);
+    updateRecommendation(brightness, now);
+    updateStats();
+    drawHistoryChart();
+  }
+
+  function updateMeter(val) {
+    const lit = Math.round(val / 100 * SEGMENTS);
+    segments.forEach((seg, i) => {
+      if (i < lit) {
+        seg.style.opacity = '1';
+        seg.style.background = segmentColor(i);
+      } else {
+        seg.style.opacity = '0.15';
+        seg.style.background = '#306230';
+      }
+    });
+    luxDisplay.textContent = val;
+    luxDisplay.style.color = zoneColor(getZone(val));
+  }
+
+  function updateRecommendation(val, now) {
+    const zone = getZone(val);
+    let text = '';
+    switch (zone) {
+      case 'too-dark':
+        text = '太暗了！建议开灯 \u{1F4A1}'; break;
+      case 'dim':
+        text = '有点暗，注意用眼 \u{1F4A1}'; break;
+      case 'ideal':
+        text = '光线适宜 \u2713'; break;
+      case 'bright':
+        text = '有点亮，注意眩光 \u{1FA9F}'; break;
+      case 'too-bright':
+        text = '太亮了！建议拉窗帘 \u{1FA9F}'; break;
+    }
+    recText.textContent = text;
+    recText.style.color = zoneColor(zone);
+
+    // Warning logic
+    const isDanger = zone === 'too-dark' || zone === 'too-bright';
+    const isOutside = zone !== 'ideal';
+
+    if (isOutside) {
+      if (!outsideIdealStart) outsideIdealStart = now;
+      if (now - outsideIdealStart > 30000) {
+        warningEl.textContent = '\u26A0 WARNING: ' + (now - outsideIdealStart > 60000 ?
+          Math.round((now - outsideIdealStart) / 60000) + ' MIN' :
+          Math.round((now - outsideIdealStart) / 1000) + ' SEC');
+        warningEl.classList.add('flash');
+        warningActive = true;
+      }
+    } else {
+      outsideIdealStart = null;
+      warningEl.textContent = '';
+      warningEl.classList.remove('flash');
+      warningActive = false;
+    }
+
+    // Beep when entering danger zone
+    if (isDanger && lastBeepZone !== zone) {
+      playBeep();
+    }
+    lastBeepZone = zone;
+  }
+
+  function updateStats() {
+    document.getElementById('statMin').textContent = stats.min;
+    document.getElementById('statMax').textContent = stats.max;
+    document.getElementById('statAvg').textContent = stats.count > 0 ? Math.round(stats.sum / stats.count) : '--';
+  }
+
+  function drawHistoryChart() {
+    const W = historyCanvas.width = historyCanvas.clientWidth;
+    const H = historyCanvas.height = historyCanvas.clientHeight;
+    hCtx.clearRect(0, 0, W, H);
+    hCtx.fillStyle = '#0f380f';
+    hCtx.fillRect(0, 0, W, H);
+
+    if (history.length < 2) return;
+
+    const pad = { l: 35, r: 10, t: 10, b: 20 };
+    const cw = W - pad.l - pad.r;
+    const ch = H - pad.t - pad.b;
+
+    // Draw zone backgrounds
+    const zones = [
+      { from: 0, to: TH.darkLow, c: 'rgba(136,0,0,0.2)' },
+      { from: TH.darkLow, to: TH.dimLow, c: 'rgba(136,136,0,0.15)' },
+      { from: TH.dimLow, to: TH.idealHigh, c: 'rgba(0,136,0,0.15)' },
+      { from: TH.idealHigh, to: TH.brightHigh, c: 'rgba(136,136,0,0.15)' },
+      { from: TH.brightHigh, to: 100, c: 'rgba(136,0,0,0.2)' }
+    ];
+    zones.forEach(z => {
+      const y1 = pad.t + ch * (1 - z.to / 100);
+      const y2 = pad.t + ch * (1 - z.from / 100);
+      hCtx.fillStyle = z.c;
+      hCtx.fillRect(pad.l, y1, cw, y2 - y1);
+    });
+
+    // Grid lines
+    hCtx.strokeStyle = '#306230';
+    hCtx.lineWidth = 1;
+    for (let v = 0; v <= 100; v += 20) {
+      const y = pad.t + ch * (1 - v / 100);
+      hCtx.beginPath();
+      hCtx.moveTo(pad.l, Math.round(y) + 0.5);
+      hCtx.lineTo(pad.l + cw, Math.round(y) + 0.5);
+      hCtx.stroke();
+      hCtx.fillStyle = '#8bac0f';
+      hCtx.font = '10px Courier New';
+      hCtx.textAlign = 'right';
+      hCtx.fillText(v, pad.l - 4, y + 3);
+    }
+
+    // Time labels
+    const timeSpan = history[history.length - 1].time - history[0].time;
+    hCtx.fillStyle = '#8bac0f';
+    hCtx.textAlign = 'center';
+    const labelSec = timeSpan > 600000 ? '30m' : timeSpan > 60000 ? Math.round(timeSpan / 60000) + 'm' : Math.round(timeSpan / 1000) + 's';
+    hCtx.fillText('now', pad.l + cw, H - 4);
+    hCtx.fillText('-' + labelSec, pad.l, H - 4);
+
+    // Draw step-line (pixel style)
+    const tMin = history[0].time;
+    const tMax = history[history.length - 1].time;
+    const tRange = Math.max(tMax - tMin, 1);
+
+    hCtx.lineWidth = 2;
+    hCtx.beginPath();
+    let prevX = null, prevY = null;
+    for (let i = 0; i < history.length; i++) {
+      const x = pad.l + (history[i].time - tMin) / tRange * cw;
+      const y = pad.t + ch * (1 - history[i].value / 100);
+      if (prevX !== null) {
+        // Step line: horizontal then vertical
+        hCtx.strokeStyle = zoneColor(getZone(history[i].value));
+        hCtx.beginPath();
+        hCtx.moveTo(Math.round(prevX), Math.round(prevY));
+        hCtx.lineTo(Math.round(x), Math.round(prevY));
+        hCtx.lineTo(Math.round(x), Math.round(y));
+        hCtx.stroke();
+      }
+      prevX = x;
+      prevY = y;
+    }
+
+    // Draw dots at each sample (pixel style, only if not too many)
+    if (history.length < 200) {
+      hCtx.fillStyle = '#9bbc0f';
+      for (let i = 0; i < history.length; i++) {
+        const x = pad.l + (history[i].time - tMin) / tRange * cw;
+        const y = pad.t + ch * (1 - history[i].value / 100);
+        hCtx.fillRect(Math.round(x) - 1, Math.round(y) - 1, 3, 3);
+      }
+    }
+  }
+
+  // Handle resize for chart
+  window.addEventListener('resize', () => { if (history.length > 1) drawHistoryChart(); });
+
+  // Init
+  updateSettings();
+</script>
+</body>
+</html>

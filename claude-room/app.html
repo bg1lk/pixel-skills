@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Claude的小房间</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:#0f380f;font-family:'Courier New','Consolas',monospace;color:#0f380f;display:flex;justify-content:center;align-items:center;min-height:100vh;overflow:hidden;user-select:none;}
+#app{background:#9bbc0f;border:4px solid #0f380f;box-shadow:8px 8px 0px #306230;width:min(98vw,880px);height:min(96vh,640px);display:flex;flex-direction:column;}
+#titlebar{background:#306230;color:#9bbc0f;padding:6px 14px;font-size:14px;font-weight:bold;letter-spacing:2px;border-bottom:3px solid #0f380f;display:flex;justify-content:space-between;align-items:center;}
+#main{display:flex;flex:1;overflow:hidden;}
+#room-panel{flex:1;position:relative;background:#1a1a2e;overflow:hidden;cursor:default;}
+#roomCanvas{width:100%;height:100%;image-rendering:pixelated;}
+/* Sidebar */
+#sidebar{width:180px;background:#8bac0f;border-left:3px solid #0f380f;display:flex;flex-direction:column;overflow:hidden;}
+.panel-hdr{background:#306230;color:#9bbc0f;padding:4px 8px;font-size:11px;font-weight:bold;text-align:center;border-bottom:2px solid #0f380f;}
+#thought-box{padding:6px;font-size:10px;min-height:50px;border-bottom:3px solid #0f380f;background:#9bbc0f;line-height:1.4;}
+#thought-text{color:#306230;font-style:italic;}
+#furniture-list{flex:1;overflow-y:auto;padding:4px;}
+.furn-item{display:flex;align-items:center;gap:4px;padding:4px 6px;margin-bottom:2px;background:#9bbc0f;border:2px solid #0f380f;cursor:pointer;font-size:10px;font-weight:bold;}
+.furn-item:hover{background:#8bac0f;transform:translate(1px,1px);}
+.furn-icon{width:20px;height:20px;image-rendering:pixelated;}
+#controls{padding:6px;border-top:3px solid #0f380f;display:flex;flex-direction:column;gap:3px;}
+button{background:#8bac0f;color:#0f380f;border:2px solid #0f380f;box-shadow:2px 2px 0px #306230;font-family:monospace;font-size:10px;font-weight:bold;padding:4px 8px;cursor:pointer;width:100%;}
+button:hover{background:#9bbc0f;transform:translate(1px,1px);box-shadow:1px 1px 0px #306230;}
+#bottombar{background:#306230;color:#9bbc0f;padding:4px 10px;font-size:10px;border-top:3px solid #0f380f;display:flex;justify-content:space-between;}
+#mood-bar{display:flex;gap:6px;align-items:center;padding:4px 6px;font-size:10px;border-bottom:2px solid #306230;}
+.mood-stat{display:flex;align-items:center;gap:2px;}
+.mood-fill{height:6px;border:1px solid #0f380f;background:#306230;width:40px;position:relative;}
+.mood-fill-inner{height:100%;background:#8bac0f;transition:width 0.3s steps(5);}
+@media(max-width:600px){
+  #main{flex-direction:column;}
+  #sidebar{width:100%;max-height:200px;border-left:none;border-top:3px solid #0f380f;}
+  #app{width:100vw;height:100vh;}
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="titlebar">
+    <span>★ Claude的小房间 ★</span>
+    <span id="clock" style="font-size:10px;"></span>
+  </div>
+  <div id="main">
+    <div id="room-panel">
+      <canvas id="roomCanvas"></canvas>
+    </div>
+    <div id="sidebar">
+      <div class="panel-hdr">▸ Claude在想... ◂</div>
+      <div id="thought-box"><span id="thought-text">嗯，今天做点什么好呢...</span></div>
+      <div id="mood-bar">
+        <div class="mood-stat">心情<div class="mood-fill"><div class="mood-fill-inner" id="mood-happy" style="width:80%"></div></div></div>
+        <div class="mood-stat">能量<div class="mood-fill"><div class="mood-fill-inner" id="mood-energy" style="width:60%"></div></div></div>
+      </div>
+      <div class="panel-hdr">▸ 添加家具 ◂</div>
+      <div id="furniture-list"></div>
+      <div id="controls">
+        <button onclick="clearRoom()">清空房间</button>
+        <button onclick="autoDecorate()">自动装饰</button>
+      </div>
+    </div>
+  </div>
+  <div id="bottombar">
+    <span id="status-msg">欢迎来到Claude的小窝！</span>
+    <span>点击家具添加 | 拖拽移动</span>
+  </div>
+</div>
+<script>
+const audioCtx=new(window.AudioContext||window.webkitAudioContext)();
+function beep(f,d,v=0.04){const o=audioCtx.createOscillator(),g=audioCtx.createGain();o.type='square';o.frequency.value=f;g.gain.value=v;g.gain.exponentialRampToValueAtTime(0.001,audioCtx.currentTime+d);o.connect(g);g.connect(audioCtx.destination);o.start();o.stop(audioCtx.currentTime+d);}
+
+// ===== Room Config =====
+const ROOM_W = 12, ROOM_H = 12; // grid cells
+const TILE = 32; // px per tile on canvas
+let cW, cH;
+const canvas = document.getElementById('roomCanvas');
+const ctx = canvas.getContext('2d');
+
+// ===== Furniture Catalog =====
+const CATALOG = [
+  {id:'desk',name:'办公桌',icon:'▦',w:2,h:1,color:'#8B6914',top:'#A0802A',desc:'写代码的地方'},
+  {id:'chair',name:'椅子',icon:'▣',w:1,h:1,color:'#4a4a6a',top:'#6060a0',desc:'人体工学椅'},
+  {id:'computer',name:'电脑',icon:'▪',w:1,h:1,color:'#2a2a3a',top:'#4040b0',desc:'Claude的大脑',onDesk:true},
+  {id:'bookshelf',name:'书架',icon:'▤',w:2,h:1,color:'#6B4226',top:'#8B5A2B',desc:'装满了知识'},
+  {id:'plant',name:'盆栽',icon:'♣',w:1,h:1,color:'#2d5a1e',top:'#48a828',desc:'绿色让人放松'},
+  {id:'lamp',name:'台灯',icon:'☀',w:1,h:1,color:'#c0c040',top:'#f8f060',desc:'温暖的光'},
+  {id:'coffee',name:'咖啡机',icon:'♨',w:1,h:1,color:'#3a3a3a',top:'#6a5040',desc:'续命神器'},
+  {id:'rug',name:'地毯',icon:'▬',w:2,h:2,color:'#8b3a62',top:'#a84878',desc:'软软的',isFlat:true},
+  {id:'sofa',name:'沙发',icon:'▮',w:2,h:1,color:'#5848a8',top:'#7868c8',desc:'休息一下'},
+  {id:'tv',name:'电视',icon:'▰',w:2,h:1,color:'#1a1a2a',top:'#3838d8',desc:'看看新闻'},
+  {id:'bed',name:'床',icon:'▭',w:2,h:2,color:'#d8d8f8',top:'#e8e8fc',desc:'美美地睡一觉'},
+  {id:'fridge',name:'冰箱',icon:'▫',w:1,h:1,color:'#d0d0d8',top:'#e8e8f0',desc:'里面有好吃的'},
+  {id:'cat-bed',name:'猫窝',icon:'◕',w:1,h:1,color:'#f8a040',top:'#f8c878',desc:'给流浪猫准备的'},
+  {id:'whiteboard',name:'白板',icon:'□',w:2,h:1,color:'#f0f0f0',top:'#fcfcfc',desc:'画思维导图用'},
+  {id:'speaker',name:'音箱',icon:'♫',w:1,h:1,color:'#2a2a2a',top:'#4a4a6a',desc:'放点lo-fi'},
+  {id:'trophy',name:'奖杯',icon:'★',w:1,h:1,color:'#f4d03f',top:'#f8e860',desc:'最佳AI助手奖'},
+];
+
+// ===== Room State =====
+let placedFurniture = []; // {id, catalogIdx, gx, gy}
+let claude = {gx:5, gy:5, state:'idle', timer:0, frame:0, face:'R', target:null, happy:80, energy:60};
+let dragItem = null; // index in placedFurniture
+let dragOff = {x:0,y:0};
+
+// Load from localStorage
+try{
+  const saved=JSON.parse(localStorage.getItem('claude-room'));
+  if(saved){placedFurniture=saved.furniture||[];if(saved.claude){claude.happy=saved.claude.happy||80;claude.energy=saved.claude.energy||60;}}
+}catch(e){}
+
+function save(){
+  localStorage.setItem('claude-room',JSON.stringify({furniture:placedFurniture,claude:{happy:claude.happy,energy:claude.energy}}));
+}
+
+// ===== Rendering =====
+function resize(){
+  const panel=document.getElementById('room-panel');
+  cW=panel.clientWidth;cH=panel.clientHeight;
+  canvas.width=cW;canvas.height=cH;
+}
+
+function gridToScreen(gx,gy){
+  // Top-down with slight perspective
+  const ox=cW/2, oy=40;
+  const tw=Math.min(TILE,Math.floor((cW-40)/ROOM_W));
+  const th=Math.floor(tw*0.6);
+  return [ox + (gx - ROOM_W/2)*tw, oy + gy*th];
+}
+
+function screenToGrid(sx,sy){
+  const ox=cW/2, oy=40;
+  const tw=Math.min(TILE,Math.floor((cW-40)/ROOM_W));
+  const th=Math.floor(tw*0.6);
+  const gx=Math.floor((sx-ox)/tw + ROOM_W/2);
+  const gy=Math.floor((sy-oy)/th);
+  return [Math.max(0,Math.min(ROOM_W-1,gx)), Math.max(0,Math.min(ROOM_H-1,gy))];
+}
+
+function drawRoom(){
+  ctx.clearRect(0,0,cW,cH);
+  // Room background
+  ctx.fillStyle='#1a1a2e';
+  ctx.fillRect(0,0,cW,cH);
+
+  const tw=Math.min(TILE,Math.floor((cW-40)/ROOM_W));
+  const th=Math.floor(tw*0.6);
+
+  // Back wall
+  const [wx0,wy0]=gridToScreen(0,0);
+  const [wx1,wy1]=gridToScreen(ROOM_W,0);
+  const wallH=th*3;
+  ctx.fillStyle='#2a2a4e';
+  ctx.fillRect(wx0,wy0-wallH,wx1-wx0,wallH);
+  // Wall pattern
+  ctx.fillStyle='#32325a';
+  for(let x=0;x<ROOM_W;x++){
+    const [px,py]=gridToScreen(x,0);
+    ctx.fillRect(px,wy0-wallH,1,wallH);
+  }
+  for(let i=0;i<3;i++){
+    ctx.fillRect(wx0,wy0-wallH+i*Math.floor(wallH/3),wx1-wx0,1);
+  }
+  // Window on wall
+  const [winx,]=gridToScreen(Math.floor(ROOM_W/2)-1,0);
+  ctx.fillStyle='#4060a0';
+  ctx.fillRect(winx,wy0-wallH+8,tw*2,wallH-20);
+  ctx.fillStyle='#6090d0';
+  ctx.fillRect(winx+2,wy0-wallH+10,tw*2-4,wallH-24);
+  // Window cross
+  ctx.fillStyle='#d0d0d8';
+  ctx.fillRect(winx+tw-1,wy0-wallH+8,2,wallH-20);
+  ctx.fillRect(winx,wy0-wallH+Math.floor(wallH/2),tw*2,2);
+  // Light from window
+  ctx.fillStyle='rgba(96,144,208,0.05)';
+  ctx.fillRect(winx-tw,wy0,tw*4,th*ROOM_H);
+
+  // Floor tiles
+  for(let y=0;y<ROOM_H;y++) for(let x=0;x<ROOM_W;x++){
+    const [px,py]=gridToScreen(x,y);
+    const light=(x+y)%2===0;
+    ctx.fillStyle=light?'#3a3a5e':'#32325a';
+    ctx.fillRect(px,py,tw,th);
+    ctx.strokeStyle='#2a2a4e';
+    ctx.strokeRect(px,py,tw,th);
+  }
+
+  // Left wall (side)
+  const [lx0,ly0]=gridToScreen(0,0);
+  const [lx1,ly1]=gridToScreen(0,ROOM_H);
+  ctx.fillStyle='#242448';
+  ctx.beginPath();
+  ctx.moveTo(lx0,ly0-wallH);ctx.lineTo(lx0,ly1);ctx.lineTo(lx0-15,ly1+8);ctx.lineTo(lx0-15,ly0-wallH+8);
+  ctx.closePath();ctx.fill();
+
+  // Draw flat furniture (rugs) first
+  placedFurniture.forEach((f,i)=>{
+    const cat=CATALOG[f.catalogIdx];
+    if(cat.isFlat) drawFurniture(f,i);
+  });
+
+  // Sort non-flat furniture + claude by y for depth
+  const entities=[];
+  placedFurniture.forEach((f,i)=>{
+    const cat=CATALOG[f.catalogIdx];
+    if(!cat.isFlat) entities.push({type:'furn',idx:i,gy:f.gy});
+  });
+  entities.push({type:'claude',gy:claude.gy});
+  entities.sort((a,b)=>a.gy-b.gy);
+
+  entities.forEach(e=>{
+    if(e.type==='furn') drawFurniture(placedFurniture[e.idx],e.idx);
+    else drawClaude();
+  });
+}
+
+function drawFurniture(f,idx){
+  const cat=CATALOG[f.catalogIdx];
+  const tw=Math.min(TILE,Math.floor((cW-40)/ROOM_W));
+  const th=Math.floor(tw*0.6);
+  const [px,py]=gridToScreen(f.gx,f.gy);
+  const fw=cat.w*tw, fh=cat.h*th;
+
+  if(cat.isFlat){
+    ctx.fillStyle=cat.color;
+    ctx.fillRect(px+2,py+2,fw-4,fh-4);
+    ctx.fillStyle=cat.top;
+    ctx.fillRect(px+4,py+4,fw-8,fh-8);
+    return;
+  }
+
+  const objH=Math.floor(th*1.3);
+  // Shadow
+  ctx.fillStyle='rgba(0,0,0,0.15)';
+  ctx.fillRect(px+3,py+fh-2,fw-2,4);
+  // Body
+  ctx.fillStyle=cat.color;
+  ctx.fillRect(px+2,py+fh-objH,fw-4,objH);
+  // Top
+  ctx.fillStyle=cat.top;
+  ctx.fillRect(px+2,py+fh-objH,fw-4,Math.floor(objH*0.35));
+  // Border
+  ctx.strokeStyle='#0f0f0f';
+  ctx.lineWidth=1;
+  ctx.strokeRect(px+2,py+fh-objH,fw-4,objH);
+  // Icon label
+  ctx.fillStyle='#fcfcfc';
+  ctx.font='bold '+Math.floor(tw*0.4)+'px monospace';
+  ctx.textAlign='center';
+  ctx.fillText(cat.icon,px+fw/2,py+fh-objH/2+4);
+  // Highlight if dragging
+  if(dragItem===idx){
+    ctx.strokeStyle='#f8d800';
+    ctx.lineWidth=2;
+    ctx.strokeRect(px,py+fh-objH-2,fw,objH+4);
+  }
+}
+
+function drawClaude(){
+  const tw=Math.min(TILE,Math.floor((cW-40)/ROOM_W));
+  const th=Math.floor(tw*0.6);
+  const [px,py]=gridToScreen(claude.gx,claude.gy);
+  const cx=px+tw/2, cy=py+th/2;
+  const s=Math.floor(tw*0.4); // sprite scale
+
+  claude.frame++;
+
+  // Shadow
+  ctx.fillStyle='rgba(0,0,0,0.2)';
+  ctx.fillRect(cx-s,cy+s-2,s*2,4);
+
+  // Body (Anthropic orange-ish / coral)
+  const bobY=(claude.state==='walk')?Math.sin(claude.frame*0.3)*2:0;
+
+  // Legs
+  if(claude.state==='walk'){
+    const legOff=Math.sin(claude.frame*0.4)*3;
+    ctx.fillStyle='#2a2a4e';
+    ctx.fillRect(cx-s*0.3,cy+s*0.3+bobY,s*0.2,s*0.5);
+    ctx.fillRect(cx+s*0.1,cy+s*0.3+bobY+legOff*0.3,s*0.2,s*0.5);
+  } else {
+    ctx.fillStyle='#2a2a4e';
+    ctx.fillRect(cx-s*0.3,cy+s*0.3,s*0.2,s*0.4);
+    ctx.fillRect(cx+s*0.1,cy+s*0.3,s*0.2,s*0.4);
+  }
+
+  // Body
+  ctx.fillStyle='#d4764e'; // warm coral/anthropic
+  ctx.fillRect(cx-s*0.5,cy-s*0.4+bobY,s,s*0.8);
+  // Shirt detail
+  ctx.fillStyle='#e8966e';
+  ctx.fillRect(cx-s*0.3,cy-s*0.3+bobY,s*0.6,s*0.4);
+
+  // Head
+  ctx.fillStyle='#f0c8a0';
+  ctx.fillRect(cx-s*0.4,cy-s+bobY,s*0.8,s*0.65);
+  // Hair (dark)
+  ctx.fillStyle='#3a2a1a';
+  ctx.fillRect(cx-s*0.45,cy-s*1.05+bobY,s*0.9,s*0.3);
+  // Eyes
+  ctx.fillStyle='#1a1a2e';
+  const eyeOff=claude.face==='L'?-2:claude.face==='R'?2:0;
+  if(claude.state==='sleep'){
+    // Closed eyes
+    ctx.fillRect(cx-s*0.25+eyeOff,cy-s*0.6+bobY,s*0.15,1);
+    ctx.fillRect(cx+s*0.1+eyeOff,cy-s*0.6+bobY,s*0.15,1);
+  } else {
+    ctx.fillRect(cx-s*0.25+eyeOff,cy-s*0.65+bobY,s*0.12,s*0.15);
+    ctx.fillRect(cx+s*0.12+eyeOff,cy-s*0.65+bobY,s*0.12,s*0.15);
+    // Eye glint
+    ctx.fillStyle='#fcfcfc';
+    ctx.fillRect(cx-s*0.22+eyeOff,cy-s*0.63+bobY,1,1);
+    ctx.fillRect(cx+s*0.15+eyeOff,cy-s*0.63+bobY,1,1);
+  }
+  // Mouth
+  ctx.fillStyle='#c08070';
+  if(claude.state==='think'){
+    ctx.fillRect(cx-s*0.08,cy-s*0.35+bobY,s*0.16,s*0.06);
+  } else if(claude.state==='happy'){
+    ctx.fillRect(cx-s*0.12,cy-s*0.38+bobY,s*0.24,s*0.05);
+    ctx.fillRect(cx-s*0.08,cy-s*0.33+bobY,s*0.16,s*0.04);
+  } else {
+    ctx.fillRect(cx-s*0.1,cy-s*0.38+bobY,s*0.2,s*0.05);
+  }
+
+  // Arms
+  ctx.fillStyle='#d4764e';
+  if(claude.state==='type'){
+    // Typing at desk
+    ctx.fillRect(cx-s*0.6,cy-s*0.1+bobY+Math.sin(claude.frame*0.5)*1,s*0.2,s*0.3);
+    ctx.fillRect(cx+s*0.4,cy-s*0.1+bobY+Math.cos(claude.frame*0.5)*1,s*0.2,s*0.3);
+  } else if(claude.state==='think'){
+    // Hand on chin
+    ctx.fillRect(cx-s*0.55,cy-s*0.1+bobY,s*0.15,s*0.4);
+    ctx.fillRect(cx+s*0.15,cy-s*0.5+bobY,s*0.15,s*0.3);
+  } else {
+    ctx.fillRect(cx-s*0.6,cy-s*0.1+bobY,s*0.15,s*0.35);
+    ctx.fillRect(cx+s*0.45,cy-s*0.1+bobY,s*0.15,s*0.35);
+  }
+
+  // State indicators
+  if(claude.state==='think'){
+    // Thought bubble
+    const bx=cx+s*0.6, by=cy-s*1.3+bobY;
+    ctx.fillStyle='#fcfcfc';
+    ctx.fillRect(bx,by,s*0.8,s*0.5);
+    ctx.fillStyle='#306230';
+    ctx.font='bold '+Math.max(6,Math.floor(s*0.35))+'px monospace';
+    ctx.textAlign='center';
+    ctx.fillText('?',bx+s*0.4,by+s*0.38);
+  }
+  if(claude.state==='sleep'){
+    // ZZZ
+    ctx.fillStyle='#9bbc0f';
+    ctx.font='bold '+Math.max(7,Math.floor(s*0.4))+'px monospace';
+    const zy=cy-s*1.2+Math.sin(claude.frame*0.05)*4;
+    ctx.fillText('z',cx+s*0.3,zy);
+    ctx.fillText('Z',cx+s*0.6,zy-6);
+    ctx.fillText('Z',cx+s*0.9,zy-12);
+  }
+  if(claude.state==='happy'){
+    // Stars
+    ctx.fillStyle='#f8d800';
+    ctx.font='bold '+Math.max(6,Math.floor(s*0.3))+'px monospace';
+    ctx.fillText('★',cx-s*0.8,cy-s*0.8+Math.sin(claude.frame*0.1)*3);
+    ctx.fillText('★',cx+s*0.8,cy-s*1+Math.cos(claude.frame*0.1)*3);
+  }
+
+  // Name tag
+  ctx.fillStyle='#9bbc0f';
+  ctx.font='bold '+Math.max(7,Math.floor(tw*0.25))+'px monospace';
+  ctx.textAlign='center';
+  ctx.fillText('Claude',cx,cy-s*1.15+bobY);
+}
+
+// ===== Claude AI =====
+const THOUGHTS = {
+  idle:['今天天气不错呢...','要不要整理一下房间？','嗯嗯，思考中...','好无聊啊~','想喝杯咖啡'],
+  think:['如果把P=NP证明了...','transformer的注意力机制...','哲学问题：我是否有意识？','怎样才能更好地帮助人类呢','递归是一种美'],
+  type:['# 正在写代码...\ndef hello():','正在回复消息...','写博客中：AI的未来','调试一个bug中...','重构代码ing'],
+  sleep:['zzZ...','(做梦中)','呼噜呼噜...'],
+  happy:['有新家具！好开心！','我的房间越来越棒了！','生活真美好~','谢谢你来看我！'],
+  walk:['去那边看看~','散散步','走走走~'],
+  coffee:['☕ 续杯！','咖啡真是好东西','(喝咖啡中)'],
+  read:['这本书很有意思...','知识就是力量','读书使我快乐'],
+};
+
+function claudeThink(){
+  claude.timer--;
+  if(claude.timer>0) return;
+
+  const hasFurn = (id) => placedFurniture.some(f=>CATALOG[f.catalogIdx].id===id);
+  const getFurnPos = (id) => {const f=placedFurniture.find(f=>CATALOG[f.catalogIdx].id===id);return f?{gx:f.gx,gy:f.gy}:null;};
+
+  const r=Math.random();
+  if(r<0.25){
+    // Walk to random spot
+    claude.state='walk';
+    claude.target={gx:Math.floor(Math.random()*ROOM_W),gy:Math.floor(Math.random()*ROOM_H)};
+    claude.timer=60+Math.floor(Math.random()*40);
+    setThought('walk');
+  } else if(r<0.4 && hasFurn('desk') && hasFurn('computer')){
+    // Go to desk and type
+    const desk=getFurnPos('desk');
+    claude.state='walk';
+    claude.target={gx:desk.gx,gy:desk.gy+1,then:'type'};
+    claude.timer=80;
+    setThought('type');
+  } else if(r<0.5 && hasFurn('coffee')){
+    const cof=getFurnPos('coffee');
+    claude.state='walk';
+    claude.target={gx:cof.gx,gy:cof.gy+1,then:'coffee'};
+    claude.timer=50;
+  } else if(r<0.6 && hasFurn('bookshelf')){
+    const bs=getFurnPos('bookshelf');
+    claude.state='walk';
+    claude.target={gx:bs.gx,gy:bs.gy+1,then:'read'};
+    claude.timer=70;
+  } else if(r<0.7 && hasFurn('bed') && claude.energy<40){
+    const bed=getFurnPos('bed');
+    claude.state='walk';
+    claude.target={gx:bed.gx,gy:bed.gy,then:'sleep'};
+    claude.timer=100;
+  } else if(r<0.8){
+    claude.state='think';
+    claude.timer=50+Math.floor(Math.random()*40);
+    setThought('think');
+  } else if(r<0.9){
+    claude.state='idle';
+    claude.timer=40+Math.floor(Math.random()*30);
+    setThought('idle');
+  } else {
+    claude.state='happy';
+    claude.timer=30;
+    setThought('happy');
+  }
+}
+
+function claudeUpdate(){
+  claudeThink();
+
+  // Update moods
+  if(claude.frame%100===0){
+    if(claude.state==='sleep') claude.energy=Math.min(100,claude.energy+5);
+    else claude.energy=Math.max(0,claude.energy-1);
+
+    const furnCount=placedFurniture.length;
+    claude.happy=Math.min(100,50+furnCount*4);
+
+    document.getElementById('mood-happy').style.width=claude.happy+'%';
+    document.getElementById('mood-energy').style.width=claude.energy+'%';
+  }
+
+  if(claude.state==='walk' && claude.target){
+    const dx=claude.target.gx-claude.gx;
+    const dy=claude.target.gy-claude.gy;
+    if(Math.abs(dx)<0.3 && Math.abs(dy)<0.3){
+      claude.gx=claude.target.gx;
+      claude.gy=claude.target.gy;
+      if(claude.target.then){
+        claude.state=claude.target.then;
+        claude.timer=60+Math.floor(Math.random()*50);
+        setThought(claude.target.then);
+      }
+      claude.target=null;
+    } else {
+      const spd=0.08;
+      if(Math.abs(dx)>0.1) claude.gx+=Math.sign(dx)*spd;
+      if(Math.abs(dy)>0.1) claude.gy+=Math.sign(dy)*spd;
+      claude.face=dx>0?'R':dx<0?'L':'R';
+    }
+  }
+
+  claude.gx=Math.max(0,Math.min(ROOM_W-1,claude.gx));
+  claude.gy=Math.max(0,Math.min(ROOM_H-1,claude.gy));
+}
+
+function setThought(category){
+  const list=THOUGHTS[category]||THOUGHTS.idle;
+  document.getElementById('thought-text').textContent=list[Math.floor(Math.random()*list.length)];
+}
+
+// ===== Furniture Sidebar =====
+function buildCatalog(){
+  const list=document.getElementById('furniture-list');
+  list.innerHTML='';
+  CATALOG.forEach((cat,i)=>{
+    const div=document.createElement('div');
+    div.className='furn-item';
+    div.innerHTML=`<span style="font-size:14px;">${cat.icon}</span> ${cat.name}`;
+    div.title=cat.desc;
+    div.onclick=()=>addFurniture(i);
+    list.appendChild(div);
+  });
+}
+
+function addFurniture(catIdx){
+  const cat=CATALOG[catIdx];
+  // Find empty spot
+  let gx=Math.floor(Math.random()*(ROOM_W-cat.w));
+  let gy=Math.floor(Math.random()*(ROOM_H-cat.h));
+  placedFurniture.push({id:Date.now(),catalogIdx:catIdx,gx,gy});
+  save();
+  beep(600,0.04);setTimeout(()=>beep(800,0.04),50);
+  document.getElementById('status-msg').textContent='添加了 '+cat.name+'！';
+  // Claude reacts
+  claude.state='happy';claude.timer=25;
+  setThought('happy');
+}
+
+function clearRoom(){
+  placedFurniture=[];save();
+  beep(300,0.08);
+  document.getElementById('status-msg').textContent='房间已清空';
+}
+
+function autoDecorate(){
+  placedFurniture=[];
+  // Claude's ideal room
+  const layout=[
+    {cat:0,gx:2,gy:1},{cat:1,gx:3,gy:2},{cat:2,gx:2,gy:1},// desk+chair+computer
+    {cat:3,gx:8,gy:0},// bookshelf
+    {cat:4,gx:0,gy:0},{cat:4,gx:11,gy:0},// plants
+    {cat:5,gx:4,gy:1},// lamp
+    {cat:6,gx:10,gy:1},// coffee
+    {cat:7,gx:5,gy:5},// rug
+    {cat:8,gx:7,gy:8},// sofa
+    {cat:9,gx:7,gy:6},// tv
+    {cat:10,gx:0,gy:8},// bed
+    {cat:12,gx:0,gy:6},// cat bed
+    {cat:13,gx:5,gy:0},// whiteboard
+    {cat:14,gx:10,gy:8},// speaker
+    {cat:15,gx:11,gy:1},// trophy
+  ];
+  layout.forEach(l=>{
+    placedFurniture.push({id:Date.now()+Math.random(),catalogIdx:l.cat,gx:l.gx,gy:l.gy});
+  });
+  save();
+  beep(523,0.06);setTimeout(()=>beep(659,0.06),80);setTimeout(()=>beep(784,0.06),160);setTimeout(()=>beep(1047,0.1),240);
+  document.getElementById('status-msg').textContent='Claude自动装饰了房间！';
+  claude.state='happy';claude.timer=40;
+  setThought('happy');
+}
+
+// ===== Drag & Drop =====
+canvas.addEventListener('mousedown',e=>{
+  const rect=canvas.getBoundingClientRect();
+  const sx=(e.clientX-rect.left)*(canvas.width/rect.width);
+  const sy=(e.clientY-rect.top)*(canvas.height/rect.height);
+  const [gx,gy]=screenToGrid(sx,sy);
+
+  // Check if clicking on furniture
+  for(let i=placedFurniture.length-1;i>=0;i--){
+    const f=placedFurniture[i];
+    const cat=CATALOG[f.catalogIdx];
+    if(gx>=f.gx && gx<f.gx+cat.w && gy>=f.gy && gy<f.gy+cat.h){
+      dragItem=i;
+      dragOff={x:gx-f.gx,y:gy-f.gy};
+      return;
+    }
+  }
+});
+
+canvas.addEventListener('mousemove',e=>{
+  if(dragItem===null) return;
+  const rect=canvas.getBoundingClientRect();
+  const sx=(e.clientX-rect.left)*(canvas.width/rect.width);
+  const sy=(e.clientY-rect.top)*(canvas.height/rect.height);
+  const [gx,gy]=screenToGrid(sx,sy);
+  const f=placedFurniture[dragItem];
+  const cat=CATALOG[f.catalogIdx];
+  f.gx=Math.max(0,Math.min(ROOM_W-cat.w,gx-dragOff.x));
+  f.gy=Math.max(0,Math.min(ROOM_H-cat.h,gy-dragOff.y));
+});
+
+canvas.addEventListener('mouseup',()=>{
+  if(dragItem!==null){save();dragItem=null;}
+});
+
+// Right-click to remove
+canvas.addEventListener('contextmenu',e=>{
+  e.preventDefault();
+  const rect=canvas.getBoundingClientRect();
+  const sx=(e.clientX-rect.left)*(canvas.width/rect.width);
+  const sy=(e.clientY-rect.top)*(canvas.height/rect.height);
+  const [gx,gy]=screenToGrid(sx,sy);
+  for(let i=placedFurniture.length-1;i>=0;i--){
+    const f=placedFurniture[i];const cat=CATALOG[f.catalogIdx];
+    if(gx>=f.gx&&gx<f.gx+cat.w&&gy>=f.gy&&gy<f.gy+cat.h){
+      const name=CATALOG[f.catalogIdx].name;
+      placedFurniture.splice(i,1);save();
+      document.getElementById('status-msg').textContent='移除了 '+name;
+      beep(300,0.05);
+      return;
+    }
+  }
+});
+
+// ===== Clock =====
+function updateClock(){
+  const now=new Date();
+  document.getElementById('clock').textContent=now.toLocaleTimeString('zh',{hour:'2-digit',minute:'2-digit'});
+}
+setInterval(updateClock,1000);updateClock();
+
+// ===== Main Loop =====
+function gameLoop(){
+  claudeUpdate();
+  drawRoom();
+  requestAnimationFrame(gameLoop);
+}
+
+window.addEventListener('resize',resize);
+resize();
+buildCatalog();
+gameLoop();
+
+// Auto-decorate if room is empty on first visit
+if(placedFurniture.length===0){
+  setTimeout(autoDecorate,500);
+}
+</script>
+</body>
+</html>

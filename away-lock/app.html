@@ -1,0 +1,122 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>离席自动锁屏</title>
+<style>*{margin:0;padding:0;box-sizing:border-box}body{background:#0f380f;color:#8bac0f;font-family:'Courier New',Consolas,monospace;min-height:100vh;display:flex;flex-direction:column;align-items:center}.title-bar{width:100%;max-width:720px;background:#306230;border:3px solid #0f380f;border-bottom:none;padding:6px 12px;text-align:center;font-size:18px;font-weight:bold;color:#9bbc0f;text-shadow:2px 2px 0 #0f380f;margin-top:8px}.main{width:100%;max-width:720px;background:#1a4a1a;border:3px solid #306230;box-shadow:6px 6px 0 #0f380f;padding:12px;display:flex;flex-direction:column;gap:10px}.cam-box{width:160px;height:120px;background:#000;border:3px solid #306230;overflow:hidden;margin:0 auto}.cam-box video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}.panel{background:#0f380f;border:2px solid #306230;padding:8px}.status-big{text-align:center;font-size:28px;font-weight:bold;padding:10px}.status-big.present{color:#58d854}.status-big.away{color:#e63946;animation:blink 1s steps(1) infinite}@keyframes blink{50%{opacity:.5}}.bar{background:#306230;height:10px;border:1px solid #0f380f;margin:4px 0}.bar-fill{background:#8bac0f;height:100%;transition:width .3s steps(5)}.btn-row{display:flex;gap:6px;flex-wrap:wrap}button{background:#8bac0f;color:#0f380f;border:3px solid #0f380f;box-shadow:4px 4px 0 #306230;font-family:monospace;font-size:12px;font-weight:bold;padding:6px 12px;cursor:pointer}button:hover{background:#9bbc0f;transform:translate(2px,2px);box-shadow:2px 2px 0 #306230}button:active{transform:translate(4px,4px);box-shadow:none}label{font-size:11px;color:#306230;display:flex;align-items:center;gap:6px}input[type=range]{width:100px;accent-color:#8bac0f}input[type=password]{background:#0f380f;color:#8bac0f;border:2px solid #306230;padding:4px 8px;font-family:monospace;font-size:16px;width:80px;text-align:center;letter-spacing:4px}.log{max-height:150px;overflow-y:auto;font-size:10px}.log div{padding:2px 0;border-bottom:1px solid #1a4a1a}.stats-row{display:flex;gap:12px;font-size:11px;flex-wrap:wrap}
+/* Lock screen overlay */
+.lock-overlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:#0a0a2e;z-index:9999;flex-direction:column;align-items:center;justify-content:center;color:#8bac0f;font-family:monospace}.lock-overlay.active{display:flex}.lock-time{font-size:48px;font-weight:bold;color:#9bbc0f;text-shadow:3px 3px 0 #0f380f;margin:20px 0}.lock-msg{font-size:16px;color:#306230;margin:10px 0}.lock-away{font-size:14px;color:#e63946}.lock-padlock{font-size:60px;margin:10px 0}.lock-pin{margin:20px 0;display:flex;flex-direction:column;align-items:center;gap:8px}.rain{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;opacity:.15;overflow:hidden}video{display:none}
+/* ===== MOBILE ===== */
+@media(max-width:600px){
+  body{overflow-y:auto!important;min-height:100vh;}
+  video{width:100%!important;max-width:100%!important;height:auto!important;}
+  canvas{max-width:100%!important;}
+  #app,.app,.container,.main,.wrapper,[id*="app"],[class*="container"]{width:100%!important;max-width:100%!important;margin:0!important;border-radius:0!important;}
+  button,.btn,.action-btn,[class*="btn"]{min-height:44px;font-size:13px!important;touch-action:manipulation;}
+  input,textarea,select{font-size:16px!important;}
+  .controls,.toolbar,.actions,.panel,.buttons,[class*="controls"],[class*="toolbar"]{flex-wrap:wrap!important;}
+  [style*="width:"][style*="px"]{max-width:100%!important;}
+}
+</style></head>
+<body>
+<div class="lock-overlay" id="lockScreen">
+<canvas id="rainCv" class="rain"></canvas>
+<div class="lock-padlock">🔒</div>
+<div class="lock-time" id="lockTime">00:00</div>
+<div class="lock-msg">主人离开了...</div>
+<div class="lock-away" id="lockAway">已离席 0 秒</div>
+<div class="lock-pin"><input type="password" id="pinInput" maxlength="4" placeholder="PIN" onkeyup="checkPin()"><div style="font-size:10px;color:#306230">输入PIN解锁 (默认0000)</div></div>
+</div>
+<div class="title-bar">★ 离席自动锁屏 ★</div><div class="main">
+<div class="cam-box"><video id="vid" playsinline muted></video></div>
+<div class="panel">
+<div class="status-big present" id="statusText">✔ 在席</div>
+<div style="font-size:10px;text-align:center">肤色检测: <span id="skinPct">0</span>%</div>
+<div class="bar"><div class="bar-fill" id="skinBar" style="width:0%"></div></div>
+</div>
+<div class="panel">
+<label>离席超时: <input type="range" id="timeout" min="15" max="120" value="30" step="15"><span id="timeoutV">30</span>秒</label>
+<label>检测阈值: <input type="range" id="thresh" min="1" max="15" value="5"><span id="threshV">5</span>%</label>
+<label>PIN码: <input type="password" id="pinSet" maxlength="4" value="0000" style="width:60px"></label>
+</div>
+<div class="btn-row">
+<button onclick="startCam()">▶ 开始监控</button>
+<button onclick="paused=!paused;this.textContent=paused?'▶ 恢复':'⏸ 暂停'">⏸ 暂停</button>
+<button onclick="soundOn=!soundOn">♪ 声音</button>
+</div>
+<div class="panel"><div class="stats-row">
+<div>今日锁屏: <b id="lockCount">0</b> 次</div>
+<div>最长离席: <b id="maxAway">0</b>秒</div>
+<div>在席率: <b id="presRate">100</b>%</div>
+</div></div>
+<div class="panel"><div class="log" id="logList">等待开始...</div></div>
+</div>
+<canvas id="tmpCv" style="display:none"></canvas>
+<script src="../cam-core/cam-core.js"></script>
+<script>
+const vid=document.getElementById('vid'),tmpCv=document.getElementById('tmpCv'),tmpCtx=tmpCv.getContext('2d');
+const rainCv=document.getElementById('rainCv'),rainCtx=rainCv.getContext('2d');
+let stream=null,running=false,paused=false,soundOn=true;
+let present=true,awayStart=null,lockTimeout=30,skinThresh=5;
+let lockCount=0,maxAway=0,totalPresent=0,totalAway=0,lastTick=Date.now();
+let logs=[];
+const presenceState=new CamCore.StateFilter(12,0.6,0.3);
+const audioCtx=new(window.AudioContext||window.webkitAudioContext)();
+function beep(f,d,type='square'){if(!soundOn)return;const o=audioCtx.createOscillator(),g=audioCtx.createGain();o.connect(g);g.connect(audioCtx.destination);o.type=type;o.frequency.value=f;g.gain.value=0.08;o.start();o.stop(audioCtx.currentTime+d)}
+function lockSound(){beep(200,0.15);setTimeout(()=>beep(150,0.2),150)}
+function unlockSound(){[523,659,784,1047].forEach((f,i)=>setTimeout(()=>beep(f,0.1,'sine'),i*80))}
+document.getElementById('timeout').oninput=function(){lockTimeout=+this.value;document.getElementById('timeoutV').textContent=this.value};
+document.getElementById('thresh').oninput=function(){skinThresh=+this.value;document.getElementById('threshV').textContent=this.value};
+async function startCam(){try{stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'user',width:{ideal:320},height:{ideal:240}},audio:false});vid.srcObject=stream;vid.style.display='block';await vid.play();tmpCv.width=160;tmpCv.height=120;rainCv.width=window.innerWidth;rainCv.height=window.innerHeight;running=true;addLog('监控已开始');requestAnimationFrame(loop)}catch(e){alert('摄像头启动失败: '+e.message)}}
+// Matrix rain
+const drops=[];for(let i=0;i<50;i++)drops.push({x:Math.random()*800,y:Math.random()*600,s:Math.random()*10+5});
+function drawRain(){rainCtx.fillStyle='rgba(10,10,46,0.1)';rainCtx.fillRect(0,0,rainCv.width,rainCv.height);rainCtx.fillStyle='#8bac0f';rainCtx.font='12px monospace';drops.forEach(d=>{const ch=String.fromCharCode(0x30A0+Math.random()*96);rainCtx.fillText(ch,d.x,d.y);d.y+=d.s;if(d.y>rainCv.height){d.y=0;d.x=Math.random()*rainCv.width}})}
+function loop(){if(!running)return;
+const now=Date.now(),dt=(now-lastTick)/1000;lastTick=now;
+if(!paused){
+// CamCore: HSV skin detection with normalize + blur
+tmpCtx.save();tmpCtx.translate(tmpCv.width,0);tmpCtx.scale(-1,1);
+tmpCtx.drawImage(vid,0,0,tmpCv.width,tmpCv.height);tmpCtx.restore();
+const img=tmpCtx.getImageData(0,0,160,120);
+CamCore.boxBlur(img,160,120,1);
+CamCore.normalize(img);
+const roi={x:Math.floor(160*0.3),y:Math.floor(120*0.3),w:Math.floor(160*0.4),h:Math.floor(120*0.4)};
+const pct=Math.round(CamCore.detectSkin(img,160,120,roi));
+document.getElementById('skinPct').textContent=pct;
+document.getElementById('skinBar').style.width=Math.min(100,pct*3)+'%';
+const wasPresent=present;
+// CamCore: temporal state filter for stable presence detection
+present=presenceState.update(pct>=skinThresh);
+if(present){
+totalPresent+=dt;
+if(!wasPresent&&awayStart){
+// Welcome back!
+const awayDur=Math.round((now-awayStart)/1000);
+if(awayDur>=lockTimeout){hideLock();unlockSound();addLog('欢迎回来! 离开了'+awayDur+'秒')}
+awayStart=null}
+document.getElementById('statusText').textContent='✔ 在席';
+document.getElementById('statusText').className='status-big present';
+}else{
+totalAway+=dt;
+if(wasPresent&&!awayStart){awayStart=now}
+if(awayStart){
+const awayDur=Math.round((now-awayStart)/1000);
+document.getElementById('statusText').textContent='⚠ 离席 '+awayDur+'s';
+document.getElementById('statusText').className='status-big away';
+if(awayDur>=lockTimeout&&!isLocked()){showLock();lockSound();lockCount++;addLog('已锁屏 (离席'+lockTimeout+'秒)');if(awayDur>maxAway)maxAway=awayDur}}
+}
+// Update lock screen
+if(isLocked()){
+const d=new Date();document.getElementById('lockTime').textContent=d.toLocaleTimeString();
+if(awayStart)document.getElementById('lockAway').textContent='已离席 '+Math.round((now-awayStart)/1000)+' 秒';
+drawRain()}
+// Stats
+document.getElementById('lockCount').textContent=lockCount;
+document.getElementById('maxAway').textContent=maxAway;
+const totalT=totalPresent+totalAway;
+document.getElementById('presRate').textContent=totalT>0?Math.round(totalPresent/totalT*100):100;
+}
+requestAnimationFrame(loop)}
+function isLocked(){return document.getElementById('lockScreen').classList.contains('active')}
+function showLock(){document.getElementById('lockScreen').classList.add('active');document.getElementById('pinInput').value=''}
+function hideLock(){document.getElementById('lockScreen').classList.remove('active')}
+function checkPin(){const pin=document.getElementById('pinInput').value;const setPin=document.getElementById('pinSet').value||'0000';if(pin===setPin){hideLock();unlockSound();addLog('手动PIN解锁')}}
+function addLog(msg){const t=new Date().toLocaleTimeString();logs.unshift(t+' - '+msg);if(logs.length>50)logs.pop();
+document.getElementById('logList').innerHTML=logs.map(l=>'<div>'+l+'</div>').join('')}
+</script></body></html>

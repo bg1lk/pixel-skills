@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>随机决定器</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:#0f380f;font-family:'Courier New','Consolas',monospace;color:#0f380f;display:flex;justify-content:center;align-items:center;min-height:100vh;}
+#app{background:#9bbc0f;border:4px solid #0f380f;box-shadow:8px 8px 0px #306230;width:min(96vw,440px);text-align:center;}
+#titlebar{background:#306230;color:#9bbc0f;padding:8px 16px;font-size:16px;font-weight:bold;letter-spacing:3px;border-bottom:3px solid #0f380f;}
+#content{padding:16px;}
+#result-box{background:#306230;border:4px solid #0f380f;padding:20px;margin:12px 0;min-height:80px;display:flex;align-items:center;justify-content:center;}
+#result-text{font-size:28px;font-weight:bold;color:#9bbc0f;text-shadow:2px 2px 0px #0f380f;letter-spacing:2px;word-break:break-all;}
+#items-area{text-align:left;margin:10px 0;}
+#items-area label{font-size:12px;font-weight:bold;color:#306230;}
+#items-input{width:100%;background:#8bac0f;border:3px solid #0f380f;padding:8px;font-family:monospace;font-size:13px;color:#0f380f;resize:vertical;min-height:80px;outline:none;}
+#items-input::placeholder{color:#306230;}
+.presets{display:flex;flex-wrap:wrap;gap:4px;margin:8px 0;}
+.preset-btn{background:#8bac0f;color:#0f380f;border:2px solid #0f380f;box-shadow:2px 2px 0px #306230;font-family:monospace;font-size:11px;font-weight:bold;padding:4px 10px;cursor:pointer;}
+.preset-btn:hover{background:#9bbc0f;transform:translate(1px,1px);box-shadow:1px 1px 0px #306230;}
+button{background:#8bac0f;color:#0f380f;border:3px solid #0f380f;box-shadow:3px 3px 0px #306230;font-family:monospace;font-size:16px;font-weight:bold;padding:10px 28px;cursor:pointer;margin:6px;}
+button:hover{background:#9bbc0f;transform:translate(1px,1px);box-shadow:2px 2px 0px #306230;}
+button:active{transform:translate(3px,3px);box-shadow:none;}
+#roll-btn{background:#e63946;color:#fcfcfc;font-size:18px;padding:12px 36px;}
+#history{text-align:left;margin-top:12px;max-height:100px;overflow-y:auto;}
+.history-title{font-size:12px;font-weight:bold;color:#306230;border-bottom:2px solid #306230;padding-bottom:2px;margin-bottom:4px;}
+.history-item{font-size:11px;padding:2px 0;color:#0f380f;border-bottom:1px dashed #306230;}
+#bottombar{background:#306230;color:#9bbc0f;padding:5px 12px;font-size:11px;border-top:3px solid #0f380f;}
+@keyframes spin{0%{transform:rotate(0deg);}100%{transform:rotate(1080deg);}}
+@keyframes flash{0%,100%{background:#306230;}50%{background:#e63946;}}
+.flash-result{animation:flash 0.3s steps(2) 3;}
+
+/* ===== MOBILE ===== */
+@media(max-width:600px){
+  body{overflow-y:auto!important;min-height:100vh;}
+  button,.btn,.action-btn,[class*="btn"]{min-height:44px;font-size:13px!important;touch-action:manipulation;}
+  input,textarea,select{font-size:16px!important;}
+  .controls,.toolbar,.actions,.panel,.buttons,[class*="controls"],[class*="toolbar"]{flex-wrap:wrap!important;}
+  [style*="width:"][style*="px"]{max-width:100%!important;}
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="titlebar">★ 随机决定器 ★</div>
+  <div id="content">
+    <div id="result-box">
+      <div id="result-text">？</div>
+    </div>
+
+    <button id="roll-btn" onclick="roll()">◆ 决定！ ◆</button>
+
+    <div id="items-area">
+      <label>选项（每行一个）：</label>
+      <textarea id="items-input" placeholder="火锅&#10;烧烤&#10;麻辣烫&#10;日料&#10;随便吧"></textarea>
+    </div>
+
+    <div class="presets">
+      <button class="preset-btn" onclick="loadPreset('food')">吃什么</button>
+      <button class="preset-btn" onclick="loadPreset('drink')">喝什么</button>
+      <button class="preset-btn" onclick="loadPreset('activity')">做什么</button>
+      <button class="preset-btn" onclick="loadPreset('yesno')">是/否</button>
+      <button class="preset-btn" onclick="loadPreset('dice')">骰子</button>
+      <button class="preset-btn" onclick="loadPreset('coin')">硬币</button>
+      <button class="preset-btn" onclick="loadPreset('num')">1-100</button>
+    </div>
+
+    <div id="history">
+      <div class="history-title">▸ 历史记录</div>
+      <div id="history-list"></div>
+    </div>
+  </div>
+  <div id="bottombar">░ 选择困难？交给命运 ░</div>
+</div>
+<script>
+const audioCtx=new(window.AudioContext||window.webkitAudioContext)();
+function beep(f,d,v=0.08){const o=audioCtx.createOscillator(),g=audioCtx.createGain();o.type='square';o.frequency.value=f;g.gain.value=v;g.gain.exponentialRampToValueAtTime(0.001,audioCtx.currentTime+d);o.connect(g);g.connect(audioCtx.destination);o.start();o.stop(audioCtx.currentTime+d);}
+function sfxRoll(){for(let i=0;i<8;i++)setTimeout(()=>beep(300+Math.random()*600,0.04),i*60);}
+function sfxResult(){beep(523,0.1);setTimeout(()=>beep(659,0.1),100);setTimeout(()=>beep(1047,0.2),200);}
+
+const PRESETS={
+  food:'火锅\n烧烤\n麻辣烫\n日料\n披萨\n汉堡\n炒菜\n面条\n饺子\n沙拉\n螺蛳粉\n黄焖鸡',
+  drink:'奶茶\n咖啡\n柠檬水\n可乐\n果汁\n矿泉水\n酸奶\n椰汁',
+  activity:'看电影\n打游戏\n散步\n看书\n画画\n听音乐\n做饭\n运动\n写日记\n整理房间',
+  yesno:'是\n否',
+  dice:'1\n2\n3\n4\n5\n6',
+  coin:'正面\n反面',
+  num:Array.from({length:100},(_,i)=>i+1).join('\n')
+};
+
+let history=[];
+try{history=JSON.parse(localStorage.getItem('dice-history')||'[]');}catch(e){}
+renderHistory();
+
+function getItems(){
+  return document.getElementById('items-input').value.split('\n').map(s=>s.trim()).filter(s=>s.length>0);
+}
+
+function loadPreset(key){
+  document.getElementById('items-input').value=PRESETS[key];
+  beep(600,0.04);
+}
+
+let rolling=false;
+function roll(){
+  const items=getItems();
+  if(items.length===0||rolling) return;
+  rolling=true;
+  sfxRoll();
+
+  const resultEl=document.getElementById('result-text');
+  const box=document.getElementById('result-box');
+  let count=0;
+  const total=12+Math.floor(Math.random()*8);
+  const iv=setInterval(()=>{
+    resultEl.textContent=items[Math.floor(Math.random()*items.length)];
+    beep(400+count*30,0.02,0.04);
+    count++;
+    if(count>=total){
+      clearInterval(iv);
+      const winner=items[Math.floor(Math.random()*items.length)];
+      resultEl.textContent=winner;
+      box.classList.remove('flash-result');
+      void box.offsetWidth;
+      box.classList.add('flash-result');
+      sfxResult();
+      history.unshift({text:winner,time:new Date().toLocaleTimeString('zh')});
+      if(history.length>20) history.pop();
+      localStorage.setItem('dice-history',JSON.stringify(history));
+      renderHistory();
+      rolling=false;
+    }
+  },80);
+}
+
+function renderHistory(){
+  const el=document.getElementById('history-list');
+  el.innerHTML=history.map(h=>`<div class="history-item">${h.time} → ${h.text}</div>`).join('');
+}
+
+// keyboard
+document.addEventListener('keydown',e=>{if(e.key===' '||e.key==='Enter'){e.preventDefault();roll();}});
+</script>
+</body>
+</html>

@@ -1,0 +1,243 @@
+[
+  {
+    "id": "expense-tracker",
+    "name": "记账本",
+    "icon": "$",
+    "color": "#f8d800",
+    "path": "../expense-tracker/app.html",
+    "description": "个人收支记账工具"
+  },
+  {
+    "id": "water-reminder",
+    "name": "喝水",
+    "icon": "~",
+    "color": "#3cbcfc",
+    "path": "../water-reminder/app.html",
+    "description": "智能喝水追踪·摄像头AI检测",
+    "camera": true
+  },
+  {
+    "id": "cat-pet",
+    "name": "猫咪",
+    "icon": "+",
+    "color": "#f878f8",
+    "path": "../cat-pet/app.html",
+    "description": "像素小猫养成游戏"
+  },
+  {
+    "id": "desktop-goose",
+    "name": "大鹅",
+    "icon": "@",
+    "color": "#fcfcfc",
+    "path": "../desktop-goose/app.html",
+    "description": "像素大鹅桌宠"
+  },
+  {
+    "id": "pixel-paint",
+    "name": "画板",
+    "icon": "#",
+    "color": "#f83800",
+    "path": "../pixel-paint/app.html",
+    "description": "像素绘画工具·AI摄像头画画",
+    "camera": true
+  },
+  {
+    "id": "pomodoro",
+    "name": "番茄",
+    "icon": "!",
+    "color": "#e63946",
+    "path": "../pomodoro/app.html",
+    "description": "番茄钟专注计时器"
+  },
+  {
+    "id": "todo-list",
+    "name": "待办",
+    "icon": "=",
+    "color": "#00a800",
+    "path": "../todo-list/app.html",
+    "description": "日常待办清单"
+  },
+  {
+    "id": "pixel-clock",
+    "name": "时钟",
+    "icon": "0",
+    "color": "#0078f8",
+    "path": "../pixel-clock/app.html",
+    "description": "时钟·秒表·倒计时"
+  },
+  {
+    "id": "dice-roller",
+    "name": "骰子",
+    "icon": "?",
+    "color": "#f4d03f",
+    "path": "../dice-roller/app.html",
+    "description": "随机决定器"
+  },
+  {
+    "id": "note-pad",
+    "name": "笔记",
+    "icon": "N",
+    "color": "#fca044",
+    "path": "../note-pad/app.html",
+    "description": "快速笔记本"
+  },
+  {
+    "id": "shanghai-cat-tour",
+    "name": "旅行",
+    "icon": "M",
+    "color": "#58d854",
+    "path": "../shanghai-cat-tour/app.html",
+    "description": "上海猫咪旅行地图"
+  },
+  {
+    "id": "claude-room",
+    "name": "房间",
+    "icon": "C",
+    "color": "#d4764e",
+    "path": "../claude-room/app.html",
+    "description": "Claude的像素小房间"
+  },
+  {
+    "id": "boss-radar",
+    "name": "雷达",
+    "icon": "!",
+    "color": "#e63946",
+    "path": "../boss-radar/app.html",
+    "description": "摸鱼辅助·老板雷达",
+    "camera": true
+  },
+  {
+    "id": "naruto-pet",
+    "name": "鸣人",
+    "icon": "N",
+    "color": "#ff6b35",
+    "path": "../naruto-pet/app.html",
+    "description": "鸣人像素桌宠"
+  },
+  {
+    "id": "room-organizer",
+    "name": "整理",
+    "icon": "R",
+    "color": "#58d854",
+    "path": "../room-organizer/app.html",
+    "description": "房间整理分类·收纳助手",
+    "camera": true
+  },
+  {
+    "id": "posture-check",
+    "name": "坐姿",
+    "icon": "P",
+    "color": "#4ecdc4",
+    "path": "../posture-check/app.html",
+    "description": "坐姿矫正器·摄像头检测",
+    "camera": true
+  },
+  {
+    "id": "eye-guardian",
+    "name": "护眼",
+    "icon": "E",
+    "color": "#45b7d1",
+    "path": "../eye-guardian/app.html",
+    "description": "护眼卫士·20-20-20法则",
+    "camera": true
+  },
+  {
+    "id": "seat-tracker",
+    "name": "久坐",
+    "icon": "S",
+    "color": "#ff8c42",
+    "path": "../seat-tracker/app.html",
+    "description": "久坐提醒·拉伸运动",
+    "camera": true
+  },
+  {
+    "id": "anime-filter",
+    "name": "二次元",
+    "icon": "A",
+    "color": "#f878f8",
+    "path": "../anime-filter/app.html",
+    "description": "实时二次元滤镜·多风格",
+    "camera": true
+  },
+{
+    "id": "manga-panel",
+    "name": "漫画",
+    "icon": "M",
+    "color": "#fcfcfc",
+    "path": "../manga-panel/app.html",
+    "description": "实时漫画分镜机",
+    "camera": true
+  },
+  {
+    "id": "breath-coach",
+    "name": "呼吸",
+    "icon": "O",
+    "color": "#7ecfc0",
+    "path": "../breath-coach/app.html",
+    "description": "压力呼吸教练·4-7-8放松法",
+    "camera": true
+  },
+  {
+    "id": "light-meter",
+    "name": "光线",
+    "icon": "L",
+    "color": "#f4d03f",
+    "path": "../light-meter/app.html",
+    "description": "光线检测器·护眼提醒",
+    "camera": true
+  },
+{
+    "id": "pet-monitor",
+    "name": "宠物",
+    "icon": "W",
+    "color": "#f8a030",
+    "path": "../pet-monitor/app.html",
+    "description": "宠物监控·活动日报",
+    "camera": true
+  },
+  {
+    "id": "delivery-watch",
+    "name": "快递",
+    "icon": "D",
+    "color": "#e63946",
+    "path": "../delivery-watch/app.html",
+    "description": "快递监控·门口来人检测",
+    "camera": true
+  },
+{
+    "id": "away-lock",
+    "name": "锁屏",
+    "icon": "K",
+    "color": "#0078f8",
+    "path": "../away-lock/app.html",
+    "description": "离席自动锁屏·隐私保护",
+    "camera": true
+  },
+  {
+    "id": "mood-buddy",
+    "name": "情绪",
+    "icon": "♥",
+    "color": "#f878f8",
+    "path": "../mood-buddy/app.html",
+    "description": "情绪检测·温暖安慰伙伴",
+    "camera": true
+  },
+  {
+    "id": "ar-pet",
+    "name": "AR宠物",
+    "icon": "🐱",
+    "color": "#f8a030",
+    "path": "../ar-pet/app.html",
+    "description": "AR像素宠物·摄像头养猫",
+    "camera": true
+  },
+  {
+    "id": "pixel-life",
+    "name": "像素生活",
+    "icon": "&",
+    "color": "#f878f8",
+    "path": "../pixel-life/app.html",
+    "description": "Diva的像素生活·摄像头还原空间",
+    "camera": true
+  }
+]

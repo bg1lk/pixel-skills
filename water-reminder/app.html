@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>智能喝水追踪器</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{background:#0f380f;font-family:'Courier New',Consolas,monospace;color:#9bbc0f;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:8px}
+.app{width:100%;max-width:480px}
+.title-bar{background:#306230;border:3px solid #8bac0f;padding:8px 12px;text-align:center;font-size:16px;font-weight:bold;color:#9bbc0f;text-shadow:2px 2px 0 #0f380f;letter-spacing:2px}
+
+.cam-wrap{position:relative;margin-top:6px;border:3px solid #306230;background:#000;overflow:hidden;aspect-ratio:4/3;cursor:crosshair}
+.cam-wrap video{width:100%;height:100%;object-fit:cover;display:block;transform:scaleX(-1)}
+.cam-wrap canvas{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;transform:scaleX(-1)}
+.cam-off{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#306230;font-size:12px;gap:8px}
+.cam-off .icon{font-size:48px}
+.cam-hint{position:absolute;bottom:6px;left:50%;transform:translateX(-50%);font-size:9px;background:rgba(15,56,15,0.85);color:#8bac0f;padding:3px 10px;border:1px solid #306230;white-space:nowrap}
+
+.status-bar{display:flex;align-items:center;gap:8px;margin-top:6px;border:3px solid #306230;padding:6px 8px;font-size:10px}
+.tpl-preview{width:32px;height:32px;border:2px solid #8bac0f;flex-shrink:0;background:#333;image-rendering:pixelated}
+.status-info{flex:1;line-height:1.5}
+
+.config-row{display:flex;align-items:center;gap:6px;margin-top:6px;border:3px solid #306230;padding:6px 8px;font-size:11px}
+.config-row label{flex-shrink:0}
+.config-row input{width:60px;background:#0a2a0a;border:2px solid #306230;color:#8bac0f;font-family:monospace;font-size:12px;padding:3px 6px;text-align:center;outline:none}
+.config-row input:focus{border-color:#8bac0f}
+
+.stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px}
+.stat-box{border:3px solid #306230;padding:10px;background:#0a2a0a;text-align:center}
+.stat-box .stat-label{font-size:9px;color:#306230;margin-bottom:4px}
+.stat-box .stat-num{font-size:32px;font-weight:bold;text-shadow:2px 2px 0 #306230;line-height:1}
+.stat-box .stat-unit{font-size:12px;color:#9bbc0f}
+.stat-box.sip .stat-num{color:#3cbcfc}
+.stat-box.vol .stat-num{color:#f4d03f}
+
+.total-bar{margin-top:6px;border:3px solid #306230;padding:10px;background:#0a2a0a;text-align:center}
+.total-bar .big-num{font-size:36px;font-weight:bold;color:#8bac0f;text-shadow:2px 2px 0 #306230;line-height:1.1}
+.total-bar .big-num span{font-size:14px;color:#9bbc0f}
+.progress{height:20px;background:#306230;border:2px solid #0f380f;margin:8px 0;position:relative;overflow:hidden}
+.progress-fill{height:100%;background:#8bac0f;transition:width 0.3s steps(10)}
+.progress-fill.done{background:#f4d03f}
+.progress-text{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:bold;color:#0f380f}
+.stat-row{display:flex;justify-content:space-around;font-size:10px;color:#9bbc0f}
+.drops{margin-top:6px;display:flex;flex-wrap:wrap;gap:3px;justify-content:center}
+.drop{width:14px;height:14px;background:#3cbcfc;border:1px solid #0f380f;border-radius:0 50% 50% 50%;transform:rotate(45deg);opacity:0.3}
+.drop.filled{opacity:1;box-shadow:1px 1px 0 #0078a8}
+
+.controls{display:flex;gap:5px;margin-top:6px;flex-wrap:wrap}
+.btn{flex:1;min-width:55px;background:#8bac0f;color:#0f380f;border:3px solid #0f380f;box-shadow:3px 3px 0 #306230;font-family:monospace;font-size:10px;font-weight:bold;padding:6px 4px;cursor:pointer;text-align:center}
+.btn:hover{background:#9bbc0f;transform:translate(1px,1px);box-shadow:2px 2px 0 #306230}
+.btn:active{transform:translate(3px,3px);box-shadow:none}
+.btn.on{background:#e63946;color:#fff}
+.btn.blue{background:#3cbcfc;color:#0f380f}
+.btn.off{background:#306230;color:#8bac0f}
+.btn.gold{background:#f4d03f;color:#0f380f}
+
+.sep{color:#306230;font-size:8px;text-align:center;margin:6px 0 2px;letter-spacing:2px}
+
+.log{margin-top:6px;border:3px solid #306230;background:#0a2a0a;padding:6px;max-height:80px;overflow-y:auto;font-size:9px;color:#306230}
+.log div{margin:1px 0}
+.log .auto{color:#3cbcfc}
+.log .vol{color:#f4d03f}
+.log .warn{color:#e63946}
+.log .ok{color:#8bac0f}
+
+.toast{position:fixed;top:18%;left:50%;transform:translateX(-50%);font-size:28px;font-weight:bold;color:#3cbcfc;text-shadow:3px 3px 0 #0f380f;pointer-events:none;z-index:999;display:none}
+.toast.show{display:block;animation:toast-up 1.6s steps(8) forwards}
+.toast.vol-toast{color:#f4d03f}
+@keyframes toast-up{0%{opacity:1;margin-top:0}75%{opacity:1}100%{opacity:0;margin-top:-90px}}
+
+@media(max-width:400px){.title-bar{font-size:13px}.stat-box .stat-num{font-size:26px}.total-bar .big-num{font-size:28px}}
+
+/* ===== MOBILE ===== */
+@media(max-width:600px){
+  body{overflow-y:auto!important;min-height:100vh;}
+  video{width:100%!important;max-width:100%!important;height:auto!important;}
+  canvas{max-width:100%!important;}
+  #app,.app,.container,.main,.wrapper,[id*="app"],[class*="container"]{width:100%!important;max-width:100%!important;margin:0!important;border-radius:0!important;}
+  button,.btn,.action-btn,[class*="btn"]{min-height:44px;font-size:13px!important;touch-action:manipulation;}
+  input,textarea,select{font-size:16px!important;}
+  .controls,.toolbar,.actions,.panel,.buttons,[class*="controls"],[class*="toolbar"]{flex-wrap:wrap!important;}
+  [style*="width:"][style*="px"]{max-width:100%!important;}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="title-bar">&#9733; 智能喝水追踪 &#9733;</div>
+
+  <div class="cam-wrap" id="camWrap" onclick="onCamClick(event)">
+    <video id="camVideo" playsinline muted></video>
+    <canvas id="trackCanvas"></canvas>
+    <div class="cam-off" id="camOff">
+      <div class="icon">&#128247;</div>
+      <div>开启摄像头 &#8594; 点击水杯选取模板</div>
+      <div>&#9660; 形状追踪，不靠颜色 &#9660;</div>
+    </div>
+    <div class="cam-hint" id="camHint" style="display:none">&#9654; 点击水杯中心选取追踪模板</div>
+  </div>
+
+  <div class="status-bar">
+    <canvas class="tpl-preview" id="tplPreview" width="32" height="32"></canvas>
+    <div class="status-info">
+      <div id="cupStatus" style="font-weight:bold">未选取模板</div>
+      <div id="cupState" style="font-size:9px;color:#306230;">点击画面中的水杯</div>
+    </div>
+  </div>
+
+  <div class="config-row">
+    <label>&#127866; 每杯容量:</label>
+    <input type="number" id="cupSize" value="350" min="50" max="2000" step="50" onchange="saveCupSize()">
+    <span style="color:#306230">ml</span>
+    <span style="margin-left:auto;color:#306230;font-size:9px;">杯子消失5秒=喝完一杯</span>
+  </div>
+  <div class="config-row">
+    <label>&#127919; 匹配灵敏度:</label>
+    <input type="range" id="threshSlider" min="40" max="85" value="62" style="flex:1;accent-color:#8bac0f;" oninput="updateThresh()">
+    <span id="threshVal" style="width:36px;text-align:right;color:#8bac0f;font-weight:bold;">62%</span>
+    <span id="liveScore" style="width:50px;text-align:right;color:#306230;font-size:9px;">当前:--</span>
+  </div>
+  <div class="config-row">
+    <label>&#9634; 追踪框大小:</label>
+    <input type="range" id="tplSlider" min="10" max="40" value="20" style="flex:1;accent-color:#8bac0f;" oninput="updateTplSize()">
+    <span id="tplVal" style="width:36px;text-align:right;color:#8bac0f;font-weight:bold;">20px</span>
+    <span style="color:#306230;font-size:9px;">改后需重选杯子</span>
+  </div>
+
+  <div class="stats-grid">
+    <div class="stat-box sip">
+      <div class="stat-label">&#128167; 喝水次数（杯子移动）</div>
+      <div class="stat-num" id="sipCount">0</div>
+      <div class="stat-unit">次</div>
+    </div>
+    <div class="stat-box vol">
+      <div class="stat-label">&#127866; 喝水量（杯子消失）</div>
+      <div class="stat-num" id="volCount">0</div>
+      <div class="stat-unit">ml</div>
+    </div>
+  </div>
+
+  <div class="total-bar">
+    <div style="font-size:10px;color:#306230;margin-bottom:4px;">&#127919; 今日总量</div>
+    <div class="big-num" id="totalMl">0<span>ml</span></div>
+    <div class="progress">
+      <div class="progress-fill" id="progressFill"></div>
+      <div class="progress-text" id="progressText">0%</div>
+    </div>
+    <div class="stat-row">
+      <span id="goalText">&#127919; 目标 2000ml</span>
+      <span id="lastTime">&#128336; --:--</span>
+    </div>
+    <div class="drops" id="dropsVis"></div>
+  </div>
+
+  <div class="sep">&#9617;&#9618;&#9619;&#9608;&#9619;&#9618;&#9617;&#9608;&#9617;&#9618;&#9619;&#9608;&#9619;&#9618;&#9617;&#9608;&#9617;&#9618;&#9619;&#9608;&#9619;&#9618;&#9617;</div>
+
+  <div class="controls">
+    <div class="btn blue" id="btnCam" onclick="toggleCam()">&#128247; 开启摄像头</div>
+    <div class="btn off" onclick="reRegister()">&#128260; 重选杯子</div>
+    <div class="btn gold" onclick="manualAdd()">&#128167; +手动一杯</div>
+    <div class="btn off" onclick="undoLast()">&#8617; 撤销</div>
+    <div class="btn off" onclick="resetDay()">&#128465; 清空</div>
+  </div>
+
+  <div class="log" id="logPanel">
+    <div class="ok">&#9733; 智能喝水追踪 v6.0 — 形状模板追踪</div>
+    <div>[规则] 点击杯子截取形状 &#8594; 追踪杯子位置 &#8594; 移动=喝一口 | 消失5秒=喝一杯</div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="../cam-core/cam-core.js"></script>
+<script>
+// ========== CONFIG ==========
+const DAILY_GOAL = 2000;
+const REMINDER_MS = 30 * 60 * 1000;
+const FPS = 6;              // 6fps for template matching (CPU heavy)
+const SW = 120, SH = 90;   // search frame size
+let TPL_SIZE = 20;          // template size, adjustable
+const SEARCH_STEP = 2;      // search every 2px (speed up)
+let MATCH_THRESHOLD = 0.62; // adjustable by user
+
+// Movement
+const MOVE_DIST = 4;
+const MOVE_FRAMES = 2;       // 2 consecutive frames moving
+const MOVE_COOLDOWN = 8000;
+// Vanish
+const VANISH_THRESHOLD = 5000;
+
+// ========== STATE ==========
+let camOn = false, stream = null, trackTimer = null, reminderTimer = null;
+let lastDrinkTs = 0;
+let today = loadToday();
+
+// Template
+let tplGray = null;       // Uint8Array of grayscale template pixels
+let tplW = 0, tplH = 0;
+let tplMean = 0;          // precomputed mean
+let tplStd = 0;           // precomputed std dev
+
+// Tracking
+let cupPos = null;
+let cupLastPos = null;
+let cupVisible = false;
+let moveFrames = 0;
+let lastSipTime = 0;
+let vanishStart = 0;
+let cupWasVisible = false;
+let matchScore = 0;
+
+// ========== DOM ==========
+const video = document.getElementById('camVideo');
+const tCanvas = document.getElementById('trackCanvas');
+const tCtx = tCanvas.getContext('2d');
+const sCanvas = document.createElement('canvas');
+sCanvas.width = SW; sCanvas.height = SH;
+const sCtx = sCanvas.getContext('2d', { willReadFrequently: true });
+
+// ========== CUP SIZE ==========
+function updateThresh(){
+  const v=parseInt(document.getElementById('threshSlider').value);
+  MATCH_THRESHOLD=v/100;
+  document.getElementById('threshVal').textContent=v+'%';
+  try{localStorage.setItem('match_thresh',v);}catch(e){}
+}
+function restoreThresh(){
+  try{const v=localStorage.getItem('match_thresh');if(v){document.getElementById('threshSlider').value=v;MATCH_THRESHOLD=parseInt(v)/100;document.getElementById('threshVal').textContent=v+'%';}}catch(e){}
+}
+
+function updateTplSize(){
+  const v=parseInt(document.getElementById('tplSlider').value);
+  TPL_SIZE=v;
+  document.getElementById('tplVal').textContent=v+'px';
+  try{localStorage.setItem('tpl_size',v);}catch(e){}
+}
+function restoreTplSize(){
+  try{const v=localStorage.getItem('tpl_size');if(v){document.getElementById('tplSlider').value=v;TPL_SIZE=parseInt(v);document.getElementById('tplVal').textContent=v+'px';}}catch(e){}
+}
+
+function getCupMl(){ return parseInt(document.getElementById('cupSize').value) || 350; }
+function saveCupSize(){ try{localStorage.setItem('cup_size_ml',getCupMl());}catch(e){} }
+function restoreCupSize(){ try{const v=localStorage.getItem('cup_size_ml');if(v)document.getElementById('cupSize').value=v;}catch(e){} }
+
+// ========== CAMERA ==========
+async function toggleCam(){
+  if(camOn){stopCam();return;}
+  try{
+    stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'user',width:{ideal:320},height:{ideal:240}},audio:false});
+    video.srcObject=stream;await video.play();
+    tCanvas.width=video.videoWidth||320;tCanvas.height=video.videoHeight||240;
+    camOn=true;
+    document.getElementById('btnCam').textContent='\u25A0 \u5173\u95ED';
+    document.getElementById('btnCam').classList.remove('blue');
+    document.getElementById('btnCam').classList.add('on');
+    document.getElementById('camOff').style.display='none';
+    if(!tplGray) document.getElementById('camHint').style.display='block';
+    else{document.getElementById('camHint').style.display='none';startTracking();}
+    addLog('ok','[\u6444\u50CF\u5934] \u5DF2\u5F00\u542F');
+  }catch(e){
+    addLog('warn','[\u9519\u8BEF] '+e.message);
+    if(window!==window.top)window.open(location.href,'_blank');
+  }
+}
+
+function stopCam(){
+  if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}
+  video.srcObject=null;camOn=false;stopTracking();
+  document.getElementById('btnCam').textContent='\u{1F4F7} \u5F00\u542F\u6444\u50CF\u5934';
+  document.getElementById('btnCam').classList.remove('on');
+  document.getElementById('btnCam').classList.add('blue');
+  document.getElementById('camOff').style.display='';
+  document.getElementById('camHint').style.display='none';
+  tCtx.clearRect(0,0,tCanvas.width,tCanvas.height);
+  updateStateUI();
+}
+
+// ========== TEMPLATE CAPTURE ==========
+function onCamClick(e){
+  if(!camOn)return;
+  const wrap=e.target.closest('.cam-wrap');
+  const rect=wrap.getBoundingClientRect();
+  // Mirror: video scaleX(-1)
+  const rx=1-(e.clientX-rect.left)/rect.width;
+  const ry=(e.clientY-rect.top)/rect.height;
+
+  // Draw full frame to search canvas
+  sCtx.drawImage(video,0,0,SW,SH);
+  const img=sCtx.getImageData(0,0,SW,SH);
+
+  // Extract template centered on click
+  const cx=Math.floor(rx*SW), cy=Math.floor(ry*SH);
+  const half=Math.floor(TPL_SIZE/2);
+  const x0=Math.max(0,cx-half), y0=Math.max(0,cy-half);
+  const x1=Math.min(SW,x0+TPL_SIZE), y1=Math.min(SH,y0+TPL_SIZE);
+  tplW=x1-x0; tplH=y1-y0;
+
+  // Convert to grayscale
+  tplGray=new Uint8Array(tplW*tplH);
+  let sum=0;
+  for(let y=y0;y<y1;y++){
+    for(let x=x0;x<x1;x++){
+      const si=(y*SW+x)*4;
+      const gray=Math.round(img.data[si]*0.3+img.data[si+1]*0.59+img.data[si+2]*0.11);
+      const ti=(y-y0)*tplW+(x-x0);
+      tplGray[ti]=gray;
+      sum+=gray;
+    }
+  }
+  tplMean=sum/(tplW*tplH);
+  // Compute std dev
+  let varSum=0;
+  for(let i=0;i<tplGray.length;i++){varSum+=(tplGray[i]-tplMean)**2;}
+  tplStd=Math.sqrt(varSum/tplGray.length);
+
+  // Show preview
+  const pvCtx=document.getElementById('tplPreview').getContext('2d');
+  pvCtx.clearRect(0,0,32,32);
+  // Draw from video at original resolution
+  const vw=video.videoWidth,vh=video.videoHeight;
+  const vcx=Math.floor(rx*vw),vcy=Math.floor(ry*vh);
+  const vhalf=Math.floor(vw/SW*TPL_SIZE/2);
+  pvCtx.drawImage(video,vcx-vhalf,vcy-vhalf,vhalf*2,vhalf*2,0,0,32,32);
+
+  document.getElementById('cupStatus').textContent='\u2714 \u5DF2\u9009\u53D6\u6A21\u677F ('+tplW+'x'+tplH+')';
+  document.getElementById('camHint').style.display='none';
+  addLog('auto','[\u6A21\u677F] \u5DF2\u622A\u53D6 '+tplW+'x'+tplH+' std:'+tplStd.toFixed(1));
+
+  if(tplStd<5){
+    addLog('warn','[\u8B66\u544A] \u6A21\u677F\u592A\u5747\u5300\uFF0C\u8BF7\u70B9\u51FB\u6709\u7EB9\u7406\u7684\u533A\u57DF');
+  }
+
+  cupPos=null;cupLastPos=null;cupWasVisible=false;vanishStart=0;moveFrames=0;
+  startTracking();
+}
+
+function reRegister(){
+  tplGray=null;stopTracking();
+  const pvCtx=document.getElementById('tplPreview').getContext('2d');
+  pvCtx.clearRect(0,0,32,32);
+  document.getElementById('cupStatus').textContent='\u672A\u9009\u53D6\u6A21\u677F';
+  document.getElementById('cupState').textContent='\u70B9\u51FB\u753B\u9762\u4E2D\u7684\u6C34\u676F';
+  document.getElementById('cupState').style.color='#306230';
+  if(camOn)document.getElementById('camHint').style.display='block';
+  addLog('','[\u91CD\u7F6E] \u5DF2\u6E05\u9664');
+}
+
+// ========== TRACKING ==========
+function startTracking(){if(trackTimer)return;trackTimer=setInterval(trackFrame,1000/FPS);}
+function stopTracking(){if(trackTimer){clearInterval(trackTimer);trackTimer=null;}}
+
+function trackFrame(){
+  if(!camOn||!tplGray)return;
+
+  sCtx.drawImage(video,0,0,SW,SH);
+  const img=sCtx.getImageData(0,0,SW,SH);
+  // CamCore: normalize for stable tracking under varying light
+  CamCore.normalize(img);
+  const d=img.data;
+
+  // Convert frame to grayscale
+  const gray=new Uint8Array(SW*SH);
+  for(let i=0;i<SW*SH;i++){
+    const j=i*4;
+    gray[i]=Math.round(d[j]*0.3+d[j+1]*0.59+d[j+2]*0.11);
+  }
+
+  // Template matching using NCC (Normalized Cross-Correlation)
+  // Search around last known position first (faster), fallback to full search
+  let bestX=0,bestY=0,bestNCC=-1;
+  const searchRegions=[];
+
+  if(cupPos){
+    // Search near last position first (+-15px)
+    const r=15;
+    searchRegions.push({
+      x0:Math.max(0,Math.round(cupPos.x)-tplW/2-r),
+      y0:Math.max(0,Math.round(cupPos.y)-tplH/2-r),
+      x1:Math.min(SW-tplW,Math.round(cupPos.x)-tplW/2+r),
+      y1:Math.min(SH-tplH,Math.round(cupPos.y)-tplH/2+r),
+      step:1
+    });
+  }
+  // Full search (coarser)
+  searchRegions.push({x0:0,y0:0,x1:SW-tplW,y1:SH-tplH,step:SEARCH_STEP});
+
+  for(const reg of searchRegions){
+    for(let sy=reg.y0;sy<=reg.y1;sy+=reg.step){
+      for(let sx=reg.x0;sx<=reg.x1;sx+=reg.step){
+        // Compute NCC at (sx,sy)
+        let sum=0,sumSq=0,cross=0;
+        for(let ty=0;ty<tplH;ty++){
+          for(let tx=0;tx<tplW;tx++){
+            const fv=gray[(sy+ty)*SW+(sx+tx)];
+            const tv=tplGray[ty*tplW+tx];
+            sum+=fv;
+            sumSq+=fv*fv;
+            cross+=fv*tv;
+          }
+        }
+        const n=tplW*tplH;
+        const fMean=sum/n;
+        const fVar=sumSq/n-fMean*fMean;
+        const fStd=Math.sqrt(Math.max(0,fVar));
+        if(fStd<1||tplStd<1)continue;
+        const ncc=(cross/n-fMean*tplMean)/(fStd*tplStd);
+        if(ncc>bestNCC){bestNCC=ncc;bestX=sx;bestY=sy;}
+      }
+    }
+    // If found good match in local search, skip full search
+    if(bestNCC>MATCH_THRESHOLD)break;
+  }
+
+  matchScore=bestNCC;
+  const tw=tCanvas.width,th=tCanvas.height;
+  tCtx.clearRect(0,0,tw,th);
+  const now=Date.now();
+  const scX=tw/SW,scY=th/SH;
+
+  if(bestNCC>MATCH_THRESHOLD){
+    // === CUP FOUND ===
+    const cx=bestX+tplW/2, cy=bestY+tplH/2;
+    cupLastPos=cupPos;
+    cupPos={x:cx,y:cy};
+    const wasInvisible=!cupVisible;
+    cupVisible=true;
+    cupWasVisible=true;
+    vanishStart=0;
+
+    // Draw match box
+    const bx=bestX*scX,by=bestY*scY,bw=tplW*scX,bh=tplH*scY;
+    tCtx.strokeStyle='#8bac0f';tCtx.lineWidth=2;tCtx.strokeRect(bx,by,bw,bh);
+    tCtx.fillStyle='#8bac0f';tCtx.beginPath();tCtx.arc(cx*scX,cy*scY,3,0,Math.PI*2);tCtx.fill();
+
+    // Score display
+    tCtx.fillStyle='rgba(15,56,15,0.7)';tCtx.fillRect(bx,by-14,60,13);
+    tCtx.fillStyle=bestNCC>0.7?'#8bac0f':'#f4d03f';tCtx.font='bold 10px monospace';
+    tCtx.fillText((bestNCC*100).toFixed(0)+'% match',bx+2,by-3);
+
+    // --- SIP: cup moved ---
+    if(cupLastPos&&!wasInvisible){
+      const dx=cx-cupLastPos.x,dy=cy-cupLastPos.y;
+      const dist=Math.sqrt(dx*dx+dy*dy);
+      if(dist>MOVE_DIST){moveFrames++;}else{moveFrames=0;}
+      if(moveFrames>=MOVE_FRAMES&&now-lastSipTime>MOVE_COOLDOWN){
+        recordSip();lastSipTime=now;moveFrames=0;
+        tCtx.strokeStyle='#3cbcfc';tCtx.lineWidth=3;tCtx.strokeRect(bx-2,by-2,bw+4,bh+4);
+      }
+    }else{moveFrames=0;}
+
+  }else{
+    // === CUP NOT FOUND ===
+    cupVisible=false;cupLastPos=cupPos;cupPos=null;moveFrames=0;
+
+    tCtx.fillStyle='rgba(155,188,15,0.3)';tCtx.font='10px monospace';
+    tCtx.fillText('\u{1F50D} \u672A\u627E\u5230\u6C34\u676F (best:'+(bestNCC*100).toFixed(0)+'%)',4,th-8);
+
+    // --- VOLUME: cup gone 5s ---
+    if(cupWasVisible){
+      if(!vanishStart)vanishStart=now;
+      const gone=now-vanishStart;
+      if(gone>1000){
+        const pct=Math.min(1,gone/VANISH_THRESHOLD);
+        tCtx.fillStyle='rgba(244,208,63,0.12)';tCtx.fillRect(0,0,tw*pct,th);
+        tCtx.fillStyle='#f4d03f';tCtx.font='bold 12px monospace';
+        tCtx.fillText('\u{1F37A} \u6C34\u676F\u79BB\u5F00 '+Math.ceil(gone/1000)+'s / 5s\u8BB0\u4E00\u676F',4,20);
+      }
+      if(gone>=VANISH_THRESHOLD){
+        recordVolume();vanishStart=0;cupWasVisible=false;
+      }
+    }
+  }
+
+  // Update live score display
+  const ls=document.getElementById('liveScore');
+  if(ls)ls.textContent='\u5F53\u524D:'+(matchScore*100).toFixed(0)+'%';
+
+  updateStateUI();
+}
+
+function updateStateUI(){
+  const el=document.getElementById('cupState');
+  if(!camOn){el.textContent='\u70B9\u51FB\u753B\u9762\u4E2D\u7684\u6C34\u676F';el.style.color='#306230';return;}
+  if(!tplGray){el.textContent='\u25B6 \u70B9\u51FB\u6C34\u676F\u4E2D\u5FC3\u9009\u53D6\u6A21\u677F';el.style.color='#f4d03f';return;}
+  if(cupVisible){
+    const cd=MOVE_COOLDOWN-(Date.now()-lastSipTime);
+    if(cd>0){el.textContent='\u{1F440} \u8FFD\u8E2A\u4E2D '+(matchScore*100).toFixed(0)+'% | \u51B7\u5374'+Math.ceil(cd/1000)+'s';el.style.color='#306230';}
+    else{el.textContent='\u{1F440} \u8FFD\u8E2A\u4E2D '+(matchScore*100).toFixed(0)+'% match';el.style.color='#8bac0f';}
+  }else if(cupWasVisible&&vanishStart){
+    el.textContent='\u{1F37A} \u6C34\u676F\u79BB\u5F00 '+Math.ceil((Date.now()-vanishStart)/1000)+'s';
+    el.style.color='#f4d03f';
+  }else{
+    el.textContent='\u{1F50D} \u5BFB\u627E\u4E2D... '+(matchScore*100).toFixed(0)+'%';el.style.color='#306230';
+  }
+}
+
+// ========== DATA ==========
+function dayKey(){const d=new Date();return 'water_'+d.getFullYear()+'_'+d.getMonth()+'_'+d.getDate();}
+function loadToday(){try{const d=JSON.parse(localStorage.getItem(dayKey()));if(d&&d.records)return d;}catch(e){}return{sips:0,cups:0,totalMl:0,records:[]};}
+function saveToday(){localStorage.setItem(dayKey(),JSON.stringify(today));}
+
+function recordSip(){
+  today.sips++;today.records.push({type:'sip',time:new Date().toISOString()});
+  saveToday();lastDrinkTs=Date.now();resetReminder();updateUI();
+  showToast('\u{1F4A7} \u559D\u4E86\u4E00\u53E3!','');playSipSound();
+  addLog('auto','[\u79FB\u52A8] \u559D\u4E86\u4E00\u53E3 (\u7B2C'+today.sips+'\u53E3)');
+}
+
+function recordVolume(){
+  const ml=getCupMl();today.cups++;today.totalMl+=ml;
+  today.records.push({type:'cup',ml:ml,time:new Date().toISOString()});
+  saveToday();lastDrinkTs=Date.now();resetReminder();updateUI();
+  showToast('\u{1F37A} +'+ml+'ml','vol-toast');playCupSound();
+  addLog('vol','[\u6D88\u5931] \u559D\u5B8C\u4E00\u676F +'+ml+'ml');
+}
+
+function manualAdd(){
+  const ml=getCupMl();today.cups++;today.totalMl+=ml;
+  today.records.push({type:'manual',ml:ml,time:new Date().toISOString()});
+  saveToday();lastDrinkTs=Date.now();resetReminder();updateUI();
+  showToast('\u{1F37A} +'+ml+'ml','vol-toast');playCupSound();
+  addLog('vol','[\u624B\u52A8] +'+ml+'ml');
+}
+
+function undoLast(){
+  if(!today.records.length)return;const last=today.records.pop();
+  if(last.type==='sip')today.sips=Math.max(0,today.sips-1);
+  else{today.cups=Math.max(0,today.cups-1);today.totalMl=Math.max(0,today.totalMl-(last.ml||0));}
+  saveToday();updateUI();addLog('','[\u64A4\u9500]');
+}
+
+function resetDay(){
+  if(!confirm('\u786E\u5B9A\u6E05\u7A7A?'))return;
+  today={sips:0,cups:0,totalMl:0,records:[]};saveToday();updateUI();
+}
+
+// ========== UI ==========
+function updateUI(){
+  document.getElementById('sipCount').textContent=today.sips;
+  document.getElementById('volCount').textContent=today.totalMl;
+  document.getElementById('totalMl').innerHTML=today.totalMl+'<span>ml</span>';
+  const pct=Math.min(100,Math.round(today.totalMl/DAILY_GOAL*100));
+  document.getElementById('progressFill').style.width=pct+'%';
+  document.getElementById('progressFill').className='progress-fill'+(pct>=100?' done':'');
+  document.getElementById('progressText').textContent=pct+'%'+(pct>=100?' \u2605\u8FBE\u6807\u2605':'');
+  if(today.records.length>0){
+    document.getElementById('lastTime').textContent='\u{1F550} '+fmt(new Date(today.records[today.records.length-1].time));
+  }
+  const ml=getCupMl(),maxD=Math.ceil(DAILY_GOAL/ml),filled=Math.min(maxD,today.cups);
+  let h='';for(let i=0;i<Math.min(maxD,15);i++)h+='<div class="drop'+(i<filled?' filled':'')+'"></div>';
+  document.getElementById('dropsVis').innerHTML=h;
+}
+
+function showToast(t,c){const el=document.getElementById('toast');el.textContent=t;el.className='toast show '+(c||'');setTimeout(()=>{el.className='toast';},1600);}
+function fmt(d){return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');}
+function addLog(c,m){const log=document.getElementById('logPanel');const div=document.createElement('div');div.className=c;const t=new Date();div.textContent=fmt(t)+':'+String(t.getSeconds()).padStart(2,'0')+' '+m;log.appendChild(div);log.scrollTop=log.scrollHeight;while(log.children.length>60)log.removeChild(log.firstChild);}
+
+// ========== SOUND ==========
+function playSipSound(){try{const ac=new(window.AudioContext||window.webkitAudioContext)();const o=ac.createOscillator(),g=ac.createGain();o.type='sine';o.frequency.setValueAtTime(880,ac.currentTime);g.gain.setValueAtTime(0.04,ac.currentTime);g.gain.linearRampToValueAtTime(0,ac.currentTime+0.08);o.connect(g).connect(ac.destination);o.start();o.stop(ac.currentTime+0.08);}catch(e){}}
+function playCupSound(){try{const ac=new(window.AudioContext||window.webkitAudioContext)();[523,659,784,1047].forEach((f,i)=>{const o=ac.createOscillator(),g=ac.createGain();o.type='sine';const t=ac.currentTime+i*0.07;o.frequency.setValueAtTime(f,t);g.gain.setValueAtTime(0.06,t);g.gain.linearRampToValueAtTime(0,t+0.1);o.connect(g).connect(ac.destination);o.start(t);o.stop(t+0.1);});}catch(e){}}
+function playReminder(){try{const ac=new(window.AudioContext||window.webkitAudioContext)();[392,0,392,0,523].forEach((f,i)=>{if(!f)return;const o=ac.createOscillator(),g=ac.createGain();o.type='triangle';const t=ac.currentTime+i*0.2;o.frequency.setValueAtTime(f,t);g.gain.setValueAtTime(0.05,t);g.gain.linearRampToValueAtTime(0,t+0.15);o.connect(g).connect(ac.destination);o.start(t);o.stop(t+0.15);});}catch(e){}}
+
+function resetReminder(){if(reminderTimer)clearInterval(reminderTimer);reminderTimer=setInterval(checkReminder,60000);}
+function checkReminder(){if(!lastDrinkTs)return;if(Date.now()-lastDrinkTs>REMINDER_MS){addLog('warn','[\u63D0\u9192] \u5DF2'+Math.round((Date.now()-lastDrinkTs)/60000)+'\u5206\u949F\u672A\u559D\u6C34!');playReminder();}}
+
+// ========== INIT ==========
+restoreCupSize();restoreThresh();restoreTplSize();updateUI();
+if(today.records&&today.records.length>0)lastDrinkTs=new Date(today.records[today.records.length-1].time).getTime();
+resetReminder();
+setInterval(()=>{if(camOn)updateStateUI();},500);
+</script>
+</body>
+</html>

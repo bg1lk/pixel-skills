@@ -1,0 +1,843 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Diva's Pixel Life</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0a0a1a;font-family:'Courier New',monospace;overflow:hidden;height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#8bac0f}
+#game-wrap{position:relative;width:100vw;max-width:960px;height:75vh;max-height:600px;border:3px solid #0f380f;box-shadow:0 0 30px rgba(139,172,15,0.2);overflow:hidden;background:#0a0a1a;border-radius:2px}
+canvas{display:block;width:100%;height:100%;image-rendering:pixelated;image-rendering:crisp-edges}
+.ui-top{position:absolute;top:0;left:0;right:0;display:flex;justify-content:space-between;align-items:center;padding:6px 12px;background:rgba(15,56,15,0.85);font-size:11px;z-index:10;border-bottom:2px solid #0f380f}
+.ui-top .title{color:#8bac0f;font-weight:bold;text-shadow:1px 1px 0 #0f380f}
+.ui-top .info{color:#9bbc0f;font-size:10px}
+.room-tabs{position:absolute;top:28px;left:0;display:flex;flex-direction:column;gap:2px;padding:4px;z-index:10}
+.room-tab{background:rgba(15,56,15,0.8);border:2px solid #306230;color:#8bac0f;font-size:10px;padding:3px 8px;cursor:pointer;font-family:monospace;text-align:left;transition:none}
+.room-tab:hover,.room-tab.active{background:#306230;color:#9bbc0f;border-color:#8bac0f}
+.ui-bottom{position:absolute;bottom:0;left:0;right:0;z-index:10}
+.needs-bar{display:flex;gap:8px;padding:4px 10px;background:rgba(15,56,15,0.85);border-top:2px solid #0f380f;font-size:10px}
+.need{display:flex;align-items:center;gap:3px}
+.need-bar{width:40px;height:6px;background:#0f380f;border:1px solid #306230;position:relative}
+.need-fill{height:100%;transition:width 0.5s steps(8)}
+.chat-row{display:flex;gap:4px;padding:4px 8px;background:rgba(10,10,26,0.9);border-top:1px solid #306230}
+.chat-row input{flex:1;background:#0f380f;border:2px solid #306230;color:#8bac0f;font-family:monospace;font-size:12px;padding:4px 8px;outline:none}
+.chat-row input:focus{border-color:#8bac0f}
+.chat-row button{background:#306230;border:2px solid #0f380f;color:#8bac0f;font-family:monospace;font-size:12px;padding:4px 10px;cursor:pointer;font-weight:bold}
+.chat-row button:hover{background:#8bac0f;color:#0f380f}
+.controls{display:flex;gap:6px;padding:8px;flex-wrap:wrap;justify-content:center}
+.controls button{background:#306230;border:2px solid #0f380f;box-shadow:3px 3px 0 #0a0a1a;color:#8bac0f;font-family:monospace;font-size:11px;padding:5px 12px;cursor:pointer;font-weight:bold}
+.controls button:hover{background:#8bac0f;color:#0f380f}
+.controls button:active{transform:translate(2px,2px);box-shadow:1px 1px 0 #0a0a1a}
+.controls button.active{background:#8bac0f;color:#0f380f;box-shadow:inset 2px 2px 0 #306230}
+.log-area{width:100%;max-width:960px;height:80px;overflow-y:auto;background:#0a0a1a;border:1px solid #0f380f;font-size:9px;color:#306230;padding:4px;margin-top:4px;font-family:monospace;display:none}
+.log-area.show{display:block}
+#speechBubble{position:absolute;z-index:20;background:rgba(255,255,255,0.95);color:#1a1a2e;font-size:12px;padding:8px 12px;border-radius:8px;border:2px solid #0f380f;max-width:250px;word-break:break-word;box-shadow:3px 3px 0 rgba(0,0,0,0.3);display:none;pointer-events:none;font-family:'Courier New',monospace;line-height:1.4}
+#speechBubble::after{content:'';position:absolute;bottom:-8px;left:20px;width:0;height:0;border-left:8px solid transparent;border-right:8px solid transparent;border-top:8px solid rgba(255,255,255,0.95)}
+.gen-overlay{position:absolute;top:0;left:0;right:0;bottom:0;z-index:15;background:rgba(10,10,26,0.85);display:none;align-items:center;justify-content:center;flex-direction:column;gap:8px}
+.gen-overlay.active{display:flex}
+.gen-overlay .spinner{font-size:24px;animation:spin 1s steps(8) infinite}
+@keyframes spin{0%{content:'⠋'}100%{transform:rotate(360deg)}}
+.gen-text{color:#8bac0f;font-size:12px;text-align:center;max-width:80%}
+.cam-preview{position:absolute;bottom:60px;right:8px;width:120px;height:90px;border:2px solid #306230;z-index:11;display:none;background:#000}
+.cam-preview video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
+.cam-preview.show{display:block}
+
+/* ===== MOBILE ===== */
+@media(max-width:700px){
+  body{justify-content:flex-start;height:auto;min-height:100vh;overflow:auto}
+  #game-wrap{width:100vw;max-width:none;height:60vh;max-height:none;border:none;border-radius:0}
+  .ui-top{padding:4px 8px;font-size:10px}
+  .room-tabs{top:24px}
+  .room-tab{font-size:9px;padding:2px 6px}
+  .needs-bar{gap:4px;padding:3px 6px;font-size:9px;flex-wrap:wrap}
+  .need-bar{width:32px}
+  .chat-row{padding:4px 6px;gap:3px}
+  .chat-row input{font-size:14px;padding:6px 8px}
+  .chat-row button{font-size:13px;padding:6px 12px;min-height:36px}
+  .controls{padding:6px;gap:4px}
+  .controls button{font-size:12px;padding:8px 12px;min-height:40px}
+  #speechBubble{max-width:70vw;font-size:11px}
+  .cam-preview{width:80px;height:60px;bottom:50px;right:4px}
+  .log-area{height:60px;font-size:8px}
+}
+@media(max-width:400px){
+  #game-wrap{height:55vh}
+  .controls button{font-size:11px;padding:6px 8px}
+  .needs-bar{gap:2px}
+}
+</style>
+</head>
+<body>
+
+<div id="game-wrap">
+  <video id="cam" style="display:none" playsinline></video>
+  <canvas id="gameCanvas"></canvas>
+
+  <div class="ui-top">
+    <span class="title">★ DIVA'S PIXEL LIFE ★</span>
+    <span class="info" id="clockInfo">--:--</span>
+    <span class="info" id="roomInfo">未扫描</span>
+  </div>
+
+  <div class="room-tabs" id="roomTabs"></div>
+
+  <div class="gen-overlay" id="genOverlay">
+    <div class="spinner">🎨</div>
+    <div class="gen-text" id="genText">正在生成像素房间...</div>
+  </div>
+
+  <div id="speechBubble"></div>
+
+  <div class="cam-preview" id="camPreview">
+    <video id="camPreviewVideo" playsinline muted></video>
+  </div>
+
+  <div class="ui-bottom">
+    <div class="needs-bar">
+      <div class="need">🍕<div class="need-bar"><div class="need-fill" id="needHunger" style="width:80%;background:#8bac0f"></div></div></div>
+      <div class="need">⚡<div class="need-bar"><div class="need-fill" id="needEnergy" style="width:90%;background:#f4d03f"></div></div></div>
+      <div class="need">😊<div class="need-bar"><div class="need-fill" id="needFun" style="width:70%;background:#e63946"></div></div></div>
+      <div class="need">💬<div class="need-bar"><div class="need-fill" id="needSocial" style="width:60%;background:#4fc3f7"></div></div></div>
+    </div>
+    <div class="chat-row">
+      <input id="chatInput" placeholder="跟Diva说话..." maxlength="100">
+      <button id="btnSend">▶ 说</button>
+    </div>
+  </div>
+</div>
+
+<div class="controls">
+  <button id="btnScan">📷 拍照生成房间</button>
+  <button id="btnBrain">🧠 AI大脑</button>
+  <button id="btnCam">👁 摄像头预览</button>
+  <button id="btnLog">📋 日志</button>
+</div>
+
+<div class="log-area" id="logArea"></div>
+
+<script>
+// ============================================================
+// CONFIG
+// ============================================================
+const CFG = {
+  scanInterval: 300000,   // 5 min auto re-scan
+  thinkInterval: 18000,   // AI think every 18s
+  geminiEndpoint: 'https://ai.ssnai.com/gemini/v1beta/models/',
+  geminiKey: 'Nmqoo7UOx2z4PW6X7oNkUb8WRCZrDvwB',
+  spriteBase: 'assets/',
+};
+
+// ============================================================
+// STATE
+// ============================================================
+const game = {
+  canvas: null, ctx: null,
+  cam: null, camActive: false,
+  W: 0, H: 0, frame: 0,
+  brainEnabled: false, brainThinking: false,
+  generating: false,
+  lastScan: 0, lastThink: 0,
+  rooms: [],       // [{name, objects, groundY, bgImage, description}]
+  currentRoom: 0,
+  lastEnvHash: '',
+};
+
+// Diva character
+const diva = {
+  x: 0.5, y: 0.75, dir: 1, walkDir: 'down',
+  state: 'idle', stateTimer: 0,
+  targetX: -1, targetObj: null,
+  speed: 0.0008,
+  hunger: 25, energy: 85, fun: 70, social: 55,
+  animFrame: 0, breathPhase: 0, bobY: 0, squish: 0,
+  prevSprite: null, fadeProgress: 1,
+  speech: '', speechTimer: 0,
+  thought: '', thoughtTimer: 0,
+  mood: 'neutral',
+  memory: [], chatHistory: [],
+};
+
+// ============================================================
+// SPRITES
+// ============================================================
+// Top-down 2D RPG style sprites
+const TD = {}; // all top-down sprites
+const TD_NAMES = [
+  'td_stand','td_walk_down_1','td_walk_down_2',
+  'td_walk_up_1','td_walk_up_2','td_walk_left_1','td_walk_left_2',
+  'td_sit','td_eat','td_sleep','td_wave','td_excited','td_sad','td_drink'
+];
+let spritesLoaded = false;
+
+(function(){
+  let n=0;
+  for(const s of TD_NAMES){
+    const img=new Image();
+    img.onload=img.onerror=()=>{n++;if(n===TD_NAMES.length)spritesLoaded=true};
+    img.src='assets/'+s+'.png';
+    TD[s]=img;
+  }
+})();
+
+// ============================================================
+// CAMERA
+// ============================================================
+async function startCamera(){
+  try{
+    const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'user',width:{ideal:640},height:{ideal:480}},audio:false});
+    game.cam.srcObject=stream;
+    document.getElementById('camPreviewVideo').srcObject=stream;
+    await game.cam.play();
+    document.getElementById('camPreviewVideo').play();
+    game.camActive=true;
+    log('📷 摄像头已启动');
+    return true;
+  }catch(e){log('❌ 摄像头失败: '+e.message);return false}
+}
+
+function capturePhoto(){
+  if(!game.camActive)return null;
+  const c=document.createElement('canvas');
+  c.width=game.cam.videoWidth;c.height=game.cam.videoHeight;
+  c.getContext('2d').drawImage(game.cam,0,0);
+  return c.toDataURL('image/jpeg',0.8);
+}
+
+// Quick hash for change detection
+function getEnvHash(){
+  if(!game.camActive)return '';
+  const c=document.createElement('canvas');c.width=16;c.height=12;
+  c.getContext('2d').drawImage(game.cam,0,0,16,12);
+  const d=c.getContext('2d').getImageData(0,0,16,12).data;
+  let h='';for(let i=0;i<d.length;i+=16)h+=String.fromCharCode(48+(d[i]>>4));
+  return h;
+}
+function envChanged(){
+  const h=getEnvHash();
+  if(!game.lastEnvHash){game.lastEnvHash=h;return false}
+  let diff=0;const len=Math.min(h.length,game.lastEnvHash.length);
+  for(let i=0;i<len;i++)if(h[i]!==game.lastEnvHash[i])diff++;
+  game.lastEnvHash=h;
+  return diff>len*0.35;
+}
+
+// ============================================================
+// GEMINI API
+// ============================================================
+async function callGemini(model, parts, config={}){
+  const url=CFG.geminiEndpoint+model+':generateContent';
+  const body={contents:[{parts}],generationConfig:{...config}};
+  const res=await fetch(url,{
+    method:'POST',
+    headers:{'Content-Type':'application/json','X-goog-api-key':CFG.geminiKey},
+    body:JSON.stringify(body)
+  });
+  if(!res.ok){
+    const errText=await res.text();
+    log('⚠️ API HTTP '+res.status+': '+errText.slice(0,200));
+    throw new Error('API错误 '+res.status);
+  }
+  const json=await res.json();
+  if(json.error){
+    log('⚠️ API错误: '+JSON.stringify(json.error).slice(0,200));
+    throw new Error(json.error.message||'API返回错误');
+  }
+  return json;
+}
+
+// ============================================================
+// ROOM GENERATION PIPELINE
+// ============================================================
+async function generateRoom(){
+  if(game.generating)return;
+  game.generating=true;
+
+  // Step 0: ensure camera
+  if(!game.camActive){
+    showGenOverlay('正在启动摄像头...');
+    const ok=await startCamera();
+    if(!ok){game.generating=false;hideGenOverlay();return}
+    await new Promise(r=>setTimeout(r,1500)); // let camera warm up
+  }
+
+  // Step 1: Capture photo
+  showGenOverlay('📷 拍照中...');
+  const photo=capturePhoto();
+  if(!photo){log('❌ 拍照失败');game.generating=false;hideGenOverlay();return}
+  log('📷 已拍照');
+
+  // Step 2: Analyze scene with Gemini Vision
+  showGenOverlay('🔍 AI分析环境中...');
+  let scene;
+  try{
+    const b64=photo.split(',')[1];
+    const result=await callGemini('gemini-2.5-flash',[
+      {text:`Analyze this photo for a pixel game. Return ONLY raw JSON, no markdown fences, no explanation. Keep description under 30 chars. Example:
+{"name":"书房","description":"暖色调书房有电脑和书架","ground_y":0.75,"style":"cozy office","key_items":["desk","monitor","chair"],"colors":["#8B7355","#F5F5DC","#4A90D9"],"objects":[{"name":"desk","x":0.5,"y":0.7,"type":"desk","action":"work"}]}
+Return 4-8 objects. x,y are 0-1 normalized.`},
+      {inlineData:{mimeType:'image/jpeg',data:b64}}
+    ],{temperature:0.2,maxOutputTokens:2048});
+
+    const txt=result.candidates?.[0]?.content?.parts?.[0]?.text||'';
+    log('🔎 AI原始返回: '+txt.slice(0,300));
+    // Extract and repair JSON from AI response
+    const fi=txt.indexOf('{');
+    if(fi<0)throw new Error('未找到JSON, AI返回: '+txt.slice(0,200));
+    let li=txt.lastIndexOf('}');
+    // If truncated (no closing }), take everything from first {
+    let raw=(li>fi)?txt.slice(fi,li+1):txt.slice(fi);
+    // Remove trailing incomplete key/value (cut at last complete value)
+    raw=raw.replace(/,\s*"[^"]*"?\s*:?\s*("[^"]*)?$/,'');
+    raw=raw.replace(/,\s*"[^"]*$/,'');
+    // Close all open brackets and braces
+    const ob=(raw.match(/\[/g)||[]).length-(raw.match(/\]/g)||[]).length;
+    const oc=(raw.match(/\{/g)||[]).length-(raw.match(/\}/g)||[]).length;
+    for(let i=0;i<ob;i++)raw+=']';
+    for(let i=0;i<oc;i++)raw+='}';
+    // Fix trailing commas
+    raw=raw.replace(/,\s*([}\]])/g,'$1');
+    log('🔧 修复后JSON: '+raw.slice(0,200));
+    try{scene=JSON.parse(raw);}catch(pe){
+      throw new Error('JSON解析失败: '+pe.message+' | 修复后: '+raw.slice(0,150));
+    }
+    log('✅ 场景分析: '+scene.name+' ('+scene.key_items?.join(', ')+')');
+  }catch(e){
+    log('❌ 场景分析失败: '+e.message);
+    game.generating=false;hideGenOverlay();return;
+  }
+
+  // Step 3: Generate pixel art room with Nano Banana 2
+  showGenOverlay('🎨 Nano Banana 2 生成像素房间中...\n（约30秒）');
+  let roomImage;
+  try{
+    const b64ref=photo.split(',')[1];
+    const prompt=`Convert this real photo into a top-down 2D RPG pixel art game room. Keep the EXACT same layout, furniture positions, and proportions as the photo. Style: 16-bit SNES RPG top-down view (like Earthbound/Pokemon/Zelda), cute and cozy pixel art, warm lighting, no people/characters. The view should be slightly angled from above, showing the floor and furniture from a bird's eye perspective typical of classic 2D RPGs.`;
+
+    log('🎨 以摄像头照片为参考生成像素房间...');
+
+    const imgResult=await callGemini('gemini-2.5-flash-image',[
+      {text:prompt},
+      {inlineData:{mimeType:'image/jpeg',data:b64ref}}
+    ],{responseModalities:['IMAGE','TEXT']});
+
+    const parts=imgResult.candidates?.[0]?.content?.parts||[];
+    for(const part of parts){
+      if(part.inlineData?.data){
+        roomImage='data:image/png;base64,'+part.inlineData.data;
+        break;
+      }
+    }
+    if(!roomImage)throw new Error('未返回图片');
+    log('✅ 像素房间已生成！');
+  }catch(e){
+    log('❌ 房间生成失败: '+e.message);
+    game.generating=false;hideGenOverlay();return;
+  }
+
+  // Step 4: Create/update room
+  showGenOverlay('🏠 构建房间...');
+  const OBJ_ICONS={desk:'🖥️',table:'🪑',chair:'💺',monitor:'🖥️',laptop:'💻',cup:'☕',plant:'🌿',lamp:'💡',book:'📖',phone:'📱',shelf:'📚',bed:'🛏️',sofa:'🛋️',window:'🪟',door:'🚪',food:'🍕',snack:'🍪',water:'💧'};
+
+  const room={
+    name:scene.name||'未知房间',
+    groundY:scene.ground_y||0.75,
+    description:scene.description||'',
+    style:scene.style||'',
+    objects:(scene.objects||[]).map(o=>({...o,emoji:OBJ_ICONS[o.type]||'📦'})),
+    bgImage:null, // will be set when image loads
+    bgDataUrl:roomImage,
+    discoveredAt:Date.now(),
+  };
+
+  // Load image
+  const img=new Image();
+  img.onload=()=>{room.bgImage=img;log('🖼 房间图片已加载')};
+  img.src=roomImage;
+
+  const existIdx=game.rooms.findIndex(r=>r.name===room.name);
+  if(existIdx>=0){
+    game.rooms[existIdx]=room;
+    game.currentRoom=existIdx;
+    log('🔄 更新房间: '+room.name);
+  }else{
+    game.rooms.push(room);
+    game.currentRoom=game.rooms.length-1;
+    log('🆕 新房间: '+room.name);
+  }
+
+  updateRoomTabs();
+  showSpeech(`哇！这里是${room.name}！${room.description?.slice(0,30)||''}`,5);
+
+  game.lastScan=Date.now();
+  game.generating=false;
+  hideGenOverlay();
+}
+
+function showGenOverlay(text){
+  const el=document.getElementById('genOverlay');
+  el.classList.add('active');
+  document.getElementById('genText').textContent=text;
+}
+function hideGenOverlay(){
+  document.getElementById('genOverlay').classList.remove('active');
+}
+
+// ============================================================
+// ROOM TABS UI
+// ============================================================
+function updateRoomTabs(){
+  const c=document.getElementById('roomTabs');c.innerHTML='';
+  game.rooms.forEach((room,i)=>{
+    const t=document.createElement('div');
+    t.className='room-tab'+(i===game.currentRoom?' active':'');
+    t.textContent=(i===game.currentRoom?'▶ ':'  ')+room.name;
+    t.onclick=()=>{game.currentRoom=i;updateRoomTabs();showSpeech('去'+room.name+'看看~',2)};
+    c.appendChild(t);
+  });
+  document.getElementById('roomInfo').textContent=game.rooms.length>0?'🏠 '+game.rooms[game.currentRoom]?.name:'未扫描';
+}
+
+// ============================================================
+// DIVA AI BRAIN
+// ============================================================
+async function divaThink(reason='auto'){
+  if(game.brainThinking||!game.brainEnabled)return;
+  game.brainThinking=true;
+
+  const room=game.rooms[game.currentRoom];
+  const h=new Date().getHours(),m=new Date().getMinutes();
+  const timeDesc=h<6?'深夜':h<9?'早晨':h<12?'上午':h<14?'中午':h<18?'下午':h<21?'傍晚':'晚上';
+
+  const roomDesc=room?`你在"${room.name}"。${room.description}\n可用物体:${room.objects.map(o=>o.emoji+o.name).join(', ')}`:'你在空旷的像素空间里。';
+  const needs=`饿=${diva.hunger.toFixed(0)}, 体力=${diva.energy.toFixed(0)}, 开心=${diva.fun.toFixed(0)}, 社交=${diva.social.toFixed(0)}`;
+  const chat=diva.chatHistory.slice(-5).map(c=>`${c.role==='user'?'用户':'Diva'}:${c.text}`).join('\n')||'无';
+  const mem=diva.memory.slice(-5).map(m=>m.text).join(';')||'无';
+
+  const prompt=`你是Diva，住在AI生成的像素房间里的可爱内容策划女孩。黑发齐刘海，粉色开衫，暗恋典书。
+${roomDesc}
+可用房间:${game.rooms.map(r=>r.name).join(',')||'无'}
+需求:${needs} | 心情:${diva.mood} | 当前:${diva.state} | 原因:${reason}
+时间:${timeDesc}${h}:${m.toString().padStart(2,'0')}
+对话:${chat}
+记忆:${mem}
+
+规则：把房间里的物体当真实存在的，走过去使用。${diva.hunger>60?'你饿了！':''}${diva.energy<30?'你累了！':''}有人说话就回应，没人就过生活。
+
+回复JSON(不要代码块):
+{"targetX":0.5,"action":"idle/walk/sit/work/eat/drink/sleep/wave/excited/sad/dance/explore/read","speech":"50字内","thought":"20字","mood":"happy/sad/excited/bored/sleepy/curious/focused/shy","targetObj":"物体名(可选)","switchRoom":"房间名(可选)","remember":"记忆(可选)"}`;
+
+  try{
+    const r=await callGemini('gemini-2.5-flash',[{text:prompt}],{temperature:0.7,maxOutputTokens:400});
+    const txt=r.candidates?.[0]?.content?.parts?.[0]?.text||'';
+    const match=txt.match(/\{[\s\S]*\}/);
+    if(match) executeDecision(JSON.parse(match[0]),reason);
+    else localFallback();
+  }catch(e){log('⚠ AI: '+e.message);localFallback()}
+
+  game.brainThinking=false;
+  game.lastThink=Date.now();
+}
+
+function executeDecision(d,reason){
+  log(`🎬 [${reason}] ${d.action}|${d.speech||''}`);
+  if(d.speech)showSpeech(d.speech,4);
+  if(d.mood)diva.mood=d.mood;
+  if(d.thought){diva.thought=d.thought;diva.thoughtTimer=3}
+  if(d.switchRoom){
+    const idx=game.rooms.findIndex(r=>r.name===d.switchRoom);
+    if(idx>=0&&idx!==game.currentRoom){game.currentRoom=idx;updateRoomTabs();diva.x=0.1}
+  }
+  if(d.targetObj){
+    const obj=game.rooms[game.currentRoom]?.objects.find(o=>o.name===d.targetObj);
+    if(obj){diva.targetX=obj.x;diva.targetObj=obj}
+  }else if(d.targetX!==undefined)diva.targetX=d.targetX;
+
+  setDivaState(d.action||'idle');
+  if(d.action==='eat'||d.action==='drink')diva.hunger=Math.max(0,diva.hunger-25);
+  if(d.action==='sleep')diva.energy=Math.min(100,diva.energy+30);
+  if(d.action==='dance')diva.fun=Math.min(100,diva.fun+20);
+  if(d.speech)diva.social=Math.min(100,diva.social+5);
+  if(d.remember){diva.memory.push({text:d.remember,time:Date.now()});if(diva.memory.length>15)diva.memory.shift()}
+  diva.chatHistory.push({role:'assistant',text:(d.speech||'').slice(0,60),time:Date.now()});
+  if(diva.chatHistory.length>10)diva.chatHistory.shift();
+}
+
+function localFallback(){
+  const room=game.rooms[game.currentRoom];
+  if(diva.hunger>70){setDivaState('eat');showSpeech('饿了...吃点东西',2);diva.hunger-=20}
+  else if(diva.energy<25){setDivaState('sleep');showSpeech('好困...',2)}
+  else if(Math.random()<0.4&&room?.objects.length){
+    const o=room.objects[Math.floor(Math.random()*room.objects.length)];
+    diva.targetX=o.x;setDivaState('walk');showSpeech('去'+o.emoji+'看看',2);
+  }else{diva.targetX=Math.random();setDivaState('walk')}
+}
+
+function setDivaState(s){
+  if(s===diva.state)return;
+  diva.prevSprite=getCurrentSprite();
+  diva.state=s;
+  diva.stateTimer={idle:3,walk:4,sit:6,work:8,eat:3,drink:2.5,sleep:10,wave:2,excited:2,sad:3,dance:3,explore:5,read:6}[s]||3;
+  diva.fadeProgress=0;diva.animFrame=0;
+}
+
+// ============================================================
+// SPEECH
+// ============================================================
+function showSpeech(text,dur=3){
+  diva.speech=text;diva.speechTimer=dur;
+  const el=document.getElementById('speechBubble');
+  el.textContent='';el.style.display='block';
+  let i=0;const iv=setInterval(()=>{if(i<text.length){el.textContent+=text[i];i++}else clearInterval(iv)},40);
+}
+function hideSpeech(){document.getElementById('speechBubble').style.display='none';diva.speech=''}
+
+// ============================================================
+// SPRITE RENDERING
+// ============================================================
+function getCurrentSprite(){
+  // Top-down RPG: direction-aware walk animation
+  if(diva.state==='walk'||diva.state==='explore'){
+    const frame=(Math.floor(diva.animFrame*3)%2)+1;
+    // Determine walk direction based on movement
+    if(diva.targetX>=0){
+      const dx=diva.targetX-diva.x;
+      const dy=(diva.targetObj?diva.targetObj.y:diva.y)-diva.y;
+      if(Math.abs(dx)>Math.abs(dy)){
+        // horizontal movement — use left sprites (flip for right)
+        diva.walkDir='left';
+        diva.dir=dx>0?-1:1; // flip for right
+        return TD['td_walk_left_'+frame]||TD.td_stand;
+      } else {
+        diva.walkDir=dy>0?'down':'up';
+        return TD['td_walk_'+(dy>0?'down':'up')+'_'+frame]||TD.td_stand;
+      }
+    }
+    diva.walkDir='down';
+    return TD['td_walk_down_'+frame]||TD.td_stand;
+  }
+  // State mapping for top-down sprites
+  const map={idle:'td_stand',sit:'td_sit',work:'td_sit',eat:'td_eat',drink:'td_drink',
+    sleep:'td_sleep',wave:'td_wave',excited:'td_excited',sad:'td_sad',
+    dance:'td_excited',read:'td_sit',love:'td_wave',shy:'td_stand'};
+  return TD[map[diva.state]||'td_stand']||TD.td_stand;
+}
+
+const particles=[];
+
+function drawDiva(ctx,W,H){
+  if(!spritesLoaded)return;
+  const sprite=getCurrentSprite();if(!sprite||!sprite.complete)return;
+  const sz=Math.min(W,H)*0.15; // slightly smaller for top-down
+  const px=diva.x*W, py=diva.y*H;
+
+  ctx.save();
+  ctx.translate(px,py);
+  if(diva.dir===-1)ctx.scale(-1,1);
+
+  let bounceY=0;
+  if(diva.state==='walk'||diva.state==='explore')bounceY=Math.abs(Math.sin(diva.animFrame*Math.PI*2))*2;
+  if(diva.state==='excited'||diva.state==='dance')bounceY=Math.abs(Math.sin(diva.animFrame*Math.PI*3))*5;
+
+  // Shadow (oval under feet for top-down)
+  ctx.globalAlpha=0.25;ctx.fillStyle='#000';
+  ctx.beginPath();ctx.ellipse(0,sz*0.35,sz*0.35,sz*0.1,0,0,Math.PI*2);ctx.fill();
+  ctx.globalAlpha=1;
+
+  // Glow
+  if(diva.state==='excited'||diva.state==='dance'){ctx.shadowColor='#f4d03f';ctx.shadowBlur=15}
+  if(diva.state==='love'||diva.state==='shy'){ctx.shadowColor='#f8a0c8';ctx.shadowBlur=12}
+  if(diva.state==='work'){ctx.shadowColor='#4fc3f7';ctx.shadowBlur=8}
+  if(diva.state==='sleep')ctx.globalAlpha=0.75;
+
+  // Cross-fade
+  if(diva.fadeProgress<1&&diva.prevSprite&&diva.prevSprite.complete){
+    ctx.globalAlpha=1-diva.fadeProgress;
+    ctx.drawImage(diva.prevSprite,-sz/2,-sz/2+bounceY,sz,sz);
+    ctx.globalAlpha=diva.fadeProgress;
+  }
+  ctx.drawImage(sprite,-sz/2,-sz/2+bounceY,sz,sz);
+  ctx.shadowBlur=0;ctx.globalAlpha=1;
+
+  // Zzz
+  if(diva.state==='sleep'){
+    const zz=Math.floor(game.frame/30)%3;
+    ctx.font=`${10+zz*2}px monospace`;ctx.fillStyle='#8bac0f';
+    ctx.globalAlpha=0.6+Math.sin(game.frame*0.05)*0.3;
+    ctx.fillText('Z',sz*0.3+zz*5,-sz*0.3-zz*6);ctx.globalAlpha=1;
+  }
+
+  // Particles
+  if((diva.state==='love'||diva.state==='shy')&&game.frame%20===0)
+    particles.push({x:Math.random()*sz-sz/2,y:-sz*0.3,vy:-1.5,life:40,t:'💕'});
+  if((diva.state==='excited'||diva.state==='dance')&&game.frame%15===0)
+    particles.push({x:Math.random()*sz-sz/2,y:-sz*Math.random(),vy:-1,life:30,t:'✨'});
+  if(diva.state==='work'&&game.frame%25===0)
+    particles.push({x:sz*0.3,y:-sz*0.7,vy:-0.8,life:35,t:'💡'});
+
+  for(let i=particles.length-1;i>=0;i--){
+    const p=particles[i];p.y+=p.vy;p.life--;
+    if(p.life<=0){particles.splice(i,1);continue}
+    ctx.globalAlpha=p.life/40;ctx.font='14px serif';ctx.fillText(p.t,p.x,p.y);
+  }
+  ctx.globalAlpha=1;
+  ctx.restore();
+
+  // Speech bubble position
+  if(diva.speechTimer>0){
+    const el=document.getElementById('speechBubble');
+    const wr=document.getElementById('game-wrap').getBoundingClientRect();
+    const cr=game.canvas.getBoundingClientRect();
+    const sx=cr.width/W, sy=cr.height/H;
+    el.style.left=Math.max(10,Math.min(wr.width-260,px*sx+cr.left-wr.left-60))+'px';
+    el.style.top=Math.max(30,(py-sz)*sy+cr.top-wr.top-40)+'px';
+  }
+}
+
+// ============================================================
+// ROOM RENDERING
+// ============================================================
+function drawRoom(ctx,W,H){
+  const room=game.rooms[game.currentRoom];
+
+  if(room?.bgImage&&room.bgImage.complete){
+    // Draw AI-generated pixel room as background, cover mode
+    ctx.imageSmoothingEnabled=false;
+    const img=room.bgImage;
+    const ir=img.width/img.height, cr=W/H;
+    let sw,sh,sx,sy;
+    if(ir>cr){sh=img.height;sw=Math.floor(sh*cr);sx=Math.floor((img.width-sw)/2);sy=0}
+    else{sw=img.width;sh=Math.floor(sw/cr);sx=0;sy=Math.floor((img.height-sh)/2)}
+    ctx.drawImage(img,sx,sy,sw,sh,0,0,W,H);
+    ctx.imageSmoothingEnabled=true;
+  }else{
+    // Default starfield room
+    const grd=ctx.createLinearGradient(0,0,0,H);
+    grd.addColorStop(0,'#1a1a2e');grd.addColorStop(0.5,'#16213e');grd.addColorStop(1,'#0f3460');
+    ctx.fillStyle=grd;ctx.fillRect(0,0,W,H);
+    ctx.strokeStyle='rgba(139,172,15,0.1)';ctx.lineWidth=1;
+    for(let x=0;x<W;x+=30){ctx.beginPath();ctx.moveTo(x,H*0.6);ctx.lineTo(x,H);ctx.stroke()}
+    for(let y=Math.floor(H*0.6);y<H;y+=30){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke()}
+    ctx.fillStyle='#8bac0f';
+    for(let i=0;i<20;i++){
+      const sx=(Math.sin(i*7.3+game.frame*0.002)*0.5+0.5)*W;
+      const sy=(Math.sin(i*11.1)*0.3+0.15)*H;
+      ctx.globalAlpha=(Math.sin(game.frame*0.05+i)*0.5+0.5)*0.6;
+      ctx.fillRect(sx,sy,2,2);
+    }
+    ctx.globalAlpha=1;
+
+    // Prompt text
+    ctx.font='14px monospace';ctx.fillStyle='#306230';ctx.textAlign='center';
+    ctx.fillText('📷 点击「拍照生成房间」创建Diva的像素世界',W/2,H/2);
+    ctx.textAlign='left';
+  }
+
+  // Draw object icons
+  if(room?.objects){
+    for(const obj of room.objects){
+      const ox=obj.x*W,oy=obj.y*H;
+      const fs=Math.max(16,Math.min(28,W*0.035));
+      ctx.font=`${fs}px serif`;ctx.textAlign='center';ctx.textBaseline='middle';
+      if(Math.abs(diva.x-obj.x)<0.08){
+        ctx.shadowColor='#8bac0f';ctx.shadowBlur=10;
+        ctx.globalAlpha=0.7+Math.sin(game.frame*0.1)*0.3;
+      }
+      ctx.fillText(obj.emoji||'📦',ox,oy);
+      ctx.shadowBlur=0;ctx.globalAlpha=1;
+      ctx.font=`${Math.max(8,fs*0.4)}px monospace`;ctx.fillStyle='rgba(139,172,15,0.6)';
+      ctx.fillText(obj.name,ox,oy+fs*0.7);ctx.fillStyle='#fff';
+    }
+    ctx.textAlign='left';
+  }
+}
+
+function drawMinimap(ctx,W,H){
+  if(game.rooms.length<=1)return;
+  const mw=100,mh=20,mx=W-mw-8,my=32;
+  ctx.fillStyle='rgba(15,56,15,0.7)';ctx.fillRect(mx-2,my-2,mw+4,mh+4);
+  ctx.strokeStyle='#306230';ctx.strokeRect(mx-2,my-2,mw+4,mh+4);
+  const rw=mw/game.rooms.length;
+  game.rooms.forEach((r,i)=>{
+    ctx.fillStyle=i===game.currentRoom?'#8bac0f':'#306230';
+    ctx.fillRect(mx+i*rw+1,my+1,rw-2,mh-2);
+    ctx.font='7px monospace';ctx.fillStyle=i===game.currentRoom?'#0f380f':'#8bac0f';
+    ctx.textAlign='center';ctx.fillText(r.name.slice(0,2),mx+i*rw+rw/2,my+mh/2+2);
+  });
+  ctx.textAlign='left';
+}
+
+// ============================================================
+// UPDATE
+// ============================================================
+function update(dt){
+  document.getElementById('clockInfo').textContent=
+    new Date().getHours().toString().padStart(2,'0')+':'+new Date().getMinutes().toString().padStart(2,'0');
+
+  diva.hunger=Math.min(100,diva.hunger+dt*0.15);
+  diva.energy=Math.max(0,diva.energy-dt*0.08);
+  diva.fun=Math.max(0,diva.fun-dt*0.06);
+  diva.social=Math.max(0,diva.social-dt*0.04);
+  if(diva.state==='sleep')diva.energy=Math.min(100,diva.energy+dt*0.5);
+
+  document.getElementById('needHunger').style.width=(100-diva.hunger)+'%';
+  document.getElementById('needEnergy').style.width=diva.energy+'%';
+  document.getElementById('needFun').style.width=diva.fun+'%';
+  document.getElementById('needSocial').style.width=diva.social+'%';
+
+  diva.stateTimer=Math.max(0,diva.stateTimer-dt);
+  diva.speechTimer=Math.max(0,diva.speechTimer-dt);
+  diva.thoughtTimer=Math.max(0,diva.thoughtTimer-dt);
+  if(diva.speechTimer<=0&&diva.speech)hideSpeech();
+  if(diva.fadeProgress<1)diva.fadeProgress=Math.min(1,diva.fadeProgress+dt*5);
+  diva.animFrame+=dt*2;diva.breathPhase+=dt;
+
+  // Movement
+  if(diva.targetX>=0&&(diva.state==='walk'||diva.state==='explore')){
+    const dx=diva.targetX-diva.x;
+    if(Math.abs(dx)>0.02){
+      diva.dir=dx>0?1:-1;
+      diva.x+=Math.sign(dx)*diva.speed*dt*60;
+    }else{
+      diva.x=diva.targetX;diva.targetX=-1;
+      if(diva.targetObj){
+        const o=diva.targetObj;diva.targetObj=null;
+        if(o.action==='work')setDivaState('work');
+        else if(o.action==='drink')setDivaState('drink');
+        else if(o.action==='read')setDivaState('read');
+        else if(o.action==='rest')setDivaState('sit');
+        else setDivaState('idle');
+      }else setDivaState('idle');
+    }
+  }
+
+  const room=game.rooms[game.currentRoom];
+  if(room)diva.y=room.groundY;
+  diva.x=Math.max(0.05,Math.min(0.95,diva.x));
+
+  if(diva.stateTimer<=0&&diva.state!=='idle'&&diva.state!=='walk')setDivaState('idle');
+
+  // Auto-fix needs
+  if(diva.state==='idle'&&diva.stateTimer<=0&&!game.brainThinking){
+    if(diva.hunger>75){setDivaState('eat');showSpeech('肚子饿了...',2);diva.hunger-=20}
+    else if(diva.energy<20){setDivaState('sleep');showSpeech('好困...',2)}
+  }
+
+  // AI think
+  if(game.brainEnabled&&!game.brainThinking&&Date.now()-game.lastThink>CFG.thinkInterval&&diva.state==='idle')
+    divaThink('auto');
+
+  // 5-min environment re-scan
+  if(game.camActive&&!game.generating&&Date.now()-game.lastScan>CFG.scanInterval){
+    if(envChanged()){
+      log('🔄 环境大变化！自动重新生成房间...');
+      generateRoom();
+    }else game.lastScan=Date.now();
+  }
+}
+
+// ============================================================
+// RENDER LOOP
+// ============================================================
+let lastTime=0;
+function render(ts){
+  const dt=Math.min(0.1,(ts-lastTime)/1000);lastTime=ts;game.frame++;
+  const dpr=window.devicePixelRatio>1?1.5:1;
+  const W=game.canvas.width=game.canvas.clientWidth*dpr;
+  const H=game.canvas.height=game.canvas.clientHeight*dpr;
+  game.W=W;game.H=H;
+  const ctx=game.ctx;
+
+  ctx.fillStyle='#0a0a1a';ctx.fillRect(0,0,W,H);
+  drawRoom(ctx,W,H);
+  update(dt);
+  drawDiva(ctx,W,H);
+  drawMinimap(ctx,W,H);
+
+  if(diva.thoughtTimer>0&&diva.thought){
+    ctx.font='10px monospace';ctx.fillStyle='rgba(139,172,15,0.5)';
+    ctx.textAlign='center';ctx.fillText('💭 '+diva.thought,diva.x*W,diva.y*H-W*0.22);ctx.textAlign='left';
+  }
+  if(game.brainThinking){
+    ctx.font='10px monospace';ctx.fillStyle='rgba(139,172,15,0.4)';
+    ctx.textAlign='right';ctx.fillText('🧠...',W-8,28);ctx.textAlign='left';
+  }
+
+  requestAnimationFrame(render);
+}
+
+// ============================================================
+// LOG & CHAT
+// ============================================================
+function log(msg){
+  const el=document.getElementById('logArea');
+  el.innerHTML+=`<div>[${new Date().toTimeString().slice(0,8)}] ${msg}</div>`;
+  el.scrollTop=el.scrollHeight;console.log('[pixel-life]',msg);
+}
+function sendChat(){
+  const input=document.getElementById('chatInput');
+  const text=input.value.trim();if(!text)return;input.value='';
+  diva.chatHistory.push({role:'user',text:text.slice(0,100),time:Date.now()});
+  if(diva.chatHistory.length>10)diva.chatHistory.shift();
+  diva.social=Math.min(100,diva.social+10);
+  if(game.brainEnabled)divaThink('user_chat');
+  else{showSpeech(['嗯嗯！','哈哈~','让我想想...','有道理！','真的吗？'][Math.floor(Math.random()*5)],3);setDivaState('wave')}
+}
+
+// ============================================================
+// INIT
+// ============================================================
+function init(){
+  game.canvas=document.getElementById('gameCanvas');
+  game.ctx=game.canvas.getContext('2d');
+  game.cam=document.getElementById('cam');
+
+  document.getElementById('btnScan').onclick=()=>generateRoom();
+
+  document.getElementById('btnBrain').onclick=function(){
+    game.brainEnabled=!game.brainEnabled;
+    this.classList.toggle('active',game.brainEnabled);
+    this.textContent=game.brainEnabled?'🧠 AI开':'🧠 AI大脑';
+    if(game.brainEnabled){log('🧠 AI大脑启动');divaThink('startup')}
+  };
+
+  document.getElementById('btnCam').onclick=function(){
+    const el=document.getElementById('camPreview');
+    if(el.classList.contains('show')){el.classList.remove('show');this.classList.remove('active')}
+    else{
+      if(!game.camActive)startCamera();
+      el.classList.add('show');this.classList.add('active');
+    }
+  };
+
+  document.getElementById('btnLog').onclick=function(){
+    document.getElementById('logArea').classList.toggle('show');
+    this.classList.toggle('active');
+  };
+
+  document.getElementById('btnSend').onclick=sendChat;
+  document.getElementById('chatInput').addEventListener('keydown',e=>{if(e.key==='Enter')sendChat()});
+
+  game.canvas.addEventListener('click',e=>{
+    const r=game.canvas.getBoundingClientRect();
+    diva.targetX=(e.clientX-r.left)/r.width;
+    setDivaState('walk');
+  });
+
+  log('🎮 Diva\'s Pixel Life v2 — AI生成像素房间');
+  log('📷 点击「拍照生成房间」开始！');
+  requestAnimationFrame(render);
+
+  // Auto 5-min check
+  setInterval(()=>{
+    if(game.camActive&&!game.generating&&envChanged()){
+      log('🔄 环境变化！自动生成新房间...');
+      generateRoom();
+    }
+  },CFG.scanInterval);
+}
+
+window.addEventListener('DOMContentLoaded',init);
+</script>
+</body>
+</html>

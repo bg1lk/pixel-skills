@@ -1,0 +1,810 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>★ 整理大师 ★</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:#0f380f;color:#9bbc0f;font-family:'Courier New',Consolas,monospace;min-height:100vh;overflow-x:hidden;}
+.app{max-width:480px;margin:0 auto;padding:8px;}
+.title-bar{text-align:center;padding:10px 0 6px;border-bottom:3px solid #306230;}
+.title-bar h1{font-size:18px;color:#8bac0f;text-shadow:2px 2px 0 #306230;letter-spacing:2px;}
+.title-bar .sub{font-size:10px;color:#306230;margin-top:2px;}
+
+/* Tabs */
+.tabs{display:flex;gap:2px;margin:8px 0;flex-wrap:wrap;}
+.tab{flex:1;min-width:50px;padding:6px 4px;background:#306230;color:#8bac0f;border:2px solid #0f380f;font-family:monospace;font-size:11px;font-weight:bold;cursor:pointer;text-align:center;}
+.tab.active{background:#8bac0f;color:#0f380f;box-shadow:inset 0 0 0 1px #0f380f;}
+.tab:hover{background:#4a7a3a;}
+
+/* Panels */
+.panel{display:none;background:#1a4a1a;border:3px solid #306230;padding:10px;margin-bottom:8px;}
+.panel.active{display:block;}
+.panel-title{font-size:14px;color:#8bac0f;font-weight:bold;margin-bottom:8px;padding-bottom:4px;border-bottom:2px dashed #306230;}
+
+/* Zone cards */
+.zone-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;}
+.zone-card{background:#0f380f;border:2px solid #306230;padding:10px;cursor:pointer;text-align:center;}
+.zone-card:hover{background:#306230;border-color:#8bac0f;}
+.zone-card.done{border-color:#8bac0f;position:relative;}
+.zone-card.done::after{content:'✓';position:absolute;top:4px;right:6px;color:#8bac0f;font-size:12px;}
+.zone-icon{font-size:28px;display:block;margin-bottom:4px;}
+.zone-name{font-size:12px;color:#9bbc0f;font-weight:bold;}
+.zone-desc{font-size:9px;color:#306230;margin-top:2px;}
+
+/* Checklist */
+.checklist{list-style:none;}
+.checklist li{padding:6px 8px;border-bottom:1px solid #1a4a1a;font-size:11px;display:flex;align-items:center;gap:8px;cursor:pointer;}
+.checklist li:hover{background:#0f380f;}
+.check-box{width:16px;height:16px;border:2px solid #306230;display:inline-flex;align-items:center;justify-content:center;font-size:10px;flex-shrink:0;}
+.check-box.checked{background:#8bac0f;color:#0f380f;border-color:#8bac0f;}
+.check-text{flex:1;}
+.check-text.done{text-decoration:line-through;color:#306230;}
+
+/* Tips */
+.tip-card{background:#0f380f;border:2px solid #306230;padding:8px;margin-bottom:6px;}
+.tip-card .tip-title{color:#f4d03f;font-size:11px;font-weight:bold;margin-bottom:3px;}
+.tip-card .tip-body{color:#9bbc0f;font-size:10px;line-height:1.5;}
+
+/* Clothes classifier */
+.cloth-section{margin-bottom:8px;}
+.cloth-section h3{font-size:12px;color:#f4d03f;margin-bottom:4px;}
+.cloth-tags{display:flex;flex-wrap:wrap;gap:4px;}
+.cloth-tag{padding:3px 8px;background:#306230;border:1px solid #4a7a3a;font-size:10px;color:#9bbc0f;cursor:pointer;}
+.cloth-tag.selected{background:#8bac0f;color:#0f380f;border-color:#8bac0f;}
+
+/* Item list */
+.item-row{display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px dotted #306230;font-size:11px;}
+.item-row .item-cat{color:#f4d03f;font-size:9px;background:#306230;padding:1px 4px;}
+.item-row .item-act{color:#e63946;font-size:9px;cursor:pointer;margin-left:auto;}
+.add-row{display:flex;gap:4px;margin-top:6px;}
+.add-row input{flex:1;background:#0f380f;border:2px solid #306230;color:#9bbc0f;font-family:monospace;font-size:11px;padding:4px 6px;outline:none;}
+.add-row input:focus{border-color:#8bac0f;}
+.add-row input::placeholder{color:#306230;}
+
+/* Buttons */
+.btn{background:#8bac0f;color:#0f380f;border:2px solid #0f380f;box-shadow:3px 3px 0 #306230;font-family:monospace;font-size:11px;font-weight:bold;padding:5px 10px;cursor:pointer;}
+.btn:hover{background:#9bbc0f;transform:translate(1px,1px);box-shadow:2px 2px 0 #306230;}
+.btn:active{transform:translate(3px,3px);box-shadow:none;}
+.btn-sm{padding:3px 8px;font-size:10px;box-shadow:2px 2px 0 #306230;}
+.btn-danger{background:#e63946;color:#fff;}
+
+/* Camera / Scan */
+.cam-box{position:relative;border:3px solid #306230;background:#000;margin-bottom:6px;overflow:hidden;}
+.cam-box video{width:100%;display:block;transform:scaleX(-1);}
+.cam-box canvas{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;}
+.cam-controls{display:flex;gap:4px;margin-bottom:6px;flex-wrap:wrap;}
+.photo-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px;}
+.photo-card{border:2px solid #306230;overflow:hidden;position:relative;}
+.photo-card img{width:100%;display:block;}
+.photo-label{position:absolute;bottom:0;left:0;right:0;background:rgba(15,56,15,0.85);color:#8bac0f;font-size:10px;padding:2px 4px;text-align:center;}
+.photo-card .del-photo{position:absolute;top:2px;right:4px;color:#e63946;font-size:12px;cursor:pointer;font-weight:bold;text-shadow:1px 1px 0 #000;}
+
+/* Scan result */
+.scan-score{text-align:center;padding:12px 0;}
+.scan-score .big-score{font-size:48px;font-weight:bold;line-height:1;}
+.scan-score .score-label{font-size:11px;margin-top:4px;}
+.scan-meter{display:flex;gap:2px;justify-content:center;margin:8px 0;}
+.scan-meter .bar{width:18px;height:8px;border:1px solid #0f380f;}
+.scan-detail{margin-top:8px;}
+.scan-detail .sd-row{display:flex;justify-content:space-between;align-items:center;font-size:11px;padding:4px 0;border-bottom:1px dotted #306230;}
+.scan-detail .sd-bar{width:80px;height:8px;background:#0f380f;border:1px solid #306230;display:inline-block;vertical-align:middle;}
+.scan-detail .sd-fill{height:100%;display:block;}
+.scan-advice{margin-top:8px;}
+
+/* Progress */
+.progress-wrap{margin:6px 0;}
+.progress-bar{background:#0f380f;border:2px solid #306230;height:18px;position:relative;}
+.progress-fill{height:100%;background:#8bac0f;transition:width 0.3s steps(10);}
+.progress-text{position:absolute;top:0;left:0;right:0;text-align:center;font-size:10px;color:#0f380f;line-height:18px;font-weight:bold;}
+.stats-row{display:flex;justify-content:space-between;margin-top:4px;font-size:10px;color:#306230;}
+
+/* Achievement */
+.achieve-popup{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#0f380f;border:4px solid #f4d03f;box-shadow:0 0 30px rgba(244,208,63,0.4);padding:20px 30px;text-align:center;z-index:999;display:none;animation:popIn 0.3s steps(5);}
+@keyframes popIn{from{transform:translate(-50%,-50%) scale(0);}to{transform:translate(-50%,-50%) scale(1);}}
+.achieve-popup .a-icon{font-size:36px;margin-bottom:8px;}
+.achieve-popup .a-title{color:#f4d03f;font-size:14px;font-weight:bold;}
+.achieve-popup .a-desc{color:#9bbc0f;font-size:11px;margin-top:4px;}
+
+::-webkit-scrollbar{width:6px;}
+::-webkit-scrollbar-track{background:#0f380f;}
+::-webkit-scrollbar-thumb{background:#306230;}
+@media(max-width:360px){.zone-grid{grid-template-columns:1fr;}.photo-grid{grid-template-columns:1fr;}}
+
+/* ===== MOBILE ===== */
+@media(max-width:600px){
+  body{overflow-y:auto!important;min-height:100vh;}
+  video{width:100%!important;max-width:100%!important;height:auto!important;}
+  canvas{max-width:100%!important;}
+  #app,.app,.container,.main,.wrapper,[id*="app"],[class*="container"]{width:100%!important;max-width:100%!important;margin:0!important;border-radius:0!important;}
+  button,.btn,.action-btn,[class*="btn"]{min-height:44px;font-size:13px!important;touch-action:manipulation;}
+  input,textarea,select{font-size:16px!important;}
+  .controls,.toolbar,.actions,.panel,.buttons,[class*="controls"],[class*="toolbar"]{flex-wrap:wrap!important;}
+  [style*="width:"][style*="px"]{max-width:100%!important;}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="title-bar">
+    <h1>★ 整理大师 ★</h1>
+    <div class="sub">░░ AI扫描·房间收纳·衣物分类 ░░</div>
+  </div>
+
+  <div class="tabs">
+    <div class="tab active" onclick="switchTab('scan')">扫描</div>
+    <div class="tab" onclick="switchTab('zones')">区域</div>
+    <div class="tab" onclick="switchTab('guide')">指南</div>
+    <div class="tab" onclick="switchTab('clothes')">衣物</div>
+    <div class="tab" onclick="switchTab('photo')">拍照</div>
+    <div class="tab" onclick="switchTab('progress')">进度</div>
+  </div>
+
+  <!-- ===== SCAN ===== -->
+  <div class="panel active" id="panel-scan">
+    <div class="panel-title">◆ 智能扫描分析</div>
+    <p style="font-size:10px;color:#306230;margin-bottom:6px;">对准需要整理的区域，实时分析整洁度并给出建议</p>
+
+    <select id="scanZone" style="background:#0f380f;border:2px solid #306230;color:#9bbc0f;font-family:monospace;font-size:11px;padding:4px;width:100%;margin-bottom:6px;">
+      <option value="desk">🖥️ 书桌</option>
+      <option value="wardrobe">👔 衣柜</option>
+      <option value="kitchen">🍳 厨房</option>
+      <option value="bathroom">🚿 浴室</option>
+      <option value="living">🛋️ 客厅</option>
+      <option value="bedroom">🛏️ 卧室</option>
+    </select>
+
+    <div class="cam-box" id="scanCamBox" style="display:none;">
+      <video id="scanVideo" playsinline></video>
+      <canvas id="scanOverlay"></canvas>
+    </div>
+
+    <div class="cam-controls">
+      <button class="btn btn-sm" id="scanToggle" onclick="toggleScan()">★ 开启扫描</button>
+      <button class="btn btn-sm" onclick="captureAnalysis()" id="btnCapture" disabled>📸 截图分析</button>
+    </div>
+
+    <!-- Real-time analysis display -->
+    <div id="scanResult" style="display:none;">
+      <div class="scan-score">
+        <div class="big-score" id="scoreNum" style="color:#8bac0f;">--</div>
+        <div class="score-label" id="scoreLabel">整洁度评分</div>
+      </div>
+      <div class="scan-meter" id="scoreMeter"></div>
+
+      <div class="scan-detail">
+        <div class="sd-row">
+          <span>物品密度</span>
+          <span><span class="sd-bar"><span class="sd-fill" id="fillDensity" style="background:#e63946;"></span></span> <span id="valDensity">--</span></span>
+        </div>
+        <div class="sd-row">
+          <span>色彩混乱度</span>
+          <span><span class="sd-bar"><span class="sd-fill" id="fillChaos" style="background:#f4d03f;"></span></span> <span id="valChaos">--</span></span>
+        </div>
+        <div class="sd-row">
+          <span>空间利用率</span>
+          <span><span class="sd-bar"><span class="sd-fill" id="fillSpace" style="background:#8bac0f;"></span></span> <span id="valSpace">--</span></span>
+        </div>
+        <div class="sd-row">
+          <span>对称/规整度</span>
+          <span><span class="sd-bar"><span class="sd-fill" id="fillSymm" style="background:#3cbcfc;"></span></span> <span id="valSymm">--</span></span>
+        </div>
+      </div>
+
+      <div class="scan-advice" id="scanAdvice"></div>
+    </div>
+  </div>
+
+  <!-- ===== ZONES ===== -->
+  <div class="panel" id="panel-zones">
+    <div class="panel-title">◆ 选择要整理的区域</div>
+    <div class="zone-grid" id="zoneGrid"></div>
+    <div style="margin-top:8px;font-size:10px;color:#306230;text-align:center;">点击区域查看整理清单 ▶</div>
+    <div id="zoneDetail" style="display:none;margin-top:10px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+        <span class="panel-title" id="zoneDetailTitle" style="margin:0;border:0;padding:0;"></span>
+        <button class="btn btn-sm" onclick="closeZoneDetail()">← 返回</button>
+      </div>
+      <ul class="checklist" id="zoneChecklist"></ul>
+      <div class="progress-wrap">
+        <div class="progress-bar"><div class="progress-fill" id="zoneProg"></div><div class="progress-text" id="zoneProgText"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== GUIDE ===== -->
+  <div class="panel" id="panel-guide">
+    <div class="panel-title">◆ 整理指南</div>
+    <div id="guideContent"></div>
+  </div>
+
+  <!-- ===== CLOTHES ===== -->
+  <div class="panel" id="panel-clothes">
+    <div class="panel-title">◆ 衣物分类器</div>
+    <p style="font-size:10px;color:#306230;margin-bottom:8px;">添加衣物，系统帮你按季节/类型/颜色归类，给出收纳建议</p>
+    <div class="cloth-section"><h3>▸ 季节</h3><div class="cloth-tags" id="seasonTags"></div></div>
+    <div class="cloth-section"><h3>▸ 类型</h3><div class="cloth-tags" id="typeTags"></div></div>
+    <div class="cloth-section"><h3>▸ 颜色</h3><div class="cloth-tags" id="colorTags"></div></div>
+    <div class="add-row">
+      <input type="text" id="clothName" placeholder="衣物名称（如：黑色羽绒服）">
+      <button class="btn btn-sm" onclick="addCloth()">+添加</button>
+    </div>
+    <div id="clothList" style="margin-top:8px;max-height:200px;overflow-y:auto;"></div>
+    <div id="clothAdvice" style="margin-top:8px;"></div>
+  </div>
+
+  <!-- ===== PHOTO ===== -->
+  <div class="panel" id="panel-photo">
+    <div class="panel-title">◆ 整理前后对比</div>
+    <p style="font-size:10px;color:#306230;margin-bottom:6px;">拍下整理前后的照片，记录你的成果！</p>
+    <div class="cam-box" id="camBox" style="display:none;">
+      <video id="camVideo" playsinline></video>
+    </div>
+    <div class="cam-controls">
+      <button class="btn btn-sm" id="camToggle" onclick="toggleCam()">★ 开启摄像头</button>
+      <button class="btn btn-sm" onclick="takePhoto('before')" id="btnBefore" disabled>拍整理前</button>
+      <button class="btn btn-sm" onclick="takePhoto('after')" id="btnAfter" disabled>拍整理后</button>
+    </div>
+    <select id="photoZone" style="background:#0f380f;border:2px solid #306230;color:#9bbc0f;font-family:monospace;font-size:11px;padding:3px;width:100%;margin-bottom:6px;">
+      <option value="">-- 选择拍照区域 --</option>
+    </select>
+    <div class="photo-grid" id="photoGrid"></div>
+    <div style="margin-top:6px;font-size:9px;color:#306230;text-align:center;" id="photoCount"></div>
+  </div>
+
+  <!-- ===== PROGRESS ===== -->
+  <div class="panel" id="panel-progress">
+    <div class="panel-title">◆ 整理进度</div>
+    <div class="progress-wrap">
+      <div class="progress-bar"><div class="progress-fill" id="totalProg"></div><div class="progress-text" id="totalProgText"></div></div>
+      <div class="stats-row"><span id="statDone"></span><span id="statTotal"></span></div>
+    </div>
+    <div id="zoneProgressList" style="margin-top:8px;"></div>
+    <div id="achieveList" style="margin-top:10px;"></div>
+    <div style="margin-top:10px;text-align:center;">
+      <button class="btn btn-sm btn-danger" onclick="if(confirm('确定要重置所有进度？'))resetAll();">重置进度</button>
+    </div>
+  </div>
+</div>
+
+<!-- Achievement popup -->
+<div class="achieve-popup" id="achievePopup">
+  <div class="a-icon" id="achieveIcon"></div>
+  <div class="a-title" id="achieveTitle"></div>
+  <div class="a-desc" id="achieveDesc"></div>
+  <button class="btn btn-sm" style="margin-top:10px;" onclick="document.getElementById('achievePopup').style.display='none';">好的！</button>
+</div>
+
+<script src="../cam-core/cam-core.js"></script>
+<script>
+// ===== DATA =====
+const ZONES = [
+  { id:'wardrobe', name:'衣柜', icon:'👔', desc:'衣物收纳分类', tasks:[
+    '把所有衣服从衣柜取出','按季节分成四堆','淘汰破旧/不穿的衣物','按类型分：上衣/裤子/裙子/外套',
+    '浅色和深色分开','常穿的放在容易拿到的位置','叠放整齐或使用收纳盒','挂好容易起皱的衣服','整理配饰（围巾/帽子/腰带）','完成！检查一遍'
+  ]},
+  { id:'desk', name:'书桌', icon:'🖥️', desc:'桌面整理规划', tasks:[
+    '清空桌面所有物品','擦干净桌面','分类：常用/偶尔用/不用','扔掉垃圾和废纸',
+    '电子设备归位（充电线理线）','文具收入笔筒/抽屉','文件分类整理或扫描','设定三个功能区：工作/参考/个人',
+    '只在桌面留最常用的东西','完成！保持桌面整洁'
+  ]},
+  { id:'kitchen', name:'厨房', icon:'🍳', desc:'厨房收纳整理', tasks:[
+    '清理过期食品和调料','锅碗瓢盆按使用频率分层','常用调料放在灶台旁',
+    '清洁剂归到水槽下方','整理冰箱：分层分区','清洁台面和油污','整理购物袋和保鲜膜',
+    '餐具按类型放入抽屉','检查有无重复厨具可淘汰','完成！厨房焕然一新'
+  ]},
+  { id:'bathroom', name:'浴室', icon:'🚿', desc:'浴室用品整理', tasks:[
+    '丢掉过期的护肤品/药品','毛巾按人分或按用途分','洗浴用品统一放置',
+    '清洁台面和镜子','整理抽屉里的杂物','补充缺少的日用品','清洁地漏和排水口','完成！清爽浴室'
+  ]},
+  { id:'living', name:'客厅', icon:'🛋️', desc:'客厅空间整理', tasks:[
+    '沙发靠垫归位整理','茶几只留常用物品','遥控器/充电器统一收纳',
+    '书籍杂志归书架','清理地面杂物','整理鞋柜和入门区','检查装饰品：保留有意义的',
+    '电线收纳整理','完成！客厅干净舒适'
+  ]},
+  { id:'bedroom', name:'卧室', icon:'🛏️', desc:'卧室空间整理', tasks:[
+    '整理床铺','床头柜只留必需品（手机/水杯/书）','整理床底储物',
+    '梳妆台物品分类收纳','检查窗帘和窗台','整理床头充电线','清理衣物椅上的堆积',
+    '完成！舒适的睡眠空间'
+  ]},
+];
+
+const GUIDES = [
+  { title:'🎯 断舍离三问法', body:'拿起每件物品问自己：\n1. 过去一年用过吗？\n2. 未来三个月会用吗？\n3. 它让我开心吗？\n三个都是"否"→ 果断放弃。'},
+  { title:'📦 收纳黄金法则', body:'• 同类物品集中存放\n• 使用频率决定位置（常用的放手边）\n• 竖着收纳比叠放更好找\n• 透明收纳盒 > 不透明的\n• 给每样东西一个"家"'},
+  { title:'👔 衣柜整理四步', body:'1.「全部取出」— 倒空衣柜\n2.「分类筛选」— 留/捐/扔三堆\n3.「折叠归位」— 竖折法省空间\n4.「标签管理」— 收纳盒贴标签'},
+  { title:'🖥️ 桌面极简三区法', body:'把桌面分成三个区：\n① 核心工作区（正前方，最常用）\n② 参考区（左侧，偶尔需要的）\n③ 个人区（右侧，水杯/小物件）\n\n规则：每区不超过3样东西。'},
+  { title:'📅 维持整洁的习惯', body:'• 每天5分钟：睡前把用过的归位\n• 每周15分钟：一个区域快速整理\n• 每月1小时：深度整理一个房间\n• 一进一出：买一件新的就淘汰一件旧的'},
+  { title:'🗑️ 不要留的10种东西', body:'1. 超过1年没穿的衣服\n2. 过期的食品和药品\n3. 坏掉的电子产品\n4. 重复的厨具\n5. 不配对的袜子\n6. 过多的购物袋\n7. 已读不会再看的杂志\n8. 不用的APP充电线\n9. 过时的名片和传单\n10. 别人送的但你不喜欢的'},
+  { title:'✨ 「5分钟规则」', body:'不想整理？给自己5分钟就好。\n设定手机计时器5分钟，只整理5分钟。\n\n通常一旦开始，你会发现自己停不下来。\n这就是启动效应的力量！'},
+];
+
+// Zone-specific scan advice
+const ZONE_ADVICE = {
+  desk: {
+    high:['桌面比较杂乱，建议先清空再分区摆放','把不常用的东西收进抽屉','电线/充电线用理线器整理','文件堆积过多，考虑扫描电子化'],
+    mid:['桌面基本整洁，还可以优化','把零散小物件收入收纳盒','考虑「三区法」重新规划桌面布局'],
+    low:['桌面很整洁！保持得不错','记得每天下班前花1分钟归位','可以加一个小绿植增添氛围']
+  },
+  wardrobe: {
+    high:['衣物堆积严重，需要断舍离','把所有衣服取出，分成「留/捐/扔」三堆','按季节分类，非当季的真空袋收纳','建议使用统一的衣架和收纳盒'],
+    mid:['衣柜有一定秩序，还能优化','试试竖折法：衣服竖着放更好找','按颜色排列会更美观也更好搭配'],
+    low:['衣柜很整齐！继续保持','记住「一进一出」原则控制总量','换季时花半小时重新整理一次']
+  },
+  kitchen: {
+    high:['台面物品太多，先全部清空','检查有没有过期的食材和调料','锅碗瓢盆按使用频率分层放置','常用的放在伸手可及的位置'],
+    mid:['厨房整体还行，细节可以改善','调料瓶统一容器会更整洁','水槽下方空间利用起来放清洁用品'],
+    low:['厨房很干净！保持得很好','定期清理冰箱，每周检查一次','台面尽量留白，做饭更方便']
+  },
+  bathroom: {
+    high:['台面瓶瓶罐罐太多了','丢掉过期的护肤品和药品','使用置物架利用墙面空间','毛巾按人或按用途分开放'],
+    mid:['浴室基本整洁，可以更好','统一瓶子的摆放方向和位置','添加一个小收纳篮装零碎物品'],
+    low:['浴室很清爽！不错','保持干燥通风防霉','定期更换毛巾和牙刷']
+  },
+  living: {
+    high:['客厅杂物太多，需要精简','沙发上不要堆东西','茶几只放遥控器和纸巾','把地面的东西都收起来'],
+    mid:['客厅还算整洁，继续保持','遥控器和充电器可以用收纳盒统一','检查角落是否有遗忘的杂物'],
+    low:['客厅很舒适！整洁度很高','保持「随手归位」的好习惯','适当留白让空间更通透']
+  },
+  bedroom: {
+    high:['先把床铺整理好','床头柜清理到只剩必需品','「衣服椅」上的衣服该收起来了','床底下的杂物需要整理'],
+    mid:['卧室基本整洁，细节可优化','梳妆台物品可以用托盘归类','充电线理一理更清爽'],
+    low:['卧室很温馨整洁！','好的睡眠环境从整洁开始','保持每天早起叠被子的习惯']
+  }
+};
+
+const SEASONS = ['春','夏','秋','冬','四季'];
+const TYPES = ['上衣','裤子','裙子','外套','内衣','运动','正装','睡衣','配饰'];
+const COLORS = ['黑','白','灰','蓝','红','绿','黄','粉','棕','彩'];
+
+const ACHIEVEMENTS = [
+  { id:'first_zone', name:'初次整理', desc:'完成第一个区域的整理', icon:'🌱', check:d=>d.completedZones>=1 },
+  { id:'three_zones', name:'整理达人', desc:'完成3个区域的整理', icon:'⭐', check:d=>d.completedZones>=3 },
+  { id:'all_zones', name:'整理大师', desc:'完成所有区域的整理', icon:'👑', check:d=>d.completedZones>=ZONES.length },
+  { id:'first_photo', name:'记录者', desc:'拍下第一张整理照片', icon:'📸', check:d=>d.photos>=1 },
+  { id:'before_after', name:'蜕变时刻', desc:'完成一组前后对比照', icon:'✨', check:d=>d.pairs>=1 },
+  { id:'clothes_10', name:'衣物管家', desc:'录入10件衣物', icon:'👔', check:d=>d.clothes>=10 },
+  { id:'half_tasks', name:'坚持不懈', desc:'完成50%的所有任务', icon:'💪', check:d=>d.taskPercent>=50 },
+  { id:'first_scan', name:'扫描专家', desc:'首次使用摄像头扫描', icon:'🔍', check:d=>d.scans>=1 },
+];
+
+// ===== STATE =====
+let state = loadState();
+let currentZone = null;
+let camStream = null, camActive = false;
+let scanStream = null, scanActive = false, scanLoop = null;
+let selectedSeason = null, selectedType = null, selectedColor = null;
+// Analysis canvas
+let scanCanvas = null, scanCtx = null;
+
+function defaultState(){ return { tasks:{}, clothes:[], photos:[], achievements:[], scans:0 }; }
+function loadState(){ try{ const s=JSON.parse(localStorage.getItem('room-organizer'))||defaultState(); if(!s.scans)s.scans=0; return s; }catch(e){ return defaultState(); } }
+function saveState(){ localStorage.setItem('room-organizer', JSON.stringify(state)); }
+
+// ===== TAB SWITCHING =====
+function switchTab(tab){
+  document.querySelectorAll('.tab').forEach(t=>{
+    const map={scan:'扫描',zones:'区域',guide:'指南',clothes:'衣物',photo:'拍照',progress:'进度'};
+    t.classList.toggle('active', t.textContent===map[tab]);
+  });
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  const el=document.getElementById('panel-'+tab);
+  if(el)el.classList.add('active');
+  if(tab==='progress') renderProgress();
+  if(tab==='photo') renderPhotos();
+  if(tab==='clothes') renderClothes();
+  // Stop scan if switching away
+  if(tab!=='scan' && scanActive) toggleScan();
+  playClick();
+}
+
+// ===== SCAN (Camera Analysis) =====
+async function toggleScan(){
+  if(scanActive){
+    if(scanLoop){cancelAnimationFrame(scanLoop);scanLoop=null;}
+    if(scanStream){scanStream.getTracks().forEach(t=>t.stop());scanStream=null;}
+    scanActive=false;
+    document.getElementById('scanCamBox').style.display='none';
+    document.getElementById('scanToggle').textContent='★ 开启扫描';
+    document.getElementById('btnCapture').disabled=true;
+    return;
+  }
+  try{
+    scanStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment',width:{ideal:640},height:{ideal:480}},audio:false});
+    const v=document.getElementById('scanVideo');
+    v.srcObject=scanStream;v.setAttribute('playsinline','');await v.play();
+    scanActive=true;
+    document.getElementById('scanCamBox').style.display='block';
+    document.getElementById('scanToggle').textContent='关闭扫描';
+    document.getElementById('btnCapture').disabled=false;
+    document.getElementById('scanResult').style.display='block';
+    // Setup analysis canvas
+    const ov=document.getElementById('scanOverlay');
+    ov.width=v.videoWidth;ov.height=v.videoHeight;
+    scanCanvas=document.createElement('canvas');
+    // Use small size for fast analysis
+    scanCanvas.width=80;scanCanvas.height=60;
+    scanCtx=scanCanvas.getContext('2d',{willReadFrequently:true});
+    // Start analysis loop
+    let frameCount=0;
+    function analyzeLoop(){
+      if(!scanActive)return;
+      frameCount++;
+      // Analyze every 10th frame (~3fps analysis)
+      if(frameCount%10===0) analyzeFrame();
+      scanLoop=requestAnimationFrame(analyzeLoop);
+    }
+    analyzeLoop();
+  }catch(e){
+    alert('摄像头启动失败: '+e.message);
+  }
+}
+
+function analyzeFrame(){
+  if(!scanActive||!scanCtx)return;
+  const v=document.getElementById('scanVideo');
+  if(v.videoWidth===0)return;
+  const W=80,H=60;
+  scanCtx.drawImage(v,0,0,W,H);
+  const imgData=scanCtx.getImageData(0,0,W,H);
+  // CamCore: normalize for consistent analysis under varying light
+  CamCore.normalize(imgData);
+  const d=imgData.data;
+  const total=W*H;
+
+  // ---- 1. Edge density (Sobel-like) ----
+  let edgeSum=0;
+  for(let y=1;y<H-1;y++){
+    for(let x=1;x<W-1;x++){
+      const i=(y*W+x)*4;
+      const gray=d[i]*0.3+d[i+1]*0.59+d[i+2]*0.11;
+      const iR=(y*W+x+1)*4, iL=(y*W+x-1)*4;
+      const iU=((y-1)*W+x)*4, iD=((y+1)*W+x)*4;
+      const grayR=d[iR]*0.3+d[iR+1]*0.59+d[iR+2]*0.11;
+      const grayL=d[iL]*0.3+d[iL+1]*0.59+d[iL+2]*0.11;
+      const grayU=d[iU]*0.3+d[iU+1]*0.59+d[iU+2]*0.11;
+      const grayD=d[iD]*0.3+d[iD+1]*0.59+d[iD+2]*0.11;
+      const gx=grayR-grayL, gy=grayD-grayU;
+      const mag=Math.sqrt(gx*gx+gy*gy);
+      if(mag>25) edgeSum++;
+    }
+  }
+  const edgeDensity=edgeSum/total; // 0~1, higher = more cluttered
+
+  // ---- 2. Color entropy (chaos) ----
+  // Quantize colors to 4x4x4=64 bins
+  const colorBins=new Array(64).fill(0);
+  for(let i=0;i<d.length;i+=4){
+    const ri=Math.floor(d[i]/64), gi=Math.floor(d[i+1]/64), bi=Math.floor(d[i+2]/64);
+    colorBins[ri*16+gi*4+bi]++;
+  }
+  let entropy=0;
+  for(const c of colorBins){
+    if(c>0){const p=c/total;entropy-=p*Math.log2(p);}
+  }
+  const maxEntropy=Math.log2(64); // ~6
+  const colorChaos=entropy/maxEntropy; // 0~1
+
+  // ---- 3. Spatial variance (block-based) ----
+  // Divide into 4x3 blocks, compute brightness variance between blocks
+  const blockW=20, blockH=20;
+  const blocks=[];
+  for(let by=0;by<3;by++){
+    for(let bx=0;bx<4;bx++){
+      let sum=0,cnt=0;
+      for(let y=by*blockH;y<(by+1)*blockH&&y<H;y++){
+        for(let x=bx*blockW;x<(bx+1)*blockW&&x<W;x++){
+          const i=(y*W+x)*4;
+          sum+=d[i]*0.3+d[i+1]*0.59+d[i+2]*0.11;cnt++;
+        }
+      }
+      blocks.push(sum/cnt);
+    }
+  }
+  const avgBlock=blocks.reduce((a,b)=>a+b,0)/blocks.length;
+  const blockVar=Math.sqrt(blocks.reduce((a,b)=>a+(b-avgBlock)**2,0)/blocks.length)/128;
+  const spatialUse=Math.min(1,blockVar*2); // Higher variance = more stuff spread around
+
+  // ---- 4. Symmetry (left vs right half) ----
+  let leftSum=0,rightSum=0,leftCnt=0,rightCnt=0;
+  for(let y=0;y<H;y++){
+    for(let x=0;x<W;x++){
+      const i=(y*W+x)*4;
+      const gray=d[i]*0.3+d[i+1]*0.59+d[i+2]*0.11;
+      if(x<W/2){leftSum+=gray;leftCnt++;}
+      else{rightSum+=gray;rightCnt++;}
+    }
+  }
+  const leftAvg=leftSum/leftCnt, rightAvg=rightSum/rightCnt;
+  const symmetry=1-Math.min(1,Math.abs(leftAvg-rightAvg)/60);
+
+  // ---- Compute overall tidiness score ----
+  // Lower edge density = tidier, lower color chaos = tidier, higher symmetry = tidier
+  const tidiness = Math.round(
+    (1 - edgeDensity*0.8) * 30 +        // Edge: less clutter = higher score
+    (1 - colorChaos*0.6) * 25 +           // Color: less chaos = higher score
+    (1 - spatialUse*0.5) * 20 +           // Space: less spread = higher score
+    symmetry * 25                           // Symmetry: more symmetric = higher
+  );
+  const score = Math.max(10, Math.min(98, tidiness));
+
+  // Update UI
+  updateScanUI(score, edgeDensity, colorChaos, spatialUse, symmetry);
+}
+
+function updateScanUI(score, density, chaos, space, symm){
+  // Score number
+  const scoreEl=document.getElementById('scoreNum');
+  scoreEl.textContent=score;
+  if(score>=75){scoreEl.style.color='#8bac0f';}
+  else if(score>=50){scoreEl.style.color='#f4d03f';}
+  else{scoreEl.style.color='#e63946';}
+
+  // Label
+  const labels=['需要大整理！','有点乱哦','还行，可以更好','不错！','很整洁！','完美！'];
+  const li=Math.min(5,Math.floor(score/18));
+  document.getElementById('scoreLabel').textContent=labels[li];
+
+  // Meter bars (20 bars)
+  const meter=document.getElementById('scoreMeter');
+  let bars='';
+  for(let i=0;i<20;i++){
+    const on=i<Math.round(score/5);
+    const color=i<6?'#e63946':i<12?'#f4d03f':'#8bac0f';
+    bars+=`<div class="bar" style="background:${on?color:'#0f380f'};"></div>`;
+  }
+  meter.innerHTML=bars;
+
+  // Detail bars (inverted for density/chaos, normal for space/symm)
+  const densityPct=Math.round(density*100);
+  const chaosPct=Math.round(chaos*100);
+  const spacePct=Math.round(space*100);
+  const symmPct=Math.round(symm*100);
+
+  document.getElementById('fillDensity').style.width=densityPct+'%';
+  document.getElementById('valDensity').textContent=densityPct+'%';
+  document.getElementById('fillChaos').style.width=chaosPct+'%';
+  document.getElementById('valChaos').textContent=chaosPct+'%';
+  document.getElementById('fillSpace').style.width=spacePct+'%';
+  document.getElementById('valSpace').textContent=spacePct+'%';
+  document.getElementById('fillSymm').style.width=symmPct+'%';
+  document.getElementById('valSymm').textContent=symmPct+'%';
+
+  // Zone-specific advice
+  const zone=document.getElementById('scanZone').value;
+  const advice=ZONE_ADVICE[zone]||ZONE_ADVICE.desk;
+  let tips;
+  if(score<45) tips=advice.high;
+  else if(score<70) tips=advice.mid;
+  else tips=advice.low;
+
+  const box=document.getElementById('scanAdvice');
+  box.innerHTML=`<div class="tip-card">
+    <div class="tip-title">💡 ${ZONES.find(z=>z.id===zone)?.name||''}整理建议</div>
+    <div class="tip-body">${tips.map(t=>'• '+t).join('<br>')}</div>
+  </div>`;
+}
+
+function captureAnalysis(){
+  if(!scanActive)return;
+  state.scans=(state.scans||0)+1;
+  saveState();
+  checkAchievements();
+
+  // Flash effect
+  const ov=document.getElementById('scanOverlay');
+  const ctx=ov.getContext('2d');
+  ctx.fillStyle='rgba(139,172,15,0.5)';
+  ctx.fillRect(0,0,ov.width,ov.height);
+  setTimeout(()=>{ctx.clearRect(0,0,ov.width,ov.height);},200);
+
+  // Also save as photo
+  const v=document.getElementById('scanVideo');
+  const c=document.createElement('canvas');
+  c.width=v.videoWidth;c.height=v.videoHeight;
+  c.getContext('2d').drawImage(v,0,0);
+  const dataUrl=c.toDataURL('image/jpeg',0.7);
+  const zone=document.getElementById('scanZone').value;
+  state.photos.push({ zone, type:'scan', data:dataUrl, time:Date.now() });
+  saveState();
+  playCheck();
+}
+
+// ===== ZONES =====
+function renderZones(){
+  const grid=document.getElementById('zoneGrid');
+  grid.innerHTML=ZONES.map(z=>{
+    const tasks=state.tasks[z.id]||[];
+    const done=tasks.filter(t=>t).length;
+    const total=z.tasks.length;
+    const isDone=done>=total;
+    return `<div class="zone-card${isDone?' done':''}" onclick="openZone('${z.id}')">
+      <span class="zone-icon">${z.icon}</span>
+      <div class="zone-name">${z.name}</div>
+      <div class="zone-desc">${done}/${total} ${z.desc}</div>
+    </div>`;
+  }).join('');
+}
+
+function openZone(id){
+  currentZone=id;
+  const zone=ZONES.find(z=>z.id===id);
+  if(!state.tasks[id]) state.tasks[id]=new Array(zone.tasks.length).fill(false);
+  document.getElementById('zoneDetail').style.display='block';
+  document.getElementById('zoneGrid').style.display='none';
+  document.getElementById('zoneDetailTitle').textContent=zone.icon+' '+zone.name+'整理清单';
+  renderChecklist();
+  playClick();
+}
+
+function closeZoneDetail(){
+  document.getElementById('zoneDetail').style.display='none';
+  document.getElementById('zoneGrid').style.display='grid';
+  currentZone=null;
+  renderZones();
+  playClick();
+}
+
+function renderChecklist(){
+  const zone=ZONES.find(z=>z.id===currentZone);
+  const tasks=state.tasks[currentZone];
+  const list=document.getElementById('zoneChecklist');
+  list.innerHTML=zone.tasks.map((t,i)=>`
+    <li onclick="toggleTask(${i})">
+      <span class="check-box${tasks[i]?' checked':''}">${tasks[i]?'✓':''}</span>
+      <span class="check-text${tasks[i]?' done':''}">${t}</span>
+    </li>
+  `).join('');
+  const done=tasks.filter(t=>t).length;
+  const pct=Math.round(done/tasks.length*100);
+  document.getElementById('zoneProg').style.width=pct+'%';
+  document.getElementById('zoneProgText').textContent=pct+'% ('+done+'/'+tasks.length+')';
+}
+
+function toggleTask(i){
+  state.tasks[currentZone][i]=!state.tasks[currentZone][i];
+  saveState();renderChecklist();checkAchievements();playCheck();
+}
+
+// ===== GUIDES =====
+function renderGuides(){
+  document.getElementById('guideContent').innerHTML=GUIDES.map(g=>`
+    <div class="tip-card"><div class="tip-title">${g.title}</div><div class="tip-body">${g.body.replace(/\n/g,'<br>')}</div></div>
+  `).join('');
+}
+
+// ===== CLOTHES =====
+function renderClothes(){
+  document.getElementById('seasonTags').innerHTML=SEASONS.map(s=>`<div class="cloth-tag${selectedSeason===s?' selected':''}" onclick="pickSeason('${s}')">${s}</div>`).join('');
+  document.getElementById('typeTags').innerHTML=TYPES.map(t=>`<div class="cloth-tag${selectedType===t?' selected':''}" onclick="pickType('${t}')">${t}</div>`).join('');
+  document.getElementById('colorTags').innerHTML=COLORS.map(c=>`<div class="cloth-tag${selectedColor===c?' selected':''}" onclick="pickColor('${c}')">${c}</div>`).join('');
+  renderClothList();renderClothAdvice();
+}
+function pickSeason(s){selectedSeason=selectedSeason===s?null:s;renderClothes();playClick();}
+function pickType(t){selectedType=selectedType===t?null:t;renderClothes();playClick();}
+function pickColor(c){selectedColor=selectedColor===c?null:c;renderClothes();playClick();}
+
+function addCloth(){
+  const name=document.getElementById('clothName').value.trim();if(!name)return;
+  state.clothes.push({name,season:selectedSeason||'四季',type:selectedType||'上衣',color:selectedColor||'',time:Date.now()});
+  document.getElementById('clothName').value='';saveState();renderClothes();checkAchievements();playCheck();
+}
+function removeCloth(i){state.clothes.splice(i,1);saveState();renderClothes();}
+
+function renderClothList(){
+  const list=document.getElementById('clothList');
+  if(!state.clothes.length){list.innerHTML='<div style="font-size:10px;color:#306230;text-align:center;padding:10px;">还没有添加衣物</div>';return;}
+  const groups={};state.clothes.forEach((c,i)=>{if(!groups[c.season])groups[c.season]=[];groups[c.season].push({...c,idx:i});});
+  let html='';
+  for(const [season,items] of Object.entries(groups)){
+    html+=`<div style="font-size:10px;color:#f4d03f;margin-top:6px;margin-bottom:2px;">▸ ${season} (${items.length}件)</div>`;
+    items.forEach(c=>{html+=`<div class="item-row"><span>${c.name}</span><span class="item-cat">${c.type}</span>${c.color?'<span class="item-cat">'+c.color+'</span>':''}<span class="item-act" onclick="removeCloth(${c.idx})">✕</span></div>`;});
+  }
+  list.innerHTML=html;
+}
+
+function renderClothAdvice(){
+  const box=document.getElementById('clothAdvice');
+  if(state.clothes.length<3){box.innerHTML='';return;}
+  const seasonCount={},typeCount={};
+  state.clothes.forEach(c=>{seasonCount[c.season]=(seasonCount[c.season]||0)+1;typeCount[c.type]=(typeCount[c.type]||0)+1;});
+  let tips=[]; const total=state.clothes.length;
+  const maxSeason=Object.entries(seasonCount).sort((a,b)=>b[1]-a[1])[0];
+  if(maxSeason[1]>total*0.5)tips.push(`${maxSeason[0]}季衣物占比过高(${maxSeason[1]}件)，考虑换季收纳`);
+  const maxType=Object.entries(typeCount).sort((a,b)=>b[1]-a[1])[0];
+  if(maxType[1]>total*0.4)tips.push(`${maxType[0]}类偏多(${maxType[1]}件)，可以精简`);
+  if(total>20)tips.push('衣物超过20件，建议用「一进一出」原则控制数量');
+  tips.push(`共${total}件，按季节收纳：当季挂出来，非当季真空袋存放`);
+  box.innerHTML=`<div class="tip-card"><div class="tip-title">💡 收纳建议</div><div class="tip-body">${tips.join('<br>')}</div></div>`;
+}
+
+// ===== PHOTO CAMERA =====
+async function toggleCam(){
+  if(camActive){
+    if(camStream){camStream.getTracks().forEach(t=>t.stop());camStream=null;}
+    camActive=false;
+    document.getElementById('camBox').style.display='none';
+    document.getElementById('camToggle').textContent='★ 开启摄像头';
+    document.getElementById('btnBefore').disabled=true;document.getElementById('btnAfter').disabled=true;
+  }else{
+    try{
+      camStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment',width:{ideal:640},height:{ideal:480}},audio:false});
+      const v=document.getElementById('camVideo');v.srcObject=camStream;v.setAttribute('playsinline','');await v.play();
+      camActive=true;document.getElementById('camBox').style.display='block';
+      document.getElementById('camToggle').textContent='关闭摄像头';
+      document.getElementById('btnBefore').disabled=false;document.getElementById('btnAfter').disabled=false;
+    }catch(e){alert('摄像头启动失败: '+e.message);}
+  }
+}
+
+function takePhoto(type){
+  if(!camActive)return;const zone=document.getElementById('photoZone').value;
+  if(!zone){alert('请先选择拍照区域');return;}
+  const v=document.getElementById('camVideo');const c=document.createElement('canvas');
+  c.width=v.videoWidth;c.height=v.videoHeight;c.getContext('2d').drawImage(v,0,0);
+  state.photos.push({zone,type,data:c.toDataURL('image/jpeg',0.7),time:Date.now()});
+  saveState();renderPhotos();checkAchievements();playCheck();
+}
+
+function deletePhoto(i){state.photos.splice(i,1);saveState();renderPhotos();}
+
+function renderPhotos(){
+  const sel=document.getElementById('photoZone');const cur=sel.value;
+  sel.innerHTML='<option value="">-- 选择拍照区域 --</option>'+ZONES.map(z=>`<option value="${z.id}"${cur===z.id?' selected':''}>${z.icon} ${z.name}</option>`).join('');
+  const grid=document.getElementById('photoGrid');
+  if(!state.photos.length){
+    grid.innerHTML='<div style="grid-column:1/-1;text-align:center;font-size:10px;color:#306230;padding:20px;">还没有照片</div>';
+    document.getElementById('photoCount').textContent='';return;
+  }
+  const sorted=[...state.photos].reverse();
+  grid.innerHTML=sorted.map((p,ri)=>{
+    const i=state.photos.length-1-ri;const zone=ZONES.find(z=>z.id===p.zone);
+    const typeLabel=p.type==='before'?'整理前':p.type==='after'?'整理后':'扫描';
+    return `<div class="photo-card"><img src="${p.data}"><div class="photo-label">${typeLabel}${zone?' · '+zone.name:''}</div><span class="del-photo" onclick="deletePhoto(${i})">✕</span></div>`;
+  }).join('');
+  document.getElementById('photoCount').textContent='共 '+state.photos.length+' 张照片';
+}
+
+// ===== PROGRESS =====
+function getStats(){
+  let totalTasks=0,doneTasks=0,completedZones=0;
+  ZONES.forEach(z=>{const tasks=state.tasks[z.id]||[];const zT=z.tasks.length;const zD=tasks.filter(t=>t).length;totalTasks+=zT;doneTasks+=zD;if(zD>=zT&&tasks.length>0)completedZones++;});
+  return {totalTasks,doneTasks,completedZones,taskPercent:totalTasks?Math.round(doneTasks/totalTasks*100):0,photos:state.photos.length,pairs:countPairs(),clothes:state.clothes.length,scans:state.scans||0};
+}
+function countPairs(){const byZone={};state.photos.forEach(p=>{if(!byZone[p.zone])byZone[p.zone]={before:false,after:false};if(p.type!=='scan')byZone[p.zone][p.type]=true;});return Object.values(byZone).filter(v=>v.before&&v.after).length;}
+
+function renderProgress(){
+  const s=getStats();
+  document.getElementById('totalProg').style.width=s.taskPercent+'%';
+  document.getElementById('totalProgText').textContent='总进度 '+s.taskPercent+'%';
+  document.getElementById('statDone').textContent='已完成 '+s.doneTasks+' 项';
+  document.getElementById('statTotal').textContent='共 '+s.totalTasks+' 项';
+  document.getElementById('zoneProgressList').innerHTML=ZONES.map(z=>{
+    const tasks=state.tasks[z.id]||[];const done=tasks.filter(t=>t).length;const total=z.tasks.length;const pct=Math.round(done/total*100);
+    return `<div style="margin-bottom:6px;"><div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:2px;"><span>${z.icon} ${z.name}</span><span>${done}/${total}</span></div><div class="progress-bar" style="height:12px;"><div class="progress-fill" style="width:${pct}%;"></div></div></div>`;
+  }).join('');
+  document.getElementById('achieveList').innerHTML='<div style="font-size:12px;color:#f4d03f;font-weight:bold;margin-bottom:6px;">🏆 成就</div>'+
+    ACHIEVEMENTS.map(a=>{const unlocked=state.achievements.includes(a.id);
+      return `<div style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:11px;${unlocked?'':'opacity:0.4;'}"><span style="font-size:18px;">${a.icon}</span><div><div style="color:${unlocked?'#f4d03f':'#306230'};font-weight:bold;">${a.name}</div><div style="font-size:9px;color:#306230;">${a.desc}</div></div>${unlocked?'<span style="margin-left:auto;color:#8bac0f;font-size:10px;">已解锁</span>':''}</div>`;
+    }).join('');
+}
+
+function checkAchievements(){
+  const s=getStats();let newA=false;
+  ACHIEVEMENTS.forEach(a=>{if(!state.achievements.includes(a.id)&&a.check(s)){state.achievements.push(a.id);newA=a;}});
+  if(newA){saveState();document.getElementById('achieveIcon').textContent=newA.icon;document.getElementById('achieveTitle').textContent='成就解锁：'+newA.name;document.getElementById('achieveDesc').textContent=newA.desc;document.getElementById('achievePopup').style.display='block';playAchieve();}else{saveState();}
+}
+
+function resetAll(){state=defaultState();saveState();renderZones();renderClothes();renderPhotos();renderProgress();}
+
+// ===== SOUND =====
+function playClick(){try{const c=new(window.AudioContext||window.webkitAudioContext)();const o=c.createOscillator();const g=c.createGain();o.type='square';o.frequency.value=800;g.gain.setValueAtTime(0.03,c.currentTime);g.gain.linearRampToValueAtTime(0,c.currentTime+0.05);o.connect(g).connect(c.destination);o.start();o.stop(c.currentTime+0.05);}catch(e){}}
+function playCheck(){try{const c=new(window.AudioContext||window.webkitAudioContext)();let t=c.currentTime;[600,900].forEach(f=>{const o=c.createOscillator();const g=c.createGain();o.type='square';o.frequency.value=f;g.gain.setValueAtTime(0.03,t);g.gain.linearRampToValueAtTime(0,t+0.08);o.connect(g).connect(c.destination);o.start(t);o.stop(t+0.08);t+=0.07;});}catch(e){}}
+function playAchieve(){try{const c=new(window.AudioContext||window.webkitAudioContext)();let t=c.currentTime;[523,659,784,1047].forEach(f=>{const o=c.createOscillator();const g=c.createGain();o.type='square';o.frequency.value=f;g.gain.setValueAtTime(0.04,t);g.gain.linearRampToValueAtTime(0,t+0.15);o.connect(g).connect(c.destination);o.start(t);o.stop(t+0.15);t+=0.12;});}catch(e){}}
+
+// ===== INIT =====
+renderZones();renderGuides();renderClothes();renderPhotos();
+</script>
+</body>
+</html>

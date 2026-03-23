@@ -1,0 +1,817 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Breath Coach - 压力呼吸教练</title>
+<style>
+  @font-face {
+    font-family: 'PixelFallback';
+    src: local('Courier New'), local('monospace');
+  }
+
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  :root {
+    --gb-darkest: #0f380f;
+    --gb-dark: #306230;
+    --gb-light: #8bac0f;
+    --gb-lightest: #9bbc0f;
+  }
+
+  body {
+    background: var(--gb-darkest);
+    color: var(--gb-lightest);
+    font-family: 'Courier New', 'Consolas', monospace;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    overflow-x: hidden;
+    user-select: none;
+  }
+
+  h1 {
+    font-size: 1.6rem;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    color: var(--gb-lightest);
+    text-shadow: 2px 2px 0 var(--gb-dark);
+    margin: 18px 0 6px;
+    text-align: center;
+  }
+
+  .subtitle {
+    font-size: 0.75rem;
+    color: var(--gb-light);
+    margin-bottom: 14px;
+    letter-spacing: 2px;
+  }
+
+  .main-layout {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 20px;
+    width: 100%;
+    max-width: 900px;
+    padding: 0 12px;
+  }
+
+  /* Camera panel */
+  .camera-panel {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .camera-frame {
+    border: 4px solid var(--gb-light);
+    box-shadow:
+      0 0 0 2px var(--gb-darkest),
+      0 0 0 4px var(--gb-dark),
+      inset 0 0 20px rgba(15,56,15,0.7);
+    background: #000;
+    position: relative;
+    width: 320px;
+    height: 240px;
+    image-rendering: pixelated;
+  }
+
+  .camera-frame video,
+  .camera-frame canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+
+  .camera-frame .no-cam {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.85rem;
+    color: var(--gb-dark);
+    text-align: center;
+    padding: 20px;
+    line-height: 1.6;
+  }
+
+  .presence-bar {
+    width: 320px;
+    height: 12px;
+    background: var(--gb-darkest);
+    border: 2px solid var(--gb-dark);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .presence-bar .fill {
+    height: 100%;
+    background: var(--gb-light);
+    transition: width 0.5s ease;
+    width: 0%;
+  }
+
+  .presence-label {
+    font-size: 0.65rem;
+    color: var(--gb-dark);
+    width: 320px;
+    display: flex;
+    justify-content: space-between;
+  }
+
+  /* Breathing panel */
+  .breath-panel {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    min-width: 300px;
+  }
+
+  .mode-selector {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .mode-btn {
+    background: var(--gb-darkest);
+    color: var(--gb-light);
+    border: 2px solid var(--gb-dark);
+    padding: 6px 12px;
+    font-family: inherit;
+    font-size: 0.7rem;
+    cursor: pointer;
+    letter-spacing: 1px;
+    transition: all 0.15s;
+  }
+
+  .mode-btn:hover {
+    border-color: var(--gb-light);
+  }
+
+  .mode-btn.active {
+    background: var(--gb-dark);
+    color: var(--gb-lightest);
+    border-color: var(--gb-lightest);
+  }
+
+  /* Breathing circle container */
+  .circle-container {
+    width: 260px;
+    height: 260px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+  }
+
+  .breath-circle {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    background: var(--gb-light);
+    transition: width 0.3s ease, height 0.3s ease, background 0.5s ease, box-shadow 0.5s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    position: absolute;
+    box-shadow:
+      0 0 0 4px var(--gb-dark),
+      0 0 0 8px rgba(139,172,15,0.3),
+      0 0 0 12px rgba(139,172,15,0.15),
+      0 0 0 16px rgba(139,172,15,0.08),
+      0 0 30px rgba(139,172,15,0.2);
+  }
+
+  .breath-circle .phase-text {
+    font-size: 1rem;
+    font-weight: bold;
+    color: var(--gb-darkest);
+    text-align: center;
+    line-height: 1.2;
+  }
+
+  .breath-circle .countdown {
+    font-size: 1.8rem;
+    font-weight: bold;
+    color: var(--gb-darkest);
+  }
+
+  /* Mandala rings */
+  .mandala-ring {
+    position: absolute;
+    border-radius: 50%;
+    border: 2px solid rgba(139,172,15,0.25);
+    pointer-events: none;
+    transition: all 0.4s ease;
+  }
+
+  /* Phase display */
+  .phase-display {
+    font-size: 1.1rem;
+    letter-spacing: 3px;
+    color: var(--gb-lightest);
+    min-height: 1.5em;
+    text-align: center;
+  }
+
+  /* Controls */
+  .controls {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .ctrl-btn {
+    background: var(--gb-dark);
+    color: var(--gb-lightest);
+    border: 3px solid var(--gb-light);
+    padding: 10px 22px;
+    font-family: inherit;
+    font-size: 0.85rem;
+    cursor: pointer;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    transition: all 0.15s;
+    box-shadow: 3px 3px 0 var(--gb-darkest);
+  }
+
+  .ctrl-btn:hover {
+    background: var(--gb-light);
+    color: var(--gb-darkest);
+  }
+
+  .ctrl-btn:active {
+    box-shadow: 1px 1px 0 var(--gb-darkest);
+    transform: translate(2px, 2px);
+  }
+
+  .ctrl-btn.active-toggle {
+    background: var(--gb-light);
+    color: var(--gb-darkest);
+  }
+
+  /* Stats */
+  .stats-bar {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+    justify-content: center;
+    font-size: 0.75rem;
+    color: var(--gb-light);
+    margin: 10px 0;
+    letter-spacing: 1px;
+  }
+
+  .stats-bar span {
+    background: var(--gb-darkest);
+    border: 1px solid var(--gb-dark);
+    padding: 4px 10px;
+  }
+
+  .stats-bar .val {
+    color: var(--gb-lightest);
+    font-weight: bold;
+  }
+
+  /* History */
+  .history-section {
+    margin: 16px 0 30px;
+    text-align: center;
+    font-size: 0.7rem;
+    color: var(--gb-dark);
+  }
+
+  .history-section .val {
+    color: var(--gb-light);
+  }
+
+  /* Responsive */
+  @media (max-width: 680px) {
+    .main-layout {
+      flex-direction: column;
+      align-items: center;
+    }
+    .camera-frame {
+      width: 280px;
+      height: 210px;
+    }
+    .presence-bar, .presence-label {
+      width: 280px;
+    }
+  }
+
+/* ===== MOBILE ===== */
+@media(max-width:600px){
+  body{overflow-y:auto!important;min-height:100vh;}
+  video{width:100%!important;max-width:100%!important;height:auto!important;}
+  canvas{max-width:100%!important;}
+  #app,.app,.container,.main,.wrapper,[id*="app"],[class*="container"]{width:100%!important;max-width:100%!important;margin:0!important;border-radius:0!important;}
+  button,.btn,.action-btn,[class*="btn"]{min-height:44px;font-size:13px!important;touch-action:manipulation;}
+  input,textarea,select{font-size:16px!important;}
+  [style*="width:"][style*="px"]{max-width:100%!important;}
+}
+</style>
+</head>
+<body>
+
+<h1>Breath Coach</h1>
+<p class="subtitle">- 压力呼吸教练 -</p>
+
+<div class="main-layout">
+  <!-- Camera -->
+  <div class="camera-panel">
+    <div class="camera-frame" id="cameraFrame">
+      <video id="video" autoplay playsinline muted style="display:none;"></video>
+      <canvas id="camCanvas"></canvas>
+      <div class="no-cam" id="noCamMsg">[ 点击下方按钮<br>开启摄像头镜像 ]</div>
+    </div>
+    <div class="presence-bar"><div class="fill" id="presenceFill"></div></div>
+    <div class="presence-label">
+      <span>亮度检测</span>
+      <span id="presenceText">--</span>
+    </div>
+  </div>
+
+  <!-- Breathing -->
+  <div class="breath-panel">
+    <div class="mode-selector">
+      <button class="mode-btn active" data-mode="478" onclick="setMode('478',this)">4-7-8 放松</button>
+      <button class="mode-btn" data-mode="box" onclick="setMode('box',this)">Box 4-4-4-4</button>
+      <button class="mode-btn" data-mode="quick" onclick="setMode('quick',this)">快速 3-3-3</button>
+    </div>
+
+    <div class="circle-container" id="circleContainer">
+      <div class="mandala-ring" id="ring1"></div>
+      <div class="mandala-ring" id="ring2"></div>
+      <div class="mandala-ring" id="ring3"></div>
+      <div class="mandala-ring" id="ring4"></div>
+      <div class="breath-circle" id="breathCircle">
+        <div class="phase-text" id="phaseText">Ready</div>
+        <div class="countdown" id="countdown"></div>
+      </div>
+    </div>
+
+    <div class="phase-display" id="phaseDisplay">选择模式，然后开始</div>
+
+    <div class="controls">
+      <button class="ctrl-btn" id="startBtn" onclick="toggleSession()">开始</button>
+      <button class="ctrl-btn" id="camBtn" onclick="toggleCamera()">摄像头</button>
+      <button class="ctrl-btn" id="soundBtn" onclick="toggleSound()">声音 ON</button>
+    </div>
+  </div>
+</div>
+
+<div class="stats-bar">
+  <span>循环: <span class="val" id="cycleCount">0</span></span>
+  <span>时长: <span class="val" id="sessionTime">0:00</span></span>
+  <span>本次模式: <span class="val" id="currentMode">4-7-8</span></span>
+</div>
+
+<div class="history-section">
+  历史总计 - 循环: <span class="val" id="totalCycles">0</span> | 时间: <span class="val" id="totalTime">0</span> 分钟
+</div>
+
+<script src="../cam-core/cam-core.js"></script>
+<script>
+// ==================== CONFIG ====================
+const MODES = {
+  '478': { name: '4-7-8', phases: [
+    { label: '吸气...', dur: 4, type: 'inhale' },
+    { label: '屏住...', dur: 7, type: 'hold' },
+    { label: '呼气...', dur: 8, type: 'exhale' }
+  ]},
+  'box': { name: 'Box 4-4-4-4', phases: [
+    { label: '吸气...', dur: 4, type: 'inhale' },
+    { label: '屏住...', dur: 4, type: 'hold' },
+    { label: '呼气...', dur: 4, type: 'exhale' },
+    { label: '屏住...', dur: 4, type: 'hold' }
+  ]},
+  'quick': { name: '快速 3-3-3', phases: [
+    { label: '吸气...', dur: 3, type: 'inhale' },
+    { label: '屏住...', dur: 3, type: 'hold' },
+    { label: '呼气...', dur: 3, type: 'exhale' }
+  ]}
+};
+
+// ==================== STATE ====================
+let currentModeKey = '478';
+let running = false;
+let phaseIndex = 0;
+let phaseTimer = 0;
+let phaseElapsed = 0;
+let cycles = 0;
+let sessionStart = null;
+let sessionTimerInterval = null;
+let soundOn = true;
+let cameraOn = false;
+
+// Audio
+let audioCtx = null;
+
+// Camera
+const video = document.getElementById('video');
+const camCanvas = document.getElementById('camCanvas');
+const camCtx = camCanvas.getContext('2d');
+camCanvas.width = 320;
+camCanvas.height = 240;
+let cameraStream = null;
+let camAnimFrame = null;
+
+// Elements
+const breathCircle = document.getElementById('breathCircle');
+const phaseText = document.getElementById('phaseText');
+const countdown = document.getElementById('countdown');
+const phaseDisplay = document.getElementById('phaseDisplay');
+const presenceFill = document.getElementById('presenceFill');
+const presenceTextEl = document.getElementById('presenceText');
+const noCamMsg = document.getElementById('noCamMsg');
+const startBtn = document.getElementById('startBtn');
+const soundBtn = document.getElementById('soundBtn');
+const cycleCountEl = document.getElementById('cycleCount');
+const sessionTimeEl = document.getElementById('sessionTime');
+const currentModeEl = document.getElementById('currentMode');
+const totalCyclesEl = document.getElementById('totalCycles');
+const totalTimeEl = document.getElementById('totalTime');
+const rings = [
+  document.getElementById('ring1'),
+  document.getElementById('ring2'),
+  document.getElementById('ring3'),
+  document.getElementById('ring4')
+];
+
+// ==================== LOCALSTORAGE ====================
+function loadStats() {
+  try {
+    const d = JSON.parse(localStorage.getItem('breathCoachStats') || '{}');
+    totalCyclesEl.textContent = d.totalCycles || 0;
+    totalTimeEl.textContent = d.totalMinutes || 0;
+  } catch(e) {}
+}
+
+function saveStats(addCycles, addSeconds) {
+  try {
+    const d = JSON.parse(localStorage.getItem('breathCoachStats') || '{}');
+    d.totalCycles = (d.totalCycles || 0) + addCycles;
+    d.totalMinutes = (d.totalMinutes || 0) + Math.round(addSeconds / 60);
+    localStorage.setItem('breathCoachStats', JSON.stringify(d));
+    totalCyclesEl.textContent = d.totalCycles;
+    totalTimeEl.textContent = d.totalMinutes;
+  } catch(e) {}
+}
+
+loadStats();
+
+// ==================== MODE ====================
+function setMode(key, btn) {
+  if (running) return;
+  currentModeKey = key;
+  document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  currentModeEl.textContent = MODES[key].name;
+}
+
+// ==================== AUDIO ====================
+function ensureAudio() {
+  if (!audioCtx) {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+}
+
+function playTone(freq, duration, type) {
+  if (!soundOn || !audioCtx) return;
+  try {
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(0, audioCtx.currentTime);
+    gain.gain.linearRampToValueAtTime(0.08, audioCtx.currentTime + 0.15);
+    gain.gain.linearRampToValueAtTime(0.06, audioCtx.currentTime + duration * 0.7);
+    gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + duration);
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start(audioCtx.currentTime);
+    osc.stop(audioCtx.currentTime + duration);
+  } catch(e) {}
+}
+
+function playPhaseSound(type, dur) {
+  if (!soundOn) return;
+  ensureAudio();
+  if (type === 'inhale') {
+    playTone(262, dur, 'sine'); // C4
+    playTone(330, dur, 'sine'); // E4
+  } else if (type === 'hold') {
+    playTone(294, dur * 0.5, 'sine'); // D4
+  } else if (type === 'exhale') {
+    playTone(247, dur, 'sine'); // B3
+    playTone(196, dur, 'sine'); // G3
+  }
+}
+
+function playCycleChime() {
+  if (!soundOn) return;
+  ensureAudio();
+  playTone(523, 0.3, 'sine');
+  setTimeout(() => playTone(659, 0.3, 'sine'), 150);
+  setTimeout(() => playTone(784, 0.5, 'sine'), 300);
+}
+
+// ==================== CAMERA ====================
+async function toggleCamera() {
+  if (cameraOn) {
+    stopCamera();
+  } else {
+    await startCamera();
+  }
+}
+
+async function startCamera() {
+  try {
+    cameraStream = await navigator.mediaDevices.getUserMedia({
+      video: { width: 320, height: 240, facingMode: 'user' }
+    });
+    video.srcObject = cameraStream;
+    await video.play();
+    cameraOn = true;
+    noCamMsg.style.display = 'none';
+    drawCamera();
+  } catch(e) {
+    noCamMsg.textContent = '[ 无法访问摄像头 ]';
+  }
+}
+
+function stopCamera() {
+  cameraOn = false;
+  if (cameraStream) {
+    cameraStream.getTracks().forEach(t => t.stop());
+    cameraStream = null;
+  }
+  if (camAnimFrame) cancelAnimationFrame(camAnimFrame);
+  camCtx.clearRect(0, 0, 320, 240);
+  noCamMsg.style.display = 'flex';
+  noCamMsg.textContent = '[ 点击下方按钮\n开启摄像头镜像 ]';
+  presenceFill.style.width = '0%';
+  presenceTextEl.textContent = '--';
+}
+
+function drawCamera() {
+  if (!cameraOn) return;
+  camCtx.save();
+  camCtx.translate(320, 0);
+  camCtx.scale(-1, 1); // mirror
+  camCtx.drawImage(video, 0, 0, 320, 240);
+  camCtx.restore();
+
+  // Apply green tint overlay for retro look
+  camCtx.fillStyle = 'rgba(15, 56, 15, 0.25)';
+  camCtx.fillRect(0, 0, 320, 240);
+
+  // Scanline effect
+  camCtx.fillStyle = 'rgba(15, 56, 15, 0.1)';
+  for (let y = 0; y < 240; y += 3) {
+    camCtx.fillRect(0, y, 320, 1);
+  }
+
+  // CamCore: normalize for better mirror display under varying light
+  const _bImg = camCtx.getImageData(0, 0, 320, 240);
+  CamCore.normalize(_bImg);
+  camCtx.putImageData(_bImg, 0, 0);
+
+  // Brightness analysis
+  analyzeBrightness();
+
+  camAnimFrame = requestAnimationFrame(drawCamera);
+}
+
+function analyzeBrightness() {
+  try {
+    const imageData = camCtx.getImageData(0, 0, 320, 240);
+    const data = imageData.data;
+    let total = 0;
+    const step = 40; // sample every Nth pixel
+    let count = 0;
+    for (let i = 0; i < data.length; i += step * 4) {
+      total += (data[i] + data[i+1] + data[i+2]) / 3;
+      count++;
+    }
+    const avg = total / count;
+    const pct = Math.min(100, Math.round((avg / 255) * 100));
+    presenceFill.style.width = pct + '%';
+    if (pct > 40) {
+      presenceTextEl.textContent = '已检测到面部';
+    } else if (pct > 15) {
+      presenceTextEl.textContent = '光线较暗';
+    } else {
+      presenceTextEl.textContent = '未检测到';
+    }
+  } catch(e) {
+    presenceTextEl.textContent = '--';
+  }
+}
+
+// ==================== BREATHING ENGINE ====================
+function toggleSession() {
+  if (running) {
+    stopSession();
+  } else {
+    startSession();
+  }
+}
+
+function startSession() {
+  ensureAudio();
+  running = true;
+  phaseIndex = 0;
+  phaseElapsed = 0;
+  cycles = 0;
+  sessionStart = Date.now();
+  startBtn.textContent = '停止';
+  startBtn.classList.add('active-toggle');
+  cycleCountEl.textContent = '0';
+  sessionTimeEl.textContent = '0:00';
+  startPhase();
+  sessionTimerInterval = setInterval(updateSessionTime, 1000);
+}
+
+function stopSession() {
+  running = false;
+  if (phaseTimer) clearInterval(phaseTimer);
+  if (sessionTimerInterval) clearInterval(sessionTimerInterval);
+  startBtn.textContent = '开始';
+  startBtn.classList.remove('active-toggle');
+  phaseDisplay.textContent = '选择模式，然后开始';
+  phaseText.textContent = 'Ready';
+  countdown.textContent = '';
+  resetCircleVisual();
+
+  // Save stats
+  if (sessionStart) {
+    const elapsed = Math.round((Date.now() - sessionStart) / 1000);
+    saveStats(cycles, elapsed);
+    sessionStart = null;
+  }
+}
+
+function startPhase() {
+  if (!running) return;
+  const mode = MODES[currentModeKey];
+  const phase = mode.phases[phaseIndex];
+  phaseElapsed = 0;
+  phaseDisplay.textContent = phase.label;
+  phaseText.textContent = phase.label;
+  countdown.textContent = phase.dur;
+
+  playPhaseSound(phase.type, phase.dur);
+  updateCircleVisual(phase.type, phase.dur, 0);
+
+  if (phaseTimer) clearInterval(phaseTimer);
+  phaseTimer = setInterval(() => {
+    phaseElapsed++;
+    const remaining = phase.dur - phaseElapsed;
+    countdown.textContent = remaining > 0 ? remaining : '';
+
+    updateCircleVisual(phase.type, phase.dur, phaseElapsed);
+
+    if (phaseElapsed >= phase.dur) {
+      clearInterval(phaseTimer);
+      phaseIndex++;
+      if (phaseIndex >= mode.phases.length) {
+        phaseIndex = 0;
+        cycles++;
+        cycleCountEl.textContent = cycles;
+        playCycleChime();
+      }
+      startPhase();
+    }
+  }, 1000);
+}
+
+function updateSessionTime() {
+  if (!sessionStart) return;
+  const s = Math.round((Date.now() - sessionStart) / 1000);
+  const m = Math.floor(s / 60);
+  const sec = s % 60;
+  sessionTimeEl.textContent = m + ':' + (sec < 10 ? '0' : '') + sec;
+}
+
+// ==================== CIRCLE VISUALS ====================
+const MIN_SIZE = 80;
+const MAX_SIZE = 200;
+
+// Color palettes for each phase type
+const COLORS = {
+  inhale: { from: [139,172,15], to: [80,140,200] },   // green -> blue
+  hold:   { from: [80,140,200], to: [140,100,180] },   // blue -> purple
+  exhale: { from: [140,100,180], to: [139,172,15] }    // purple -> green
+};
+
+function lerpColor(a, b, t) {
+  return [
+    Math.round(a[0] + (b[0]-a[0])*t),
+    Math.round(a[1] + (b[1]-a[1])*t),
+    Math.round(a[2] + (b[2]-a[2])*t)
+  ];
+}
+
+function updateCircleVisual(type, duration, elapsed) {
+  const progress = Math.min(elapsed / duration, 1);
+  let size;
+
+  if (type === 'inhale') {
+    size = MIN_SIZE + (MAX_SIZE - MIN_SIZE) * easeInOutCubic(progress);
+  } else if (type === 'exhale') {
+    size = MAX_SIZE - (MAX_SIZE - MIN_SIZE) * easeInOutCubic(progress);
+  } else {
+    // hold: gentle pulse
+    const pulse = Math.sin(progress * Math.PI * 2) * 8;
+    size = (phaseIndex === 1 ? MAX_SIZE : MIN_SIZE) + pulse;
+  }
+
+  breathCircle.style.width = size + 'px';
+  breathCircle.style.height = size + 'px';
+
+  // Color
+  const col = COLORS[type] || COLORS.inhale;
+  const c = lerpColor(col.from, col.to, progress);
+  const rgb = `rgb(${c[0]},${c[1]},${c[2]})`;
+  const rgba1 = `rgba(${c[0]},${c[1]},${c[2]},0.35)`;
+  const rgba2 = `rgba(${c[0]},${c[1]},${c[2]},0.18)`;
+  const rgba3 = `rgba(${c[0]},${c[1]},${c[2]},0.10)`;
+  const rgba4 = `rgba(${c[0]},${c[1]},${c[2]},0.05)`;
+
+  breathCircle.style.background = rgb;
+  breathCircle.style.boxShadow = `
+    0 0 0 4px var(--gb-dark),
+    0 0 0 8px ${rgba1},
+    0 0 0 14px ${rgba2},
+    0 0 0 22px ${rgba3},
+    0 0 0 32px ${rgba4},
+    0 0 ${size/2}px ${rgba2},
+    inset 0 0 ${size/4}px rgba(255,255,255,0.1)
+  `;
+
+  // Mandala rings
+  const ringScales = [1.5, 2.0, 2.6, 3.3];
+  const ringRotations = [progress*45, -progress*30, progress*60, -progress*20];
+  rings.forEach((ring, i) => {
+    const rs = size * ringScales[i] / 2;
+    ring.style.width = rs*2 + 'px';
+    ring.style.height = rs*2 + 'px';
+    ring.style.left = (130 - rs) + 'px';
+    ring.style.top = (130 - rs) + 'px';
+    ring.style.borderColor = `rgba(${c[0]},${c[1]},${c[2]},${0.2 - i*0.04})`;
+    ring.style.transform = `rotate(${ringRotations[i]}deg)`;
+    ring.style.borderStyle = i % 2 === 0 ? 'solid' : 'dashed';
+  });
+}
+
+function resetCircleVisual() {
+  breathCircle.style.width = MIN_SIZE + 'px';
+  breathCircle.style.height = MIN_SIZE + 'px';
+  breathCircle.style.background = 'var(--gb-light)';
+  breathCircle.style.boxShadow = `
+    0 0 0 4px var(--gb-dark),
+    0 0 0 8px rgba(139,172,15,0.3),
+    0 0 0 12px rgba(139,172,15,0.15),
+    0 0 0 16px rgba(139,172,15,0.08),
+    0 0 30px rgba(139,172,15,0.2)
+  `;
+  rings.forEach(ring => {
+    ring.style.width = '0px';
+    ring.style.height = '0px';
+    ring.style.borderColor = 'transparent';
+  });
+}
+
+function easeInOutCubic(t) {
+  return t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t + 2, 3) / 2;
+}
+
+// ==================== SOUND TOGGLE ====================
+function toggleSound() {
+  soundOn = !soundOn;
+  soundBtn.textContent = soundOn ? '声音 ON' : '声音 OFF';
+  soundBtn.classList.toggle('active-toggle', soundOn);
+  if (soundOn) ensureAudio();
+}
+
+// Init sound button state
+soundBtn.classList.add('active-toggle');
+</script>
+</body>
+</html>

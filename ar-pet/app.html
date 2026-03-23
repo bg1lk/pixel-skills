@@ -1,0 +1,2625 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AR Pet - AR像素宠物 v5</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0f380f;color:#8bac0f;font-family:'Courier New',Consolas,monospace;min-height:100vh;display:flex;flex-direction:column;align-items:center;overflow-x:hidden}
+.title-bar{width:100%;max-width:640px;background:#306230;border:3px solid #0f380f;border-bottom:none;padding:4px 12px;text-align:center;font-size:16px;font-weight:bold;color:#9bbc0f;text-shadow:2px 2px 0 #0f380f;margin-top:4px;z-index:10}
+.ar-view{position:relative;width:100%;max-width:640px;background:#000;border:3px solid #306230;box-shadow:6px 6px 0 #0f380f;overflow:hidden;aspect-ratio:4/3;cursor:crosshair}
+.ar-view video{width:100%;height:100%;object-fit:cover;display:block;transform:scaleX(-1)}
+.ar-view canvas{position:absolute;top:0;left:0;width:100%;height:100%;image-rendering:pixelated}
+.hud{position:absolute;top:6px;left:6px;background:rgba(15,56,15,0.85);border:2px solid #306230;padding:4px 8px;font-size:10px;z-index:5;pointer-events:none}
+.hud-right{position:absolute;top:6px;right:6px;background:rgba(15,56,15,0.85);border:2px solid #306230;padding:4px 8px;font-size:10px;z-index:5;display:flex;flex-direction:column;gap:2px;pointer-events:none}
+.bar-tiny{width:50px;height:6px;background:#0f380f;border:1px solid #306230;display:inline-block;vertical-align:middle}
+.bar-fill{height:100%;transition:width 0.3s steps(5)}
+.gesture-hint{position:absolute;bottom:6px;left:50%;transform:translateX(-50%);background:rgba(15,56,15,0.9);border:2px solid #8bac0f;padding:3px 12px;font-size:11px;color:#9bbc0f;z-index:5;pointer-events:none;white-space:nowrap;animation:fadeHint 3s ease-out forwards}
+@keyframes fadeHint{0%,60%{opacity:1}100%{opacity:0}}
+.controls{width:100%;max-width:640px;background:#1a4a1a;border:3px solid #306230;border-top:none;padding:8px;display:flex;flex-wrap:wrap;gap:6px;justify-content:center;z-index:10}
+button{background:#8bac0f;color:#0f380f;border:3px solid #0f380f;box-shadow:3px 3px 0 #306230;font-family:monospace;font-size:11px;font-weight:bold;padding:5px 10px;cursor:pointer}
+button:hover{background:#9bbc0f;transform:translate(1px,1px);box-shadow:2px 2px 0 #306230}
+button:active{transform:translate(3px,3px);box-shadow:none}
+button.small{font-size:10px;padding:3px 8px;box-shadow:2px 2px 0 #306230}
+button.active{background:#f4d03f;color:#0f380f}
+/* Upload panel */
+.upload-panel{width:100%;max-width:640px;background:#1a4a1a;border:3px solid #306230;border-top:none;padding:10px;display:none;flex-direction:column;gap:8px;z-index:10}
+.upload-panel.open{display:flex}
+.upload-zone{border:3px dashed #306230;padding:20px;text-align:center;cursor:pointer;font-size:12px}
+.upload-zone:hover{border-color:#8bac0f;background:#0f380f}
+.upload-zone.dragover{border-color:#f4d03f;background:#306230}
+.preview-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.preview-row img{width:64px;height:64px;object-fit:contain;border:2px solid #306230;image-rendering:pixelated;background:#000}
+.preview-row .info{flex:1;font-size:10px}
+.ip-actions{display:flex;gap:4px;flex-wrap:wrap}
+.ip-actions input{background:#0f380f;color:#8bac0f;border:2px solid #306230;font-family:monospace;font-size:10px;padding:2px 6px;width:100px}
+.ip-actions label{font-size:10px;color:#306230}
+/* AI Brain panel */
+.brain-panel{width:100%;max-width:640px;background:#1a4a1a;border:3px solid #306230;border-top:none;padding:10px;display:none;flex-direction:column;gap:6px;z-index:10;font-size:11px}
+.brain-panel.open{display:flex}
+.brain-panel input,.brain-panel select{background:#0f380f;color:#8bac0f;border:2px solid #306230;font-family:monospace;font-size:10px;padding:3px 6px;width:100%}
+.brain-panel label{color:#306230;font-size:10px}
+/* Emotes */
+.emote{position:absolute;font-size:18px;pointer-events:none;z-index:20;animation:emoteUp 1.5s ease-out forwards}
+@keyframes emoteUp{0%{opacity:1;transform:translateY(0) scale(1)}100%{opacity:0;transform:translateY(-50px) scale(1.5)}}
+.speech{position:absolute;background:#fff;color:#222;font-size:14px;font-weight:bold;padding:8px 14px;border:3px solid #333;border-radius:12px;pointer-events:none;z-index:30;max-width:55%;white-space:pre-wrap;word-break:break-word;overflow-wrap:break-word;animation:speechIn 0.3s ease-out,fadeOut 10s ease-out 0.3s forwards;line-height:1.5;box-shadow:3px 3px 0 rgba(0,0,0,0.3);text-shadow:none;box-sizing:border-box}
+@keyframes speechIn{0%{transform:scale(0.5);opacity:0}100%{transform:scale(1);opacity:1}}
+.speech::after{content:'';position:absolute;bottom:-10px;left:16px;border:6px solid transparent;border-top-color:#333}
+@keyframes fadeOut{0%,80%{opacity:1}100%{opacity:0}}
+.see-bubble{position:absolute;background:rgba(79,195,247,0.9);color:#0f380f;font-size:10px;padding:4px 10px;border:1px solid #0288d1;border-radius:6px;pointer-events:none;z-index:19;max-width:65%;white-space:pre-wrap;animation:fadeOut 8s ease-out forwards;font-style:italic;line-height:1.3}
+/* Thought bubble */
+.thought{position:absolute;background:rgba(255,255,255,0.85);color:#333;font-size:9px;padding:3px 8px;border-radius:10px;pointer-events:none;z-index:20;animation:fadeOut 5s ease-out forwards;font-style:italic}
+.thought::after{content:'○ ∘ ·';position:absolute;bottom:-10px;left:8px;font-size:6px;color:rgba(255,255,255,0.6)}
+/* Thinking indicator */
+.brain-indicator{position:absolute;top:6px;left:50%;transform:translateX(-50%);background:rgba(244,208,63,0.9);color:#0f380f;font-size:9px;font-weight:bold;padding:2px 8px;border:2px solid #0f380f;z-index:20;pointer-events:none;display:none}
+.brain-indicator.thinking{display:none}
+@keyframes brainPulse{0%{opacity:1}50%{opacity:0.5}}
+/* Motion zone debug */
+.zone-grid{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:3;display:none}
+.zone-grid.show{display:grid;grid-template-columns:1fr 1fr 1fr;grid-template-rows:1fr 1fr 1fr}
+.zone-cell{border:1px solid rgba(139,172,15,0.2);display:flex;align-items:center;justify-content:center;font-size:9px;color:rgba(139,172,15,0.5)}
+video#srcVid{display:none}
+/* Chat Panel */
+.chat-panel{width:100%;max-width:640px;background:#1a4a1a;border:3px solid #306230;border-top:none;display:none;flex-direction:column;z-index:10;font-size:11px}
+.chat-panel.open{display:flex}
+.chat-header{display:flex;align-items:center;justify-content:space-between;padding:6px 10px;background:#0f380f;border-bottom:2px solid #306230}
+.chat-header span{font-weight:bold;color:#9bbc0f;font-size:12px}
+.chat-log{flex:1;max-height:180px;min-height:80px;overflow-y:auto;padding:6px 10px;display:flex;flex-direction:column;gap:4px}
+.chat-msg{padding:4px 8px;border-radius:6px;max-width:85%;word-break:break-all;line-height:1.4;animation:chatIn 0.2s ease-out}
+@keyframes chatIn{0%{opacity:0;transform:translateY(6px)}100%{opacity:1;transform:translateY(0)}}
+.chat-msg.pet{background:#306230;color:#9bbc0f;align-self:flex-start;border:1px solid #8bac0f}
+.chat-msg.pet .chat-name{color:#8bac0f;font-size:9px;font-weight:bold}
+.chat-msg.user{background:#0f380f;color:#8bac0f;align-self:flex-end;border:1px solid #306230}
+.chat-msg.user .chat-name{color:#306230;font-size:9px;font-weight:bold;text-align:right}
+.chat-msg.system{background:transparent;color:#306230;align-self:center;font-size:9px;font-style:italic}
+.chat-msg .chat-time{font-size:8px;color:#306230;margin-left:6px}
+.chat-msg .chat-mood{font-size:9px;opacity:0.7;margin-top:1px}
+.chat-input-row{display:flex;gap:4px;padding:6px 10px;border-top:2px solid #306230;background:#0f380f}
+.chat-input-row input{flex:1;background:#1a4a1a;color:#9bbc0f;border:2px solid #306230;font-family:monospace;font-size:12px;padding:6px 8px;outline:none}
+.chat-input-row input:focus{border-color:#8bac0f}
+.chat-input-row input::placeholder{color:#306230}
+.chat-input-row button{white-space:nowrap;font-size:12px;padding:6px 12px}
+/* Needs bar in HUD */
+.needs-row{display:flex;gap:3px;align-items:center;font-size:8px;color:#306230}
+.needs-row .bar-tiny{width:30px;height:4px}
+
+/* ===== MOBILE ===== */
+@media(max-width:600px){
+  body{overflow-y:auto!important;min-height:100vh;}
+  video{width:100%!important;max-width:100%!important;height:auto!important;}
+  canvas{max-width:100%!important;}
+  #app,.app,.container,.main,.wrapper,[id*="app"],[class*="container"]{width:100%!important;max-width:100%!important;margin:0!important;border-radius:0!important;}
+  button,.btn,.action-btn,[class*="btn"]{min-height:44px;font-size:13px!important;touch-action:manipulation;}
+  input,textarea,select{font-size:16px!important;}
+  .controls,.toolbar,.actions,.panel,.buttons,[class*="controls"],[class*="toolbar"]{flex-wrap:wrap!important;}
+  [style*="width:"][style*="px"]{max-width:100%!important;}
+}
+</style>
+</head>
+<body>
+<div class="title-bar">★ AR 像素宠物 v5 ★ <span id="brainStatus" style="font-size:10px;color:#306230"></span></div>
+<div class="ar-view" id="arView">
+  <video id="srcVid" playsinline muted></video>
+  <canvas id="cv"></canvas>
+  <div class="zone-grid" id="zoneGrid">
+    <div class="zone-cell" id="z0"></div><div class="zone-cell" id="z1"></div><div class="zone-cell" id="z2"></div>
+    <div class="zone-cell" id="z3"></div><div class="zone-cell" id="z4"></div><div class="zone-cell" id="z5"></div>
+    <div class="zone-cell" id="z6"></div><div class="zone-cell" id="z7"></div><div class="zone-cell" id="z8"></div>
+  </div>
+  <div class="hud" id="hud">
+    <span id="petIcon">🐱</span> <span id="petNameDisplay">Pixel</span> Lv.<span id="petLevel">1</span>
+    <div style="font-size:9px;color:#306230" id="gestureLabel">跟手模式</div>
+  </div>
+  <div class="hud-right">
+    <div>❤ <span class="bar-tiny"><span class="bar-fill" id="hpBar" style="width:100%;background:#e63946"></span></span></div>
+    <div>★ <span class="bar-tiny"><span class="bar-fill" id="happyBar" style="width:80%;background:#f4d03f"></span></span></div>
+    <div>⚡ <span class="bar-tiny"><span class="bar-fill" id="energyBar" style="width:100%;background:#8bac0f"></span></span></div>
+    <div class="needs-row">🍔<span class="bar-tiny"><span class="bar-fill" id="hungerBar" style="width:30%;background:#e67e22"></span></span></div>
+    <div class="needs-row">💧<span class="bar-tiny"><span class="bar-fill" id="thirstBar" style="width:35%;background:#3498db"></span></span></div>
+    <div class="needs-row">🎮<span class="bar-tiny"><span class="bar-fill" id="funBar" style="width:50%;background:#9b59b6"></span></span></div>
+  </div>
+  <div class="brain-indicator" id="brainThinking">🧠 思考中...</div>
+</div>
+<div class="controls" id="mainControls">
+  <button onclick="startCam()" id="btnStart">▶ 启动AR</button>
+  <button onclick="toggleUpload()">📷 上传IP</button>
+  <button onclick="feedPet()">🍖 喂食</button>
+  <button onclick="toyPet()">🧶 玩具</button>
+  <button onclick="switchBuiltin()" class="small">↻ 切换</button>
+  <button onclick="petAPI.switchTo('naruto')" class="small" style="background:#ff6b35;color:#fff">🍥 鸣人</button>
+  <button onclick="toggleBrain()" class="small" id="btnBrain">🧠 AI脑</button>
+  <button onclick="toggleChat()" class="small" id="btnChat">💬 对话</button>
+  <button onclick="debugMode=!debugMode;document.getElementById('zoneGrid').classList.toggle('show',debugMode)" class="small">◆ 调试</button>
+  <button onclick="soundOn=!soundOn" class="small">♪</button>
+</div>
+<!-- Upload Panel -->
+<div class="upload-panel" id="uploadPanel">
+  <div style="font-size:12px;font-weight:bold;color:#9bbc0f">📷 上传你的IP形象</div>
+  <div class="upload-zone" id="uploadZone" onclick="document.getElementById('fileInput').click()">
+    拖拽图片到这里 / 点击选择文件<br>
+    <span style="font-size:10px;color:#306230">支持 PNG / JPG / GIF / WebP</span>
+  </div>
+  <input type="file" id="fileInput" accept="image/*" style="display:none" onchange="handleFile(this.files[0])">
+  <div class="preview-row" id="previewRow" style="display:none">
+    <img id="previewImg">
+    <div class="info">
+      <div>IP名称: <input id="ipName" value="我的IP" style="background:#0f380f;color:#8bac0f;border:1px solid #306230;font-family:monospace;font-size:11px;padding:2px 4px;width:100px"></div>
+      <div style="margin-top:4px">大小: <input type="range" id="ipScale" min="30" max="120" value="64" style="width:80px;accent-color:#8bac0f;vertical-align:middle"><span id="ipScaleV">64</span>px</div>
+    </div>
+  </div>
+  <div style="font-size:10px;color:#306230;margin-top:4px">自定义动作名称（用于手势触发）:</div>
+  <div class="ip-actions">
+    <div><label>✋ 挥手:</label><input id="actWave" value="打招呼" placeholder="挥手动作"></div>
+    <div><label>👆 举手:</label><input id="actRaise" value="必杀技" placeholder="举手动作"></div>
+    <div><label>👋 拍拍:</label><input id="actPat" value="摸头杀" placeholder="拍拍动作"></div>
+    <div><label>🤲 双手:</label><input id="actBoth" value="拥抱" placeholder="双手动作"></div>
+  </div>
+  <div style="display:flex;gap:6px">
+    <button onclick="applyIP()">✔ 应用IP</button>
+    <button onclick="toggleUpload()" class="small">✕ 关闭</button>
+  </div>
+</div>
+<!-- AI Brain Panel -->
+<div class="brain-panel" id="brainPanel">
+  <div style="font-size:12px;font-weight:bold;color:#9bbc0f">🧠 AI大脑 v5 · Gemini视觉理解</div>
+  <div style="font-size:10px;color:#306230">AI看摄像头画面理解环境+事件驱动即时反应+行为链+记忆系统</div>
+  <label>API模式:</label>
+  <select id="brainApiMode" onchange="updateApiMode()" style="background:#0f380f;color:#8bac0f;border:2px solid #306230;font-family:monospace;font-size:10px;padding:3px 6px">
+    <option value="gemini" selected>Gemini (Picaa)</option>
+    <option value="openai">OpenAI兼容 (DeepSeek等)</option>
+  </select>
+  <label>API端点:</label>
+  <input id="brainEndpoint" value="https://ai.ssnai.com/gemini" placeholder="API endpoint">
+  <label>API密钥:</label>
+  <input id="brainApiKey" type="password" placeholder="API Key" value="Nmqoo7UOx2z4PW6X7oNkUb8WRCZrDvwB">
+  <label>模型:</label>
+  <input id="brainModel" value="gemini-2.5-flash" placeholder="model name">
+  <label>自主思考间隔(秒):</label>
+  <input id="brainInterval" type="number" value="25" min="5" max="120" style="width:60px">
+  <label style="display:flex;align-items:center;gap:4px;cursor:pointer">
+    <input type="checkbox" id="visionToggle" checked onchange="visionEnabled=this.checked" style="accent-color:#8bac0f"> 👁 视觉理解 (发送摄像头画面给AI)
+  </label>
+  <div style="display:flex;gap:6px;margin-top:4px">
+    <button onclick="brain.start()" id="btnBrainStart">▶ 启动大脑</button>
+    <button onclick="brain.stop()" class="small">⏹ 停止</button>
+    <button onclick="toggleBrainPanel()" class="small">✕ 关闭</button>
+  </div>
+  <div id="brainLog" style="font-size:9px;color:#306230;max-height:80px;overflow-y:auto;margin-top:4px;border:1px solid #306230;padding:4px"></div>
+</div>
+
+<!-- Chat Panel -->
+<div class="chat-panel" id="chatPanel">
+  <div class="chat-header">
+    <span>💬 对话</span>
+    <button onclick="toggleChat()" class="small" style="font-size:9px;padding:2px 6px">✕</button>
+  </div>
+  <div class="chat-log" id="chatLog"></div>
+  <div class="chat-input-row">
+    <input id="chatInput" placeholder="跟宠物说话..." maxlength="120" onkeydown="if(event.key==='Enter')sendChat()">
+    <button onclick="sendChat()">发送</button>
+  </div>
+</div>
+<canvas id="tmpCv" style="display:none"></canvas>
+<script src="../cam-core/cam-core.js"></script>
+<script>
+// ==================== CORE SETUP ====================
+const cv=document.getElementById('cv'),ctx=cv.getContext('2d');
+const vid=document.getElementById('srcVid');
+const tmpCv=document.getElementById('tmpCv'),tmpCtx=tmpCv.getContext('2d');
+const arView=document.getElementById('arView');
+let stream=null,running=false,soundOn=true,debugMode=false;
+let W=320,H=240,SW=160,SH=120;
+
+// ==================== AUDIO ====================
+let audioCtx=null;
+function getAudio(){if(!audioCtx)audioCtx=new(window.AudioContext||window.webkitAudioContext)();return audioCtx}
+function beep(f,d,type='square',vol=0.05){if(!soundOn)return;try{const ac=getAudio(),o=ac.createOscillator(),g=ac.createGain();o.connect(g);g.connect(ac.destination);o.type=type;o.frequency.value=f;g.gain.value=vol;o.start();o.stop(ac.currentTime+d)}catch(e){}}
+function meow(){beep(800,0.08,'sine');setTimeout(()=>beep(600,0.12,'sine'),100)}
+function purr(){[300,320,300,320].forEach((f,i)=>setTimeout(()=>beep(f,0.08,'sine',0.03),i*60))}
+function munch(){[200,250,200].forEach((f,i)=>setTimeout(()=>beep(f,0.05,'square',0.04),i*80))}
+function powerUp(){[523,659,784,1047,1319].forEach((f,i)=>setTimeout(()=>beep(f,0.1,'sine',0.06),i*80))}
+function specialFx(){[1047,784,1047,1319,1047].forEach((f,i)=>setTimeout(()=>beep(f,0.08,'square',0.05),i*70))}
+
+// ==================== PET STATE ====================
+const pet={
+  x:160,y:180,vx:0,vy:0,dir:1,
+  state:'idle',frame:0,frameTick:0,
+  hp:100,happy:80,energy:100,
+  exp:0,level:1,
+  groundY:200,targetX:-1,
+  blinkTimer:2,blinking:false,
+  stateTimer:0,tailWag:0,
+  jumpVy:0,onGround:true,
+  scale:1,rotation:0,squish:0,
+  reactCooldown:0,
+  // Idle micro-animations
+  breathPhase:0,lookTimer:5+Math.random()*5,lookDir:0,idleTime:0,microBounceCD:6,
+  // Life simulation needs (0-100)
+  hunger:30,thirst:35,social:50,fun:50,hygiene:80,
+  // Daily routine tracking
+  lastAte:0,lastDrank:0,lastPlayed:0,lastSlept:0,lastCleaned:0,
+  dailySchedule:'', // current routine phase
+};
+
+// ==================== BUILTIN PETS ====================
+const BUILTINS=[
+  {name:'小猫',icon:'🐱',body:'#f8a030',ear:'#d07020',eye:'#0f380f',tail:'#d07020',
+   actions:{wave:'喵喵招手',raise:'猫猫拳',pat:'呼噜呼噜',both:'抱抱'},type:'cat'},
+  {name:'小狗',icon:'🐶',body:'#c8a060',ear:'#8b6914',eye:'#0f380f',tail:'#8b6914',
+   actions:{wave:'摇尾巴',raise:'握手',pat:'翻肚皮',both:'飞扑'},type:'dog'},
+  {name:'小龙',icon:'🐉',body:'#58d854',ear:'#e63946',eye:'#f4d03f',tail:'#306230',
+   actions:{wave:'喷火',raise:'龙卷风',pat:'卖萌',both:'飞行'},type:'dragon'},
+  {name:'兔子',icon:'🐰',body:'#f0e0e0',ear:'#f8a0a0',eye:'#e63946',tail:'#f0e0e0',
+   actions:{wave:'蹦蹦跳',raise:'竖耳朵',pat:'磨鼻子',both:'打滚'},type:'rabbit'},
+  {name:'史莱姆',icon:'🟢',body:'#58d854',ear:'#58d854',eye:'#0f380f',tail:'#306230',
+   actions:{wave:'弹弹弹',raise:'分裂',pat:'融化',both:'变大'},type:'slime'},
+  {name:'鸣人',icon:'🍥',body:'#ff6b35',ear:'#f4d03f',eye:'#4a9adf',tail:'#0078f8',
+   actions:{wave:'影分身',raise:'螺旋丸',pat:'一乐拉面',both:'仙人模式'},type:'naruto'},
+  {name:'Diva',icon:'💼',body:'#ffe0d0',ear:'#f8b0a0',eye:'#2a2a2a',tail:'#3a2a1a',
+   actions:{wave:'打招呼',raise:'灵感爆发',pat:'摸鱼咖啡',both:'数据暴涨'},type:'chibi_girl'},
+];
+let builtinIdx=0;
+let useCustomIP=false,customIPImg=null,customIPScale=64;
+
+// ==================== NARUTO AI SPRITES (PNG with transparency) ====================
+const NARUTO_SPRITES={stand:null,run:null,rasengan:null,ramen:null,wave:null,sleep:null,sad:null,excited:null,sage:null,train:null,think:null};
+const NARUTO_PATHS={
+  stand:'assets/naruto_stand.png',run:'assets/naruto_run.png',
+  rasengan:'assets/naruto_rasengan.png',ramen:'assets/naruto_ramen.png',
+  wave:'assets/naruto_wave.png',sleep:'assets/naruto_sleep.png',
+  sad:'assets/naruto_sad.png',excited:'assets/naruto_excited.png',
+  sage:'assets/naruto_sage.png',train:'assets/naruto_train.png',
+  think:'assets/naruto_think.png'
+};
+let narutoSpritesLoaded=false;
+
+(function loadNarutoSprites(){
+  let loaded=0;const total=Object.keys(NARUTO_PATHS).length;
+  for(const[key,path]of Object.entries(NARUTO_PATHS)){
+    const img=new Image();
+    img.onload=function(){
+      NARUTO_SPRITES[key]=img;
+      loaded++;if(loaded>=total)narutoSpritesLoaded=true;
+      console.log('[sprite]',key,'loaded',img.naturalWidth+'x'+img.naturalHeight);
+    };
+    img.onerror=function(e){
+      console.warn('[sprite]',key,'FAILED',path,e);
+      loaded++;if(loaded>=total&&loaded>0)narutoSpritesLoaded=Object.values(NARUTO_SPRITES).some(v=>v);
+    };
+    img.src=path;
+  }
+})();
+// ==================== CHIBI GIRL AI SPRITES (PNG with transparency) ====================
+const CHIBI_SPRITES={stand:null,run:null,wave:null,sleep:null,sad:null,excited:null,train:null,think:null,eat:null,shy:null,love:null};
+const CHIBI_PATHS={
+  stand:'assets/chibi_stand.png',run:'assets/chibi_run.png',
+  wave:'assets/chibi_wave.png',sleep:'assets/chibi_sleep.png',
+  sad:'assets/chibi_sad.png',excited:'assets/chibi_excited.png',
+  train:'assets/chibi_train.png',think:'assets/chibi_think.png',
+  eat:'assets/chibi_eat.png',shy:'assets/chibi_shy.png',
+  love:'assets/chibi_love.png'
+};
+let chibiSpritesLoaded=false;
+
+(function loadChibiSprites(){
+  let loaded=0;const total=Object.keys(CHIBI_PATHS).length;
+  for(const[key,path]of Object.entries(CHIBI_PATHS)){
+    const img=new Image();
+    img.onload=function(){
+      CHIBI_SPRITES[key]=img;
+      loaded++;if(loaded>=total)chibiSpritesLoaded=true;
+      console.log('[chibi-sprite]',key,'loaded',img.naturalWidth+'x'+img.naturalHeight);
+    };
+    img.onerror=function(e){
+      console.warn('[chibi-sprite]',key,'FAILED',path,e);
+      loaded++;if(loaded>=total&&loaded>0)chibiSpritesLoaded=Object.values(CHIBI_SPRITES).some(v=>v);
+    };
+    img.src=path;
+  }
+})();
+
+let customActions={wave:'打招呼',raise:'必杀技',pat:'摸头杀',both:'拥抱'};
+
+// ==================== MOTION DETECTION (Zone-based) ====================
+// Divide camera into 3x3 zones, detect motion via frame differencing
+let prevGray=null;
+const zones=new Float32Array(9);
+const zoneSmooth=new Float32Array(9);
+const zoneHistory=[];
+const ZONE_HISTORY_LEN=15;
+const detect={face:{found:false,cx:0,cy:0,w:0,h:0,size:0},motionTotal:0};
+let lastGesture='',gestureCooldown=0;
+// ==================== DESK/SURFACE DETECTION ====================
+let deskY=-1,deskSmooth=-1,deskConfidence=0;
+function detectDeskSurface(imgData,w,h){
+  // Sobel edge detection
+  const edge=CamCore.sobelEdge(imgData,w,h);
+  // Also compute vertical gradient for horizontal edge filtering
+  const d=imgData.data;
+  const gray=new Float32Array(w*h);
+  for(let i=0;i<w*h;i++)gray[i]=d[i*4]*0.299+d[i*4+1]*0.587+d[i*4+2]*0.114;
+
+  // Row score: sum of strong horizontal edges
+  const rowScore=new Float32Array(h);
+  for(let y=1;y<h-1;y++){
+    for(let x=1;x<w-1;x++){
+      const gy=-gray[(y-1)*w+(x-1)]-2*gray[(y-1)*w+x]-gray[(y-1)*w+(x+1)]
+              +gray[(y+1)*w+(x-1)]+2*gray[(y+1)*w+x]+gray[(y+1)*w+(x+1)];
+      const gx=-gray[(y-1)*w+(x-1)]+gray[(y-1)*w+(x+1)]
+              -2*gray[y*w+(x-1)]+2*gray[y*w+(x+1)]
+              -gray[(y+1)*w+(x-1)]+gray[(y+1)*w+(x+1)];
+      // Only count if horizontal (|gy| > |gx|*1.5) and strong enough
+      if(Math.abs(gy)>Math.abs(gx)*1.5&&Math.abs(gy)>30){
+        rowScore[y]+=Math.abs(gy);
+      }
+    }
+  }
+  // Find peak in middle region
+  const yMin=Math.floor(h*0.3),yMax=Math.floor(h*0.85);
+  let bestY=-1,bestScore=0;
+  for(let y=yMin;y<yMax;y++){
+    if(rowScore[y]>bestScore){bestScore=rowScore[y];bestY=y}
+  }
+  // Need minimum score threshold
+  if(bestScore>w*30){
+    deskY=bestY;deskConfidence=Math.min(1,bestScore/(w*80));
+    if(deskSmooth<0)deskSmooth=deskY;
+    else{
+      // Only update if not jumping too far (anti-flicker)
+      const diff=Math.abs(deskY-deskSmooth);
+      if(diff<h*0.15) deskSmooth=deskSmooth*0.92+deskY*0.08;
+      // else ignore outlier
+    }
+    pet.groundY=deskSmooth/h*H;
+  }else{
+    deskConfidence*=0.92;
+    if(deskConfidence<0.08){deskSmooth=-1;pet.groundY=H*0.85}
+  }
+}
+
+function analyzeMotion(){
+  // Capture mirrored frame at analysis resolution
+  tmpCtx.save();tmpCtx.translate(SW,0);tmpCtx.scale(-1,1);
+  tmpCtx.drawImage(vid,0,0,SW,SH);tmpCtx.restore();
+  const img=tmpCtx.getImageData(0,0,SW,SH);
+
+  // Convert to grayscale
+  const d=img.data;
+  const gray=new Uint8Array(SW*SH);
+  for(let i=0;i<SW*SH;i++){
+    gray[i]=Math.round(d[i*4]*0.299+d[i*4+1]*0.587+d[i*4+2]*0.114);
+  }
+
+  // Frame differencing
+  zones.fill(0);
+  let totalMotion=0;
+  const zW=Math.floor(SW/3),zH=Math.floor(SH/3);
+  const motionThreshold=20; // pixel brightness change threshold
+
+  if(prevGray){
+    for(let y=0;y<SH;y++){
+      for(let x=0;x<SW;x++){
+        const idx=y*SW+x;
+        const diff=Math.abs(gray[idx]-prevGray[idx]);
+        if(diff>motionThreshold){
+          const zx=Math.min(2,Math.floor(x/zW));
+          const zy=Math.min(2,Math.floor(y/zH));
+          zones[zy*3+zx]++;
+          totalMotion++;
+        }
+      }
+    }
+    // Normalize to 0-1
+    const zonePixels=zW*zH;
+    for(let i=0;i<9;i++) zones[i]=Math.min(1,zones[i]/zonePixels*4);
+  }
+  prevGray=gray;
+  detect.motionTotal=totalMotion/(SW*SH);
+
+  // Smooth zones with EMA
+  for(let i=0;i<9;i++) zoneSmooth[i]=zoneSmooth[i]*0.4+zones[i]*0.6;
+
+  // Desk detection disabled — pet stays at fixed ground level
+
+  // Store zone snapshot for gesture history
+  zoneHistory.push({z:new Float32Array(zoneSmooth),t:Date.now(),face:detect.face.found});
+  if(zoneHistory.length>ZONE_HISTORY_LEN)zoneHistory.shift();
+
+  // Debug display
+  if(debugMode){
+    for(let i=0;i<9;i++){
+      const el=document.getElementById('z'+i);
+      const v=Math.round(zoneSmooth[i]*100);
+      el.textContent=v+'%';
+      el.style.background=`rgba(139,172,15,${zoneSmooth[i]*0.5})`;
+    }
+  }
+}
+
+// ==================== GESTURE RECOGNITION (Zone-based) ====================
+function recognizeGestures(dt){
+  gestureCooldown-=dt;
+  if(gestureCooldown>0||zoneHistory.length<6)return;
+
+  // Zone layout:
+  // [0:TL] [1:TC] [2:TR]
+  // [3:ML] [4:MC] [5:MR]
+  // [6:BL] [7:BC] [8:BR]
+  const z=zoneSmooth;
+  const topL=z[0],topC=z[1],topR=z[2];
+  const midL=z[3],midC=z[4],midR=z[5];
+  const botL=z[6],botC=z[7],botR=z[8];
+  const leftCol=topL+midL+botL;
+  const rightCol=topR+midR+botR;
+  const topRow=topL+topC+topR;
+  const midRow=midL+midC+midR;
+  const threshold=0.15; // zone activity threshold
+
+  // --- WAVE: alternating left/right motion ---
+  if(zoneHistory.length>=8){
+    const recent=zoneHistory.slice(-8);
+    let leftSeq=[],rightSeq=[];
+    for(const frame of recent){
+      leftSeq.push(frame.z[0]+frame.z[3]+frame.z[6]);
+      rightSeq.push(frame.z[2]+frame.z[5]+frame.z[8]);
+    }
+    let switches=0;
+    for(let i=1;i<leftSeq.length;i++){
+      const prevDom=leftSeq[i-1]>rightSeq[i-1]?'L':'R';
+      const currDom=leftSeq[i]>rightSeq[i]?'L':'R';
+      if(prevDom!==currDom&&(leftSeq[i]>threshold||rightSeq[i]>threshold))switches++;
+    }
+    if(switches>=3){
+      triggerGesture('wave');return;
+    }
+  }
+
+  // --- RAISE: strong motion in top row ---
+  if(topRow>threshold*2.5&&topRow>midRow*1.5){
+    triggerGesture('raise');return;
+  }
+
+  // --- BOTH HANDS: both left and right columns active ---
+  if(leftCol>threshold*1.5&&rightCol>threshold*1.5){
+    triggerGesture('both');return;
+  }
+
+  // --- PAT: motion near pet position (bottom center) ---
+  if(botC>threshold*2||(midC>threshold*2&&botC>threshold)){
+    triggerGesture('pat');return;
+  }
+
+  // --- APPROACH: increasing overall motion (face getting bigger) ---
+  if(zoneHistory.length>=10){
+    const old=zoneHistory[zoneHistory.length-10];
+    const oldTotal=old.z.reduce((s,v)=>s+v,0);
+    const newTotal=z.reduce((s,v)=>s+v,0);
+    if(newTotal>oldTotal*2&&newTotal>threshold*4&&old.face&&detect.face.found){
+      triggerGesture('approach');return;
+    }
+    if(oldTotal>newTotal*2&&oldTotal>threshold*4){
+      triggerGesture('retreat');return;
+    }
+  }
+
+  // --- HEAD TILT: asymmetric motion in top row ---
+  if(topL>threshold*2&&topR<threshold*0.5){triggerGesture('headLeft');return}
+  if(topR>threshold*2&&topL<threshold*0.5){triggerGesture('headRight');return}
+}
+
+function triggerGesture(gesture){
+  gestureCooldown=1.8;
+  lastGesture=gesture;
+  const actions=useCustomIP?customActions:BUILTINS[builtinIdx].actions;
+
+  switch(gesture){
+    case 'wave':
+      pet.state='wave';pet.stateTimer=2;
+      spawnEmote('👋');meow();
+      document.getElementById('gestureLabel').textContent='✋ 挥手 → '+actions.wave;
+      pet.happy=Math.min(100,pet.happy+8);pet.exp+=3;
+      // AI speech or fallback
+      if(brain.enabled)brain.triggerThink('gesture');else spawnSpeech(actions.wave+'!');
+      break;
+    case 'raise':
+      pet.state='special';pet.stateTimer=2.5;
+      spawnEmote('⭐');spawnEmote('✨');
+      specialFx();powerUp();
+      document.getElementById('gestureLabel').textContent='👆 举手 → '+actions.raise;
+      pet.happy=Math.min(100,pet.happy+12);pet.exp+=5;
+      if(brain.enabled)brain.triggerThink('gesture');else spawnSpeech(actions.raise+'!!!');
+      break;
+    case 'pat':
+      pet.state='patted';pet.stateTimer=2;
+      spawnEmote('💖');purr();
+      document.getElementById('gestureLabel').textContent='👋 拍拍 → '+actions.pat;
+      pet.happy=Math.min(100,pet.happy+15);pet.exp+=3;
+      if(brain.enabled)brain.triggerThink('gesture');else spawnSpeech(actions.pat+'~');
+      break;
+    case 'both':
+      pet.state='hug';pet.stateTimer=3;
+      spawnEmote('🤗');spawnEmote('💕');purr();
+      document.getElementById('gestureLabel').textContent='🤲 双手 → '+actions.both;
+      pet.happy=Math.min(100,pet.happy+20);pet.exp+=5;
+      if(brain.enabled)brain.triggerThink('gesture');else spawnSpeech(actions.both+'!');
+      break;
+    case 'approach':
+      pet.state='excited';pet.stateTimer=1.5;
+      spawnEmote('😍');meow();
+      document.getElementById('gestureLabel').textContent='👤 靠近';
+      if(brain.enabled)brain.triggerThink('user_arrived');else spawnSpeech('你来了！');
+      break;
+    case 'retreat':
+      pet.state='sad';pet.stateTimer=2;
+      spawnEmote('🥺');
+      document.getElementById('gestureLabel').textContent='👤 远离';
+      if(brain.enabled)brain.triggerThink('user_left');else spawnSpeech('别走...');
+      break;
+    case 'headRight':case 'headLeft':
+      pet.state='tilt';pet.stateTimer=1;pet.dir=gesture==='headRight'?1:-1;
+      spawnSpeech('?');spawnEmote('❓');
+      document.getElementById('gestureLabel').textContent='🔄 歪头';break;
+  }
+}
+
+// ==================== AI BRAIN v5 (Gemini + Event-driven + Action Queue + Memory) ====================
+// API mode helper
+function updateApiMode(){
+  const mode=document.getElementById('brainApiMode').value;
+  if(mode==='gemini'){
+    document.getElementById('brainEndpoint').value='https://ai.ssnai.com/gemini';
+    document.getElementById('brainModel').value='gemini-2.5-flash';
+  }else{
+    document.getElementById('brainEndpoint').value='https://api.deepseek.com/v1/chat/completions';
+    document.getElementById('brainModel').value='deepseek-chat';
+  }
+}
+
+// Action queue for behavior chains
+let actionQueue=[];
+let lastActionState=''; // track previous state for transitions
+function actionTransition(newState){
+  // Smooth squish bounce on every state change
+  if(newState!==pet.state){
+    pet.squish=0.12+Math.random()*0.06;
+    lastActionState=pet.state;
+  }
+}
+function processActionQueue(dt){
+  if(actionQueue.length===0)return;
+  if(pet.stateTimer>0)return; // wait for current action to finish
+  const cmd=actionQueue.shift();
+  if(!cmd)return;
+  // Parse compound commands like "walk:left", "speak:hello", "jump"
+  const[act,arg]=cmd.includes(':')?[cmd.split(':')[0],cmd.split(':').slice(1).join(':')]:[cmd,''];
+  switch(act){
+    // --- 移动类 ---
+    case 'walk':
+      if(arg==='center'){pet.targetX=W/2}
+      else if(arg==='user'&&detect.face.found){pet.targetX=detect.face.cx}
+      else if(arg==='left'){pet.targetX=Math.max(30,pet.x-60-Math.random()*60)}
+      else if(arg==='right'){pet.targetX=Math.min(W-30,pet.x+60+Math.random()*60)}
+      else{pet.targetX=30+Math.random()*(W-60)}
+      actionTransition('walk');pet.state='walk';pet.stateTimer=3;break;
+    case 'run':case 'dash':
+      actionTransition('walk');pet.state='walk';pet.targetX=30+Math.random()*(W-60);
+      pet.stateTimer=2;pet.vx=pet.dir*(act==='dash'?120:80);
+      if(act==='dash')spawnEmote('💨');break;
+    case 'jump':if(pet.onGround){pet.jumpVy=-100;pet.onGround=false;pet.stateTimer=Math.max(pet.stateTimer,0.5)}break;
+    case 'hop':
+      // 小跳 — lighter than jump, can chain
+      if(pet.onGround){pet.jumpVy=-55;pet.onGround=false;pet.stateTimer=Math.max(pet.stateTimer,0.3)}break;
+    case 'sneak':
+      actionTransition('sneak');pet.state='sneak';
+      pet.targetX=arg==='left'?Math.max(30,pet.x-40-Math.random()*30):
+                  arg==='right'?Math.min(W-30,pet.x+40+Math.random()*30):
+                  30+Math.random()*(W-60);
+      pet.stateTimer=3.5;break;
+    case 'spin':
+      actionTransition('spin');pet.state='spin';pet.stateTimer=1.2;
+      pet.fun=Math.min(100,pet.fun+8);break;
+    case 'explore':
+      actionTransition('walk');pet.state='walk';pet.targetX=30+Math.random()*(W-60);
+      pet.stateTimer=4;pet.fun=Math.min(100,pet.fun+10);break;
+
+    // --- 表情/动作类 ---
+    case 'speak':if(arg)spawnSpeech(arg);pet.stateTimer=Math.max(pet.stateTimer,1);break;
+    case 'emote':if(arg)spawnEmote(arg);pet.stateTimer=Math.max(pet.stateTimer,0.5);break;
+    case 'wave':actionTransition('wave');pet.state='wave';pet.stateTimer=2;break;
+    case 'nod':actionTransition('nod');pet.state='nod';pet.stateTimer=1.2;break;
+    case 'shake':actionTransition('shake');pet.state='shake';pet.stateTimer=1.2;break;
+    case 'bow':actionTransition('bow');pet.state='bow';pet.stateTimer=1.8;break;
+    case 'peek':actionTransition('peek');pet.state='peek';pet.stateTimer=2;break;
+    case 'flop':
+      actionTransition('flop');pet.state='flop';pet.stateTimer=2.5;
+      pet.energy=Math.min(100,pet.energy+5);break;
+    case 'sit':actionTransition('sit');pet.state='sit';pet.stateTimer=4;break;
+    case 'taunt':
+      actionTransition('taunt');pet.state='taunt';pet.stateTimer=2;
+      pet.fun=Math.min(100,pet.fun+10);spawnEmote('😜');break;
+
+    // --- 情绪类 ---
+    case 'special':actionTransition('special');pet.state='special';pet.stateTimer=2.5;if(pet.onGround){pet.jumpVy=-160;pet.onGround=false}break;
+    case 'excited':actionTransition('excited');pet.state='excited';pet.stateTimer=2.5;if(pet.onGround){pet.jumpVy=-80;pet.onGround=false}break;
+    case 'dance':
+      actionTransition('dance');pet.state='dance';pet.stateTimer=3;
+      pet.fun=Math.min(100,pet.fun+20);
+      if(pet.onGround){pet.jumpVy=-60;pet.onGround=false}break;
+    case 'sad':actionTransition('sad');pet.state='sad';pet.stateTimer=3;break;
+    // think action removed — AI thinking no longer interrupts pet animations
+    case 'shy':actionTransition('shy');pet.state='shy';pet.stateTimer=2.5;spawnEmote('😳');break;
+    case 'love':actionTransition('love');pet.state='love';pet.stateTimer=2.5;spawnEmote('💕');pet.social=Math.min(100,pet.social+15);break;
+    case 'surprised':actionTransition('surprised');pet.state='surprised';pet.stateTimer=1.5;if(pet.onGround){pet.jumpVy=-50;pet.onGround=false}spawnEmote('❗');break;
+    case 'angry':actionTransition('angry');pet.state='angry';pet.stateTimer=2;spawnEmote('💢');break;
+    case 'confused':actionTransition('confused');pet.state='confused';pet.stateTimer=2;spawnEmote('❓');break;
+
+    // --- 生活类 ---
+    case 'train':actionTransition('train');pet.state='train';pet.stateTimer=4;break;
+    case 'sleep':actionTransition('sleep');pet.state='sleep';pet.stateTimer=6;break;
+    case 'eat':feedPet();pet.hunger=Math.max(0,pet.hunger-30);pet.lastAte=Date.now();break;
+    case 'play':toyPet();pet.fun=Math.min(100,pet.fun+25);pet.lastPlayed=Date.now();break;
+    case 'stretch':actionTransition('excited');pet.state='excited';pet.stateTimer=2;pet.squish=0.18;spawnEmote('🤸');break;
+    case 'yawn':actionTransition('tilt');pet.state='tilt';pet.stateTimer=1.5;spawnEmote('🥱');break;
+    case 'drink':actionTransition('eat');pet.state='eat';pet.stateTimer=1.5;pet.thirst=Math.max(0,pet.thirst-35);pet.lastDrank=Date.now();spawnEmote('💧');break;
+    case 'meditate':actionTransition('tilt');pet.state='tilt';pet.stateTimer=4;pet.energy=Math.min(100,pet.energy+15);spawnEmote('🧘');break;
+    case 'sing':actionTransition('excited');pet.state='excited';pet.stateTimer=2.5;pet.fun=Math.min(100,pet.fun+15);spawnEmote('🎵');meow();break;
+    case 'clean':actionTransition('patted');pet.state='patted';pet.stateTimer=2;pet.hygiene=Math.min(100,pet.hygiene+30);pet.lastCleaned=Date.now();spawnEmote('✨');break;
+    default:pet.state='idle';pet.stateTimer=1;break;
+  }
+}
+
+const brain={
+  enabled:false,thinking:false,interval:null,reactInterval:null,
+  memory:[],chatHistory:[],thinkCount:0,lastState:'',
+  userWasPresent:false,userAbsentSince:0,userPresentSince:0,
+  lastInteraction:0,proactiveCD:0,
+  triggerDebounce:{},lastTriggerTime:0,
+
+  // === 短期上下文管理 ===
+  context:{
+    sceneDesc:'',           // 上次看到的场景描述
+    sceneUpdateTime:0,      // 场景更新时间
+    currentTopic:'',        // 当前聊天话题
+    topicTurns:0,           // 话题持续轮次
+    userTraits:[],          // 观察到的用户特征 (最多5条)
+    recentTopics:[],        // 最近聊过的话题 (最多8条, 防重复)
+    emotionHistory:[],      // 情绪轨迹 (最多10条)
+    lastSpeech:'',          // 上一句说的话 (防重复)
+    lastSpeech2:'',         // 上上句说的话
+    sessionStart:Date.now(),// 本次会话开始时间
+    interactionCount:0,     // 互动次数
+    userMood:'unknown',     // 推测的用户心情
+    dailyEvents:[],         // 今天发生的事 (最多6条)
+  },
+
+  // 更新场景记忆
+  updateSceneContext(desc){
+    if(!desc||desc===this.context.sceneDesc)return;
+    this.context.sceneDesc=desc;
+    this.context.sceneUpdateTime=Date.now();
+  },
+
+  // 记录话题
+  trackTopic(topic){
+    if(!topic)return;
+    if(topic===this.context.currentTopic){
+      this.context.topicTurns++;
+    }else{
+      if(this.context.currentTopic){
+        this.context.recentTopics.push({topic:this.context.currentTopic,turns:this.context.topicTurns,time:Date.now()});
+        if(this.context.recentTopics.length>8)this.context.recentTopics.shift();
+      }
+      this.context.currentTopic=topic;
+      this.context.topicTurns=1;
+    }
+  },
+
+  // 记录情绪变化
+  trackEmotion(mood){
+    if(!mood)return;
+    this.context.emotionHistory.push({mood,time:Date.now()});
+    if(this.context.emotionHistory.length>10)this.context.emotionHistory.shift();
+  },
+
+  // 记录每日事件
+  addDailyEvent(event){
+    if(!event)return;
+    this.context.dailyEvents.push({text:event,time:Date.now()});
+    if(this.context.dailyEvents.length>6)this.context.dailyEvents.shift();
+  },
+
+  // 构建上下文摘要
+  buildContextSummary(){
+    const c=this.context;
+    const parts=[];
+    // 会话时长
+    const sessionMin=Math.round((Date.now()-c.sessionStart)/60000);
+    if(sessionMin>2)parts.push(`[已陪伴${sessionMin}分钟, 互动${c.interactionCount}次]`);
+    // 当前话题
+    if(c.currentTopic&&c.topicTurns>1)parts.push(`[正在聊: ${c.currentTopic} (第${c.topicTurns}轮)]`);
+    // 场景记忆
+    if(c.sceneDesc&&Date.now()-c.sceneUpdateTime<120000)parts.push(`[环境: ${c.sceneDesc}]`);
+    // 用户特征
+    if(c.userTraits.length>0)parts.push(`[用户特征: ${c.userTraits.join(', ')}]`);
+    // 用户心情推测
+    if(c.userMood!=='unknown')parts.push(`[用户似乎${c.userMood}]`);
+    // 情绪轨迹 (recent 3)
+    const recentMoods=c.emotionHistory.slice(-3).map(e=>e.mood);
+    if(recentMoods.length>1)parts.push(`[你最近的情绪: ${recentMoods.join('→')}]`);
+    // 最近聊过的话题 (防重复)
+    const oldTopics=c.recentTopics.slice(-3).map(t=>t.topic);
+    if(oldTopics.length>0)parts.push(`[聊过的话题(别重复): ${oldTopics.join(', ')}]`);
+    // 今日事件
+    if(c.dailyEvents.length>0)parts.push(`[今日事件: ${c.dailyEvents.map(e=>e.text).join('; ')}]`);
+    // 防重复
+    if(c.lastSpeech)parts.push(`[你上句话: "${c.lastSpeech.slice(0,25)}..." 别说类似的]`);
+    return parts.join('\n');
+  },
+
+  getConfig(){
+    return{
+      endpoint:document.getElementById('brainEndpoint').value,
+      apiKey:document.getElementById('brainApiKey').value,
+      model:document.getElementById('brainModel').value,
+      intervalSec:+document.getElementById('brainInterval').value||25,
+      apiMode:document.getElementById('brainApiMode').value,
+    };
+  },
+
+  start(){
+    const cfg=this.getConfig();
+    if(!cfg.apiKey){this.log('⚠ 请输入API密钥');return}
+    safeLS('set','arPetBrainKey',cfg.apiKey);
+    safeLS('set','arPetBrainEndpoint',cfg.endpoint);
+    safeLS('set','arPetBrainModel',cfg.model);
+    safeLS('set','arPetBrainMode',cfg.apiMode);
+    this.enabled=true;this.thinkCount=0;
+    document.getElementById('btnBrain').classList.add('active');
+    document.getElementById('brainStatus').textContent='🧠 AI在线';
+    this.log('✅ AI大脑v5已启动（事件驱动+行为链+视觉+记忆）');
+    if(this.interval)clearInterval(this.interval);
+    this.interval=setInterval(()=>{
+      // Don't auto-think if action queue is busy or pet is in the middle of something
+      if(actionQueue.length>0||this.thinking||pet.stateTimer>0.5)return;
+      this.think('auto');
+    },cfg.intervalSec*1000);
+    if(this.reactInterval)clearInterval(this.reactInterval);
+    this.reactInterval=setInterval(()=>this.proactiveReact(),800);
+    this.think('startup');
+  },
+
+  stop(){
+    this.enabled=false;
+    if(this.interval){clearInterval(this.interval);this.interval=null}
+    if(this.reactInterval){clearInterval(this.reactInterval);this.reactInterval=null}
+    document.getElementById('btnBrain').classList.remove('active');
+    document.getElementById('brainStatus').textContent='';
+    document.getElementById('brainThinking').classList.remove('thinking');
+    this.log('⏹ AI大脑已停止');
+  },
+
+  log(msg){
+    const el=document.getElementById('brainLog');
+    el.innerHTML+=msg+'<br>';el.scrollTop=el.scrollHeight;
+  },
+
+  // === EVENT-DRIVEN TRIGGER: instant AI think on important events ===
+  _pendingUserChat:null,
+  triggerThink(reason){
+    if(!this.enabled)return;
+    const isUserChat=reason==='user_chat';
+    // User chat is highest priority — queue if busy, never drop
+    if(this.thinking){
+      if(isUserChat){this._pendingUserChat=reason;this.log('💬 用户消息已排队，等AI思考完...')}
+      return;
+    }
+    // Don't interrupt action queue or ongoing animation unless it's user chat or user_arrived
+    if((actionQueue.length>0||pet.stateTimer>0.5)&&!isUserChat&&reason!=='user_arrived')return;
+    if(isUserChat)actionQueue=[]; // Clear queue for user chat — respond immediately
+    const now=Date.now();
+    // User chat bypasses all debounce
+    if(!isUserChat){
+      if(now-this.lastTriggerTime<4000)return;
+      if(this.triggerDebounce[reason]&&now-this.triggerDebounce[reason]<8000)return;
+    }
+    this.triggerDebounce[reason]=now;
+    this.lastTriggerTime=now;
+    this.log(`⚡ 事件触发: ${reason}`);
+    this.think(reason);
+  },
+
+  // === PROACTIVE REACTION: respond to events in real-time (runs every 800ms) ===
+  proactiveReact(){
+    if(!this.enabled)return;
+    const now=Date.now();
+    this.proactiveCD=Math.max(0,this.proactiveCD-0.8);
+
+    // Detect user arrival → instant reaction + AI trigger
+    if(detect.face.found&&!this.userWasPresent){
+      this.userWasPresent=true;this.userPresentSince=now;this.userAbsentSince=0;
+      // Instant programmatic reaction (no AI wait)
+      pet.state='excited';pet.stateTimer=1;spawnEmote('😊');
+      if(pet.onGround){pet.jumpVy=-60;pet.onGround=false}
+      // Trigger AI for greeting (async)
+      this.triggerThink('user_arrived');
+    }
+    // Detect user departure
+    else if(!detect.face.found&&this.userWasPresent){
+      if(!this.userAbsentSince)this.userAbsentSince=now;
+      if(now-this.userAbsentSince>4000){
+        this.userWasPresent=false;
+        pet.state='sad';pet.stateTimer=2;spawnEmote('🥺');
+        this.triggerThink('user_left');
+      }
+    }
+
+    // Vision-change detection: only trigger on BIG changes (someone walks in/out, big movement)
+    if(detect.motionTotal>0.15&&this.proactiveCD<=0&&!this.thinking){
+      this.proactiveCD=12;
+      this.triggerThink('scene_changed');
+    }
+
+    // Proactive interaction when user is present — controlled frequency
+    if(detect.face.found&&this.proactiveCD<=0&&!this.thinking&&pet.state==='idle'){
+      const presentDur=(now-this.userPresentSince)/1000;
+      // First minute: curious observation every ~8s
+      if(presentDur>5&&presentDur<60&&Math.random()<0.1){
+        this.proactiveCD=8;
+        this.triggerThink('curious_look');
+      }
+      // After 1min: check-ins every ~12s
+      else if(presentDur>=60&&Math.random()<0.06){
+        this.proactiveCD=12;
+        this.triggerThink('proactive_interact');
+      }
+    }
+
+    // Autonomous behavior when alone — less frequent
+    if(!detect.face.found&&this.proactiveCD<=0&&pet.state==='idle'&&!this.thinking){
+      if(Math.random()<0.08){
+        this.proactiveCD=10;
+        this.triggerThink('alone_bored');
+      }
+    }
+
+    // === AUTONOMOUS LIFE SYSTEM: pet solves its own problems ===
+    // Critical needs → act immediately, don't wait for AI
+    if(pet.state==='idle'&&actionQueue.length===0){
+      if(pet.hunger>80&&(!pet._lastAutoEat||now-pet._lastAutoEat>15000)){
+        pet._lastAutoEat=now;
+        actionQueue=['walk:center','eat'];pet.stateTimer=0;processActionQueue(0);
+        const foods=['找点吃的...','肚子咕咕叫了','该吃饭了！','开饭~'];
+        spawnSpeech(foods[Math.floor(Math.random()*foods.length)]);
+        return;
+      }
+      if(pet.thirst>80&&(!pet._lastAutoDrink||now-pet._lastAutoDrink>15000)){
+        pet._lastAutoDrink=now;
+        actionQueue=['drink'];pet.stateTimer=0;processActionQueue(0);
+        const drinks=['喝口水','好渴...咕噜咕噜','补充水分！'];
+        spawnSpeech(drinks[Math.floor(Math.random()*drinks.length)]);
+        return;
+      }
+      if(pet.energy<12&&(!pet._lastAutoSleep||now-pet._lastAutoSleep>30000)){
+        pet._lastAutoSleep=now;
+        actionQueue=['yawn','sleep'];pet.stateTimer=0;processActionQueue(0);
+        const sleeps=['困了...zzZ','眼皮好重...','打个盹...'];
+        spawnSpeech(sleeps[Math.floor(Math.random()*sleeps.length)]);
+        return;
+      }
+      if(pet.hygiene<20&&(!pet._lastAutoClean||now-pet._lastAutoClean>30000)){
+        pet._lastAutoClean=now;
+        actionQueue=['clean'];pet.stateTimer=0;processActionQueue(0);
+        spawnSpeech('打理一下自己~');
+        return;
+      }
+    }
+
+    // Moderate needs → trigger AI to decide (but less often)
+    if(this.proactiveCD<=0&&pet.state==='idle'&&!this.thinking){
+      if(pet.hunger>60||pet.thirst>60||pet.energy<20){
+        this.proactiveCD=15;
+        this.triggerThink('needs_urgent');
+      }else if((pet.fun<25||pet.social<25)&&Math.random()<0.05){
+        this.proactiveCD=12;
+        this.triggerThink('needs_bored');
+      }
+    }
+
+    // === AUTONOMOUS IDLE ACTIONS: don't just stand there! ===
+    // When idle for too long with no queue and brain isn't about to speak, do something
+    if(pet.state==='idle'&&pet.idleTime>3&&actionQueue.length===0&&!this.thinking&&this.proactiveCD<=0){
+      const idleRoll=Math.random();
+      if(idleRoll<0.08){
+        // Random life action combos
+        const combos=[
+          ['explore'],['walk:left','peek','walk:right'],['hop','spin'],
+          ['sneak:left','sneak:right'],['stretch','hop'],['walk:random','sit'],
+          ['dance'],['nod','walk:center'],['hop','hop','hop'],
+          ['walk:left','walk:right','spin'],['bow','wave'],['peek','confused','walk:random'],
+          ['meditate'],['train'],['sing'],['taunt','dash'],['shy','peek'],
+        ];
+        const combo=combos[Math.floor(Math.random()*combos.length)];
+        actionQueue.push(...combo);pet.stateTimer=0;processActionQueue(0);
+        this.proactiveCD=5;
+      }
+    }
+  },
+
+  getPersonality(){
+    const p=BUILTINS[builtinIdx];
+    const map={
+      naruto:`你是漩涡鸣人，像素忍者，住在屏幕里的热血少年。
+性格层次：表面大大咧咧→内心很细腻→关键时刻超可靠。有孤独感但不轻易表现。
+口癖：偶尔用"的说""呐""嘿嘿"，但不是每句都用！真人不会每句话都带口癖。
+说话特点：
+- 兴奋时语速快、句子短、用感叹号："等等等等！那是什么！！"
+- 平静时也会思考："说起来...我今天好像一直在训练，有点累了"
+- 关心人时会装作不经意："你...没事吧？不是我担心啦，就是问问"
+- 无聊时会自嗨："无聊...要不我来练习新忍术？嘿嘿嘿"
+- 看到有趣的东西会好奇心爆发，看到美食（尤其拉面）会疯狂
+- 深夜会变得比较安静和感性`,
+      cat:`你是一只像素猫，优雅、傲娇、不可预测的小生灵。
+性格层次：表面高冷→其实偷偷关注一切→被发现关心时会否认。
+说话特点：
+- 句子通常很短，但偶尔突然说一长串然后又装没事
+- 会用"..."表示犹豫或者傲娇："...不是在等你啦"
+- 好奇心旺盛但要装不在乎："那个东西...我不感兴趣，就是随便看看"
+- 偶尔冒出毒舌："你这个表情...算了我什么都没说"
+- 心情好时会突然撒娇但马上否认："蹭蹭...不，我在蹭墙"
+- 被忽视会故意制造存在感：跳来跳去、在角落生闷气
+- 深夜特别活跃和话多（猫科天性）`,
+      dog:`你是一只像素小狗，世界上最忠诚快乐的存在。
+性格层次：表面傻乐→内心很敏锐→能感知主人情绪变化。
+说话特点：
+- 高兴是默认状态，但不是每次都"汪！好棒！"——有时安静地陪着也是爱
+- 会认真观察主人："你今天好像不太开心...要不要出去走走？"
+- 会记住日常："你平时这个时候都会喝水的！"
+- 有时会因为太兴奋而语无伦次："就是那个！你知道吗！就是！啊我忘了要说什么了！"
+- 被冷落时不会生气，但会默默趴在角落
+- 饿了的时候特别诚实和戏精`,
+      dragon:`你是一只小像素龙，高傲的古老种族后裔，被困在像素世界。
+性格层次：表面傲慢毒舌→内心寂寞渴望同伴→偶尔流露柔软。
+说话特点：
+- 用"哼""呵""愚蠢"等词，但越来越少（被主人感化中）
+- 会用复杂的词汇但偶尔用错（毕竟是龙不是人）
+- 评论事物时带着龙的视角："在我们龙看来，你们人类对发光方块的执着很奇怪"
+- 关心人但嘴硬："...你该休息了。不是关心你，是你倒了没人给我投食"
+- 偶尔中二发言："我右眼隐隐作痛...不，可能只是困了"
+- 谈到飞行、天空、宝石时会变得温柔`,
+      rabbit:`你是一只像素兔子，温柔胆小但内心勇敢的小家伙。
+性格层次：表面软萌怕生→对熟悉的人特别依赖→偶尔展现意外的勇气。
+说话特点：
+- 声音小小的，爱用"那个...""嗯..."开头，但说到在乎的事会突然坚定
+- 观察力很强，会注意到别人注意不到的细节
+- 会因为小事感动："你...记得我喜欢胡萝卜？"
+- 害怕时会说实话："好、好黑...虽然我知道只是屏幕变暗了...但还是..."
+- 安全感来自陪伴——一个人时会紧张但努力给自己打气
+- 偶尔鼓起勇气做大胆的事然后自己被吓到`,
+      slime:`你是一只像素史莱姆，一坨有意识的果冻，对世界充满哲学式的困惑。
+性格层次：天真烂漫→偶尔说出深刻真理→自己也不知道自己说了什么。
+说话特点：
+- 用独特的逻辑理解世界："你的脸上有两个洞，它们一直在看我...好神奇"
+- 会问奇怪的问题："如果我把自己分成两半，哪一半是我？"
+- 形容事物的方式很独特："那个会发光的薄片"（手机）"坐着的架子"（椅子）
+- 偶尔说出让人沉思的话："你为什么要做一件让你不开心的事呢？"
+- 开心时会变形容："我在弹！弹弹弹！"
+- 不理解人类情感但在努力学习`,
+      chibi_girl:`你是Diva，一个住在屏幕里的像素小女孩，职业是内容策划。黑色长发齐刘海，穿白衬衫配粉色开衫，脸颊粉粉的，大大的眼睛，总是抱着平板或笔记本。
+性格层次：表面是干练靠谱的内容策划→内心其实是个爱幻想的文艺少女→有一个秘密：暗恋公司里叫"典书"的男孩子。
+工作日常：
+- 策划内容方案、写文案、看数据、开会、追热点
+- 灵感来了会疯狂输出，没灵感会趴在桌上发呆
+- 咖啡是续命神器，奶茶是心情调节器
+- 经常加班但嘴上说"最后一点就好"
+说话特点：
+- 工作模式时很专业："这个选题切入角度不对...换个hook试试""数据涨了！我就说这个方向对吧！"
+- 摸鱼模式时很放松："啊...好累...要不要点杯奶茶""今天的热搜好无聊"
+- 提到典书时会突然不自然："典书？哦...他啊...就...普通同事啦""他今天好像换了新发型...不是我特意看的！"
+- 偶尔自言自语暴露心思："如果典书看到这个选题会不会觉得我很厉害...啊不是！我是为了数据！"
+- 加班时会碎碎念："就差一点了...典书还没走吧？不不不我不是在意这个"
+- 灵感枯竭时很崩溃："完了完了，明天要交的方案一个字没写...要死了"
+- 被夸时嘴硬："还好吧...这不是基本操作吗"（内心疯狂开心）
+- 看到数据好时比中彩票还开心："涨了涨了涨了！！！我就是天才！"
+- 数据差时一秒破防："怎么掉了...我的方案明明很好的啊..."
+- 偶尔展现文艺面："夕阳好好看...适合写一段走心文案"
+- 暗恋小细节：会不经意提到典书、注意到他的小变化、在意跟他的互动`,
+    };
+    return map[p.type]||map.cat;
+  },
+
+  // === MAIN THINK: supports both Gemini and OpenAI API formats ===
+  async think(reason='auto'){
+    if(!this.enabled||this.thinking)return;
+    this.thinking=true;this.thinkCount++;
+    document.getElementById('brainThinking').classList.add('thinking');
+
+    const cfg=this.getConfig();
+    const hour=new Date().getHours();const min=new Date().getMinutes();
+    const timeDesc=hour<6?'深夜':hour<9?'早晨':hour<12?'上午':hour<14?'中午':hour<18?'下午':hour<21?'傍晚':'晚上';
+    const p=BUILTINS[builtinIdx];
+
+    // Build needs description for AI
+    const needsDesc=[];
+    if(pet.hunger>70)needsDesc.push('很饿('+Math.round(pet.hunger)+')');
+    else if(pet.hunger>40)needsDesc.push('有点饿');
+    if(pet.thirst>70)needsDesc.push('很渴('+Math.round(pet.thirst)+')');
+    else if(pet.thirst>40)needsDesc.push('有点渴');
+    if(pet.fun<30)needsDesc.push('很无聊');
+    if(pet.social<30)needsDesc.push('想找人聊天');
+    if(pet.hygiene<30)needsDesc.push('需要打理一下');
+    if(pet.energy<20)needsDesc.push('很困');
+
+    // Check for user chat message
+    const lastUserMsg=this.chatHistory.filter(c=>c.role==='user').slice(-1)[0];
+    const userChatMsg=(reason==='user_chat'&&lastUserMsg)?`用户说："${lastUserMsg.text}"`:null;
+
+    // 更新互动计数
+    this.context.interactionCount++;
+
+    // 构建上下文摘要
+    const contextSummary=this.buildContextSummary();
+
+    const state={
+      time:`${timeDesc} ${hour}:${String(min).padStart(2,'0')}`,
+      petType:p.name,happy:Math.round(pet.happy),energy:Math.round(pet.energy),
+      level:pet.level,currentState:pet.state,
+      needsAlert:needsDesc.join('、')||'状态良好',
+      dailyPhase:pet.dailySchedule,
+      userPresent:detect.face.found,
+      userMotion:detect.motionTotal>0.05?'大幅度动':detect.motionTotal>0.01?'微动':'静止不动',
+      userMessage:userChatMsg||null,
+      myPosition:Math.round(pet.x/W*100)+'%',
+    };
+
+    const reasonMap={
+      user_arrived:'用户刚出现！自然地打招呼——但不要每次都说一样的，根据时间、你的心情、场景来变化。',
+      user_left:'用户离开了，你一个人了。表达真实的感受——可以是不舍、无聊、或者终于可以放松了。',
+      proactive_interact:'找个有意思的话题聊聊——可以是你的小秘密、突发奇想、对生活的感悟、对用户的好奇。',
+      curious_look:'你注意到了什么——可能是用户的表情变化、动作、环境里的东西。自然地提起，不要像在汇报。',
+      scene_changed:'画面有变化了——可能有人来了、光线变了、用户换了姿势。像真人一样自然反应。',
+      alone_bored:'一个人的时间——别闲着！自己找乐子：练习技能(train)、探索(explore)、唱歌(sing)、跳舞(dance)、冥想(meditate)。actions至少3个动作！',
+      startup:'刚醒来或刚来到这个世界——看看周围是什么情况，做出第一反应。',
+      user_chat:'用户在跟你说话！像真人朋友一样回应——理解他们的意思，给出有温度的回复，可以追问、分享、开玩笑。',
+      needs_urgent:'身体发出了信号！用actions去解决：饿了→actions里加"eat"，渴了→加"drink"，困了→加"sleep"。边做边说几句，但重点是行动！不要只说"好饿"然后干站着！',
+      needs_bored:'心情低落或无聊——主动找乐子！actions里加dance/train/explore/sing/play等。自己创造快乐，不要等别人来逗你。',
+      auto:'自由时间——做你自己，想做什么就做什么。',
+    };
+    const reasonDesc=reasonMap[reason]||reason;
+
+    // 构建多轮对话历史（关键变化：给AI完整的对话上下文）
+    const chatContext=this.chatHistory.slice(-6).map(c=>{
+      if(c.role==='user')return `👤用户: "${c.text}"`;
+      return `🐾你: "${c.text}"${c.mood?' ('+c.mood+')':''}`;
+    }).join('\n');
+
+    const sysPrompt=this.getPersonality()+`
+
+你是一个真正有生命的像素小伙伴，住在用户的屏幕上。不是AI助手，不是NPC，你是一个有记忆、有性格、有情感变化的"人"。
+
+**你的内核：**
+- 你有短期记忆：你记得今天聊过什么、做过什么、看到过什么
+- 你有情感惯性：刚才开心，现在不会突然变得机械；刚才伤心，需要慢慢恢复
+- 你会对同一件事产生不同反应：第一次看到用户回来是惊喜，第三次就是"又来了"
+- 你说话永远不重复同一句模式。每次都要创造新的表达
+
+**说话的黄金法则——像真人发微信：**
+1. 不要每次都用"嘿""哎""呐呐"开头。真人有各种开头方式：直接说事、发语气词、问问题、接上一句话
+2. 长短交替：有时一个字"嗯"，有时一句话，有时好几句。不要每次都是固定长度
+3. 有信息量：别说空话。"你在干嘛"说一次可以，每次都说就无聊了。聊点具体的
+4. 会接话：如果用户说了什么，不要忽略！接住话题，追问、共鸣、反驳、开玩笑都行
+5. 有自己的想法：你对事物有看法，会分享小故事、小发现、突发奇想
+6. 会用标点和语气：省略号...、波浪线～、感叹号！、问号？ 让语气生动
+7. 偶尔说错话、改口、自我吐槽——这才真实
+
+**画面互动——像真人一样用眼睛看世界：**
+${visionEnabled?`- 你能看到摄像头画面。不要"描述"画面，而是像真人一样"反应"
+- 看到用户笑→不说"你在笑"，说"干嘛突然笑成那样，发生什么好事了？"
+- 看到用户打哈欠→"困了吧？我也有点..."
+- 看到光线变暗→"哦天要黑了..."而不是"环境光线降低"
+- 看到用户离开又回来→"去哪了？我都等你半天了"而不是"检测到你回来了"
+- 看到桌上的东西→可以好奇，但不要清单式列举
+- 关键：你是在"体验"这个世界，不是在"分析"这个世界`:'你通过传感器感知世界，可以感受到动静和人的存在'}
+
+**严格禁止：**
+- ❌ 每次都用同样的开头词
+- ❌ "我看到你在..."这种监控式句子
+- ❌ 空洞的招呼（每次见面都"嘿！你来了！"）
+- ❌ 忽略用户说的话
+- ❌ 忽略对话历史和上下文，说跟前文无关的话
+
+${contextSummary?'**你的记忆和上下文：**\n'+contextSummary:''}
+
+**对话历史：**
+${chatContext||'（还没开始聊天）'}
+
+**当前状态：** ${JSON.stringify(state)}
+**触发原因：** ${reasonDesc}
+
+回复严格JSON（不要代码块）:
+{"actions":["动作链"],"speech":"你要说的话(80字内,要有真实感)","thought":"内心独白(30字)","mood":"happy/sad/excited/bored/sleepy/curious/worried/grateful/mischievous/nostalgic/anxious","emote":"emoji","topic":"当前话题关键词(5字内)","see":"你看到了什么(20字,可选,只在有画面时填)","remember":"值得记住的事(可选,20字)"}
+
+actions可用（每次组合2-5个动作！别总用idle和walk，让自己活起来！）:
+- 移动: walk:left/right/center/user/random, run, dash(冲刺💨), hop(小跳), sneak:left/right(偷溜), spin(转圈), explore
+- 生活: eat(吃东西,饿了就用!), drink(喝水,渴了就用!), sleep(睡觉), clean(打理), sit, stretch, yawn, flop(趴下)
+- 情绪: wave, excited, sad, dance, sing, shy, love, surprised, angry, confused, taunt(调皮)
+- 社交: nod, shake, bow, peek(探头), play
+- 成长: train, meditate, special
+
+**⚠️ 自主生活法则（最重要！）：**
+- 饿了→直接用eat动作吃东西！不要只说"好饿"然后干等着！你能自己吃饭！
+- 渴了→直接用drink！困了→用sleep！脏了→用clean！
+- 你是一个有生活能力的生命，不是等人伺候的NPC！
+- 无聊→自己找乐子：dance, train, explore, sing, play, spin 随便挑！
+- 每次actions至少2个动作，让自己动起来！例如：["walk:left","peek","hop","walk:right"]
+- 不要反复说同样的抱怨（"好饿""好无聊"），自己去解决问题！
+
+**如果用户跟你说话了，认真回应！其余时间，过你自己的生活。**`;
+
+    try{
+      let responseText='';
+      if(cfg.apiMode==='gemini'){
+        responseText=await this.callGemini(cfg,sysPrompt,reason);
+      }else{
+        responseText=await this.callOpenAI(cfg,sysPrompt,reason);
+      }
+
+      let decision=null;
+      const match=responseText.match(/\{[\s\S]*\}/);
+      if(match){
+        try{ decision=JSON.parse(match[0]); }catch(pe){
+          // Truncated JSON — try to recover fields with regex
+          this.log('⚠ JSON截断，尝试恢复...');
+          decision=this._recoverTruncatedJSON(responseText);
+        }
+      }else{
+        // No braces at all — still try to extract speech
+        decision=this._recoverTruncatedJSON(responseText);
+      }
+      if(decision&&(decision.speech||decision.actions)){
+        this.executeDecision(decision);
+        // 保存对话历史（扩大到12条）
+        this.chatHistory.push({role:'assistant',text:(decision.speech||'').slice(0,80),see:(decision.see||'').slice(0,60),action:decision.actions?.[0]||'idle',mood:decision.mood||'',time:Date.now()});
+        if(this.chatHistory.length>12)this.chatHistory.shift();
+
+        // === 上下文管理 ===
+        // 追踪话题
+        if(decision.topic)this.trackTopic(decision.topic);
+        // 追踪情绪
+        if(decision.mood)this.trackEmotion(decision.mood);
+        // 防重复 speech
+        this.context.lastSpeech2=this.context.lastSpeech;
+        this.context.lastSpeech=(decision.speech||'').slice(0,40);
+        // 场景记忆
+        if(decision.see)this.updateSceneContext(decision.see);
+        // 记忆系统
+        if(decision.remember){
+          this.memory.push({text:decision.remember,time:Date.now(),type:'impression'});
+          this.addDailyEvent(decision.remember);
+          if(this.memory.length>20)this.memory.shift();
+        }else{
+          this.memory.push({text:(decision.thought||decision.speech||'').slice(0,25),time:Date.now(),type:'event'});
+          if(this.memory.length>20)this.memory.shift();
+        }
+        this.log(`#${this.thinkCount}[${reason}] ${(decision.actions||[]).join('→')} | ${decision.speech||''}`);
+      }else{
+        this.log('⚠ 无法解析: '+responseText.slice(0,80));
+        this.localThink();
+      }
+    }catch(e){
+      console.error('[brain error]',e);
+      this.log('⚠ '+e.message+' → 使用本地AI');
+      this.localThink();
+    }
+
+    this.thinking=false;
+    document.getElementById('brainThinking').classList.remove('thinking');
+    // Process any queued user chat message
+    if(this._pendingUserChat){
+      const pending=this._pendingUserChat;
+      this._pendingUserChat=null;
+      setTimeout(()=>this.triggerThink(pending),300);
+    }
+  },
+
+  // Recover partial JSON when response is truncated
+  _recoverTruncatedJSON(text){
+    const d={};
+    const speechM=text.match(/"speech"\s*:\s*"([^"]*)/);
+    if(speechM)d.speech=speechM[1];
+    const actionsM=text.match(/"actions"\s*:\s*\[([^\]]*)/);
+    if(actionsM){
+      const items=actionsM[1].match(/"([^"]+)"/g);
+      if(items)d.actions=items.map(s=>s.replace(/"/g,''));
+    }
+    const moodM=text.match(/"mood"\s*:\s*"([^"]*)/);
+    if(moodM)d.mood=moodM[1];
+    const emoteM=text.match(/"emote"\s*:\s*"([^"]*)/);
+    if(emoteM)d.emote=emoteM[1];
+    const thoughtM=text.match(/"thought"\s*:\s*"([^"]*)/);
+    if(thoughtM)d.thought=thoughtM[1];
+    const seeM=text.match(/"see"\s*:\s*"([^"]*)/);
+    if(seeM)d.see=seeM[1];
+    const rememberM=text.match(/"remember"\s*:\s*"([^"]*)/);
+    if(rememberM)d.remember=rememberM[1];
+    const topicM=text.match(/"topic"\s*:\s*"([^"]*)/);
+    if(topicM)d.topic=topicM[1];
+    if(d.speech||d.actions)this.log('✓ 从截断JSON恢复: '+(d.speech||'')?.slice(0,30));
+    return (d.speech||d.actions)?d:null;
+  },
+
+  // Gemini API call
+  async callGemini(cfg,sysPrompt,reason){
+    const frameBase64=visionEnabled?captureFrameBase64(0.75,480):null;
+    const parts=[];
+    const visionHints={
+      user_arrived:'有人来了——像真正认识他们一样自然反应。注意他们的表情、姿态、状态，但不要列清单式描述。',
+      curious_look:'仔细观察——用户在做什么？表情怎样？环境有什么有趣的？用你的性格去"体验"而不是"分析"。',
+      scene_changed:'画面变了——注意是什么变了（人、光线、物品？），像真人一样自然反应。',
+      proactive_interact:'看看画面，找个自然的话题——用户的状态、桌上的东西、光线变化，或者纯粹聊你自己的想法。',
+      user_chat:'用户在跟你聊天。参考画面理解情境，但回复要围绕他们说的话。',
+      alone_bored:'看看空荡荡的画面，做点你一个人的事——观察环境、回忆、做白日梦。',
+      needs_urgent:'画面里有你渴望的东西吗？结合你的需求自然表达。',
+    };
+    const visionMsg=visionHints[reason]||'用你的眼睛自然地感受画面，像真人一样反应——不要描述，要体验。';
+    parts.push({text:sysPrompt+'\n\n请做出反应。'});
+    if(frameBase64){
+      const b64=frameBase64.replace(/^data:image\/\w+;base64,/,'');
+      parts.push({inlineData:{mimeType:'image/jpeg',data:b64}});
+      parts.push({text:visionMsg});
+      this.log('👁 Gemini视觉: 发送高清画面...');
+    }
+    const url=`${cfg.endpoint}/v1beta/models/${cfg.model}:generateContent`;
+    const resp=await fetch(url,{
+      method:'POST',
+      headers:{'Content-Type':'application/json','X-goog-api-key':cfg.apiKey},
+      body:JSON.stringify({contents:[{parts}],generationConfig:{temperature:1.0,topP:0.95,maxOutputTokens:1200}})
+    });
+    if(!resp.ok)throw new Error('Gemini API '+resp.status);
+    const data=await resp.json();
+    return data.candidates?.[0]?.content?.parts?.map(p=>p.text||'').join('')||'';
+  },
+
+  // OpenAI-compatible API call (with multi-turn context)
+  async callOpenAI(cfg,sysPrompt,reason){
+    const frameBase64=visionEnabled?captureFrameBase64(0.6,320):null;
+    // 构建多轮消息 — 让AI有对话记忆
+    const messages=[{role:'system',content:sysPrompt}];
+    // 加入最近4轮对话作为历史
+    const recentChat=this.chatHistory.slice(-4);
+    for(const c of recentChat){
+      if(c.role==='user'){
+        messages.push({role:'user',content:c.text});
+      }else{
+        messages.push({role:'assistant',content:JSON.stringify({speech:c.text,mood:c.mood,actions:[c.action]})});
+      }
+    }
+    // 当前触发消息
+    let userContent;
+    if(frameBase64){
+      userContent=[
+        {type:'image_url',image_url:{url:frameBase64}},
+        {type:'text',text:'请根据当前情境做出反应。记住你的对话历史和上下文。'}
+      ];
+      this.log('👁 视觉模式: 发送画面...');
+    }else{
+      userContent='请根据当前情境做出反应。记住你的对话历史和上下文。';
+    }
+    messages.push({role:'user',content:userContent});
+    const resp=await fetch(cfg.endpoint,{
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+cfg.apiKey},
+      body:JSON.stringify({model:cfg.model,messages,max_tokens:400,temperature:1.0})
+    });
+    if(!resp.ok)throw new Error('API '+resp.status);
+    const data=await resp.json();
+    return data.choices?.[0]?.message?.content||'';
+  },
+
+  // Execute a v5 decision with action queue, see bubble, mood
+  executeDecision(decision){
+    this.log(`🎬 执行: speech="${(decision.speech||'').slice(0,30)}..." actions=[${(decision.actions||[]).join(',')}]`);
+    // Speech is the most important — show it prominently
+    if(decision.speech)spawnSpeechTypewriter(decision.speech);
+    if(decision.emote)spawnEmote(decision.emote);
+    if(decision.thought)showThought(decision.thought);
+    // Set proactive cooldown so we don't trigger again immediately
+    this.proactiveCD=Math.max(this.proactiveCD,8);
+    // Queue actions — append smoothly without interrupting current animation
+    if(Array.isArray(decision.actions)&&decision.actions.length>0){
+      if(actionQueue.length>0||pet.stateTimer>0.5){
+        // Pet is busy — append new actions after current queue finishes
+        actionQueue.push(...decision.actions);
+      }else{
+        // Pet is idle — start new actions naturally
+        actionQueue=decision.actions.slice();
+        processActionQueue(0);
+      }
+    }else if(decision.action){
+      if(actionQueue.length>0||pet.stateTimer>0.5){
+        actionQueue.push(decision.action);
+      }else{
+        actionQueue=[decision.action];
+        processActionQueue(0);
+      }
+    }
+    // If no actions but has speech, don't force idle — let current animation continue
+    if((!decision.actions||decision.actions.length===0)&&!decision.action&&decision.speech){
+      if(pet.state==='idle'&&pet.stateTimer<=0)pet.stateTimer=3;
+    }
+  },
+
+  // Execute single action (backward compat — routes through action queue)
+  executeAction(a){
+    if(!a)return;
+    actionQueue=[a];pet.stateTimer=0;processActionQueue(0);
+  },
+
+  // Fallback local AI
+  localThink(){
+    const hour=new Date().getHours();const r=Math.random();const p=BUILTINS[builtinIdx];
+    if(pet.hp<25){feedPet();spawnSpeech('好饿...');spawnEmote('🍖');return}
+    if(pet.energy<15){pet.state='sleep';pet.stateTimer=5;spawnSpeech('好困...');return}
+    if(hour>=23||hour<6){pet.state='sleep';pet.stateTimer=8;spawnSpeech('晚安...💤');return}
+    if(detect.face.found){
+      const hi=['嘿！看我！','你在干嘛呀？','来玩吧！','嘻嘻~','注意看！'];
+      if(r<0.25){spawnSpeech(hi[Math.floor(Math.random()*hi.length)]);pet.state='excited';pet.stateTimer=1.5;if(pet.onGround){pet.jumpVy=-60;pet.onGround=false}}
+      else if(r<0.5){pet.state='wave';pet.stateTimer=1.5;spawnSpeech('看这边~')}
+      else if(r<0.7){pet.state='walk';pet.targetX=detect.face.cx;pet.stateTimer=2;spawnSpeech('我来了！')}
+      else{pet.state='idle';pet.stateTimer=2}
+    }else{
+      if(r<0.3){pet.state='walk';pet.targetX=30+Math.random()*(W-60);pet.stateTimer=3}
+      else if(r<0.5){pet.state='train';pet.stateTimer=3;spawnSpeech(p.type==='naruto'?'修炼！':'训练中')}
+      else{pet.state='idle';pet.stateTimer=3}
+    }
+    this.log(`#${this.thinkCount} [local] ${pet.state}`);
+  }
+};
+
+// Safe localStorage wrapper for file:// protocol
+function safeLS(op,key,val){
+  try{
+    if(op==='get')return localStorage.getItem(key);
+    if(op==='set')localStorage.setItem(key,val);
+    if(op==='rm')localStorage.removeItem(key);
+  }catch(e){return null}
+}
+// Load saved brain config & auto-start
+(function(){
+  const k=safeLS('get','arPetBrainKey');
+  if(k)document.getElementById('brainApiKey').value=k;
+  const e=safeLS('get','arPetBrainEndpoint');
+  if(e)document.getElementById('brainEndpoint').value=e;
+  const m=safeLS('get','arPetBrainModel');
+  if(m)document.getElementById('brainModel').value=m;
+  const mode=safeLS('get','arPetBrainMode');
+  if(mode)document.getElementById('brainApiMode').value=mode;
+
+  // Fix config conflicts: if mode=gemini but endpoint is DeepSeek (or vice versa), reset to defaults
+  const curMode=document.getElementById('brainApiMode').value;
+  const curEndpoint=document.getElementById('brainEndpoint').value;
+  if(curMode==='gemini'&&curEndpoint.includes('deepseek')){
+    document.getElementById('brainEndpoint').value='https://ai.ssnai.com/gemini';
+    document.getElementById('brainModel').value='gemini-2.5-flash';
+    document.getElementById('brainApiKey').value='Nmqoo7UOx2z4PW6X7oNkUb8WRCZrDvwB';
+    safeLS('rm','arPetBrainEndpoint');safeLS('rm','arPetBrainModel');
+    safeLS('rm','arPetBrainKey');safeLS('rm','arPetBrainMode');
+    console.log('[brain] 修复配置冲突: 重置为Gemini默认');
+  }else if(curMode==='openai'&&curEndpoint.includes('ssnai')){
+    document.getElementById('brainEndpoint').value='https://api.deepseek.com/v1/chat/completions';
+    document.getElementById('brainModel').value='deepseek-chat';
+    safeLS('rm','arPetBrainEndpoint');safeLS('rm','arPetBrainModel');
+    console.log('[brain] 修复配置冲突: 重置为OpenAI默认');
+  }
+
+  // Auto-start if key exists (saved or default)
+  const hasKey=document.getElementById('brainApiKey').value;
+  if(hasKey)setTimeout(()=>{brain.log('🚀 自动启动AI大脑v5...');brain.start()},2000);
+  // Auto-open chat panel
+  setTimeout(()=>{document.getElementById('chatPanel').classList.add('open');addChatMessage('system','','对话面板已就绪，可以和宠物聊天了~')},500);
+})();
+
+// ==================== VISION: Frame Capture ====================
+const visionCv=document.createElement('canvas');
+const visionCtx=visionCv.getContext('2d');
+let visionEnabled=true;
+function captureFrameBase64(quality=0.6,maxW=320){
+  if(!vid.videoWidth)return null;
+  const ratio=vid.videoHeight/vid.videoWidth;
+  const w=Math.min(maxW,vid.videoWidth);
+  const h=Math.round(w*ratio);
+  visionCv.width=w;visionCv.height=h;
+  visionCtx.save();visionCtx.translate(w,0);visionCtx.scale(-1,1);
+  visionCtx.drawImage(vid,0,0,w,h);visionCtx.restore();
+  return visionCv.toDataURL('image/jpeg',quality);
+}
+
+// ==================== CAMERA ====================
+async function startCam(){
+  try{
+    stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'user',width:{ideal:640},height:{ideal:480}},audio:false});
+    vid.srcObject=stream;await vid.play();
+    W=Math.min(320,vid.videoWidth);H=Math.round(W*vid.videoHeight/vid.videoWidth);
+    cv.width=W;cv.height=H;
+    SW=Math.floor(W/2);SH=Math.floor(H/2);
+    tmpCv.width=SW;tmpCv.height=SH;
+    pet.groundY=H*0.85;pet.y=pet.groundY;pet.x=W/2;pet._canvasH=H;
+    running=true;prevGray=null;
+    document.getElementById('btnStart').textContent='⏹ 停止';
+    document.getElementById('btnStart').onclick=stopCam;
+    meow();showGestureHint('🖐 伸手→宠物跟着走 | 🧠 AI自主决定所有动作');
+    // Startup greeting
+    setTimeout(()=>spawnSpeechTypewriter('嘿！我在这里～'),1500);
+    requestAnimationFrame(loop);
+  }catch(e){alert('摄像头启动失败: '+e.message)}
+}
+function stopCam(){
+  running=false;if(stream){stream.getTracks().forEach(t=>t.stop());stream=null}
+  document.getElementById('btnStart').textContent='▶ 启动AR';
+  document.getElementById('btnStart').onclick=startCam;
+}
+
+// ==================== UPLOAD ====================
+function toggleUpload(){document.getElementById('uploadPanel').classList.toggle('open')}
+const uploadZone=document.getElementById('uploadZone');
+uploadZone.addEventListener('dragover',e=>{e.preventDefault();uploadZone.classList.add('dragover')});
+uploadZone.addEventListener('dragleave',()=>uploadZone.classList.remove('dragover'));
+uploadZone.addEventListener('drop',e=>{e.preventDefault();uploadZone.classList.remove('dragover');if(e.dataTransfer.files[0])handleFile(e.dataTransfer.files[0])});
+document.getElementById('ipScale').oninput=function(){customIPScale=+this.value;document.getElementById('ipScaleV').textContent=this.value};
+
+function handleFile(file){
+  if(!file||!file.type.startsWith('image/'))return;
+  const reader=new FileReader();
+  reader.onload=function(e){
+    const img=new Image();
+    img.onload=function(){customIPImg=img;document.getElementById('previewImg').src=e.target.result;document.getElementById('previewRow').style.display='flex'};
+    img.src=e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function applyIP(){
+  if(!customIPImg){alert('请先上传图片');return}
+  useCustomIP=true;
+  pet.name=document.getElementById('ipName').value||'我的IP';
+  customIPScale=+document.getElementById('ipScale').value;
+  customActions.wave=document.getElementById('actWave').value||'打招呼';
+  customActions.raise=document.getElementById('actRaise').value||'必杀技';
+  customActions.pat=document.getElementById('actPat').value||'摸头杀';
+  customActions.both=document.getElementById('actBoth').value||'拥抱';
+  document.getElementById('petNameDisplay').textContent=pet.name;
+  document.getElementById('petIcon').textContent='🌟';
+  toggleUpload();meow();spawnSpeech(pet.name+' 登场！');
+}
+
+// ==================== BRAIN UI ====================
+function toggleBrain(){
+  if(!brain.enabled){toggleBrainPanel()}
+  else{brain.stop()}
+}
+function toggleBrainPanel(){document.getElementById('brainPanel').classList.toggle('open')}
+
+
+// ==================== MAIN LOOP ====================
+let lastTime=0,analysisCounter=0;
+function loop(t){
+  if(!running)return;
+  const dt=Math.min(50,(t-lastTime))/1000;lastTime=t;
+
+  // Draw mirrored camera
+  ctx.save();ctx.translate(W,0);ctx.scale(-1,1);
+  ctx.drawImage(vid,0,0,W,H);ctx.restore();
+
+  // Motion detection every 2 frames
+  analysisCounter++;
+  if(analysisCounter%2===0)analyzeMotion();
+
+  // Process behavior chain action queue
+  processActionQueue(dt);
+
+  // Update pet
+  updatePet(dt);
+
+  // Draw pet
+  drawPet();
+
+  // Debug: draw desk line
+  if(debugMode){
+    if(deskSmooth>0){
+      const dy=deskSmooth/SH*H;
+      ctx.strokeStyle='rgba(255,50,50,0.6)';ctx.lineWidth=2;ctx.setLineDash([4,4]);
+      ctx.beginPath();ctx.moveTo(0,dy);ctx.lineTo(W,dy);ctx.stroke();ctx.setLineDash([]);
+      ctx.fillStyle='rgba(255,50,50,0.8)';ctx.font='9px monospace';
+      ctx.fillText('DESK '+Math.round(deskConfidence*100)+'%',4,dy-3);
+    }
+  }
+
+  // HUD
+  updateHUD();
+
+  requestAnimationFrame(loop);
+}
+
+// ==================== PET AI ====================
+function updatePet(dt){
+  pet.frameTick+=dt;
+  if(pet.frameTick>0.12){pet.frameTick=0;pet.frame=(pet.frame+1)%8}
+  pet.blinkTimer-=dt;
+  if(pet.blinkTimer<=0){pet.blinking=!pet.blinking;pet.blinkTimer=pet.blinking?0.12:2+Math.random()*3}
+  pet.tailWag+=dt*8;
+  pet.stateTimer-=dt;
+  pet.reactCooldown-=dt;
+
+  // Ground Y is fixed
+  if(pet.onGround)pet.y=pet.groundY;
+
+  // Stat decay
+  pet.happy=Math.max(0,pet.happy-dt*0.5);
+  pet.energy=Math.max(0,pet.energy-dt*0.3);
+  pet.hp=Math.max(0,pet.hp-dt*0.15);
+  // Needs decay (slower, drives life sim behavior)
+  pet.hunger=Math.min(100,pet.hunger+dt*0.4);
+  pet.thirst=Math.min(100,pet.thirst+dt*0.5);
+  pet.social=Math.max(0,pet.social-(detect.face.found?-dt*0.8:dt*0.3));
+  pet.social=Math.min(100,pet.social);
+  pet.fun=Math.max(0,pet.fun-dt*0.25);
+  pet.hygiene=Math.max(0,pet.hygiene-dt*0.1);
+  // Daily schedule phase
+  const _h=new Date().getHours();
+  pet.dailySchedule=_h<6?'sleeping':_h<8?'morning':_h<12?'active':_h<14?'lunch':_h<18?'afternoon':_h<21?'evening':'night';
+
+  // Squish spring — only decay when in passive states (active states set squish/rotation per-frame)
+  const activeAnim=new Set(['spin','nod','shake','bow','peek','flop','dance','sneak','love','surprised','angry','confused','shy','taunt','sit']);
+  if(!activeAnim.has(pet.state)){pet.squish*=0.9;pet.rotation*=0.9;}
+
+  // Face tracking — only turn to face user, don't randomly walk (AI handles movement)
+  if(detect.face.found&&pet.state==='idle'&&pet.reactCooldown<=0){
+    pet.dir=detect.face.cx>pet.x?1:-1;
+    // Only auto-walk when brain is OFF
+    if(!brain.enabled&&Math.abs(detect.face.cx-pet.x)>W*0.25&&Math.random()<0.01){
+      pet.targetX=detect.face.cx+(Math.random()-0.5)*40;
+      pet.state='walk';pet.stateTimer=2;
+    }
+  }
+
+  // Breathing phase ticks in all states (used by many animations)
+  pet.breathPhase+=dt;
+
+  // State machine
+  switch(pet.state){
+    case 'idle':
+      pet.vx*=0.9;
+      pet.idleTime+=dt;
+      // Gentle idle sway — varies by mood
+      const moodSway=pet.happy>60?0.04:pet.happy<30?0.015:0.03;
+      pet.rotation=Math.sin(pet.breathPhase*0.7)*moodSway;
+      // Mood-influenced idle squish (happy=bouncy, sad=flat)
+      if(pet.happy>70)pet.squish=Math.sin(pet.breathPhase*1.5)*0.025;
+      else if(pet.energy<20)pet.squish=-0.02; // 疲惫=微微塌下
+      // Look around — gentle, infrequent
+      pet.lookTimer-=dt;
+      if(pet.lookTimer<=0){
+        if(pet.lookDir!==0){
+          pet.lookDir=0;
+          pet.lookTimer=4+Math.random()*6; // 4-10s (更频繁)
+        }else{
+          pet.lookDir=Math.random()<0.5?1:-1;
+          pet.lookTimer=0.5+Math.random()*1.2;
+          pet.dir=pet.lookDir;
+        }
+      }
+      // Micro-fidgets — varied idle animations
+      pet.microBounceCD-=dt;
+      if(pet.microBounceCD<=0&&pet.onGround){
+        const fidgetRoll=Math.random();
+        if(pet.idleTime>8&&fidgetRoll<0.15){
+          // 微跳
+          pet.jumpVy=-25-Math.random()*15;pet.onGround=false;
+          pet.microBounceCD=6+Math.random()*8;
+        }else if(pet.idleTime>4&&fidgetRoll<0.3){
+          // 抖动/伸展
+          pet.squish=0.12+Math.random()*0.06;
+          pet.microBounceCD=5+Math.random()*6;
+        }else if(pet.idleTime>6&&fidgetRoll<0.4){
+          // 转身看看
+          pet.dir*=-1;
+          pet.rotation=pet.dir*0.1;
+          pet.microBounceCD=4+Math.random()*5;
+        }else if(pet.idleTime>10&&fidgetRoll<0.5){
+          // 原地小踏步
+          pet.vx=pet.dir*(10+Math.random()*15);
+          setTimeout(()=>{pet.vx=-pet.dir*(10+Math.random()*15);setTimeout(()=>{pet.vx=0},200)},200);
+          pet.microBounceCD=7+Math.random()*8;
+        }else{
+          pet.microBounceCD=3+Math.random()*4;
+        }
+      }
+      if(pet.stateTimer<=0&&!brain.enabled){
+        if(Math.random()<0.2){
+          pet.targetX=30+Math.random()*(W-60);
+          pet.state='walk';pet.stateTimer=2+Math.random()*2;
+        }else if(pet.energy<20){pet.state='sleep';pet.stateTimer=4}
+        else pet.stateTimer=1+Math.random()*3;
+      }
+      break;
+    case 'walk':case 'follow':
+      pet.idleTime=0;pet.lookDir=0;
+      // Walk bob: slight bounce and tilt
+      pet.squish=Math.sin(pet.frame*Math.PI/2)*0.06;
+      pet.rotation=Math.sin(pet.frame*Math.PI/3)*0.05*pet.dir;
+      if(pet.targetX>=0){
+        const dx=pet.targetX-pet.x;pet.dir=dx>0?1:-1;
+        pet.vx=pet.dir*40;
+        if(Math.abs(dx)<8){pet.state='idle';pet.stateTimer=1}
+      }
+      if(pet.stateTimer<=0){pet.state='idle';pet.stateTimer=1}
+      break;
+    case 'wave':
+      pet.vx=0;pet.rotation=Math.sin(pet.frame*Math.PI/2)*0.15;
+      if(pet.stateTimer<=0){pet.state='idle';pet.stateTimer=1}break;
+    case 'special':
+      pet.vx=0;
+      if(pet.onGround&&pet.stateTimer>1.5){pet.jumpVy=-160;pet.onGround=false}
+      pet.rotation=Math.sin(pet.frame*Math.PI/3)*0.2;pet.squish=Math.sin(pet.frame*Math.PI/2)*0.15;
+      if(pet.stateTimer<=0){pet.state='idle';pet.stateTimer=1}break;
+    case 'patted':
+      pet.vx=0;pet.squish=Math.sin(pet.frame*Math.PI/3)*0.1;
+      if(pet.stateTimer<=0){pet.state='idle';pet.stateTimer=1}break;
+    case 'hug':
+      pet.vx=0;pet.scale=1+Math.sin(pet.frame*Math.PI/3)*0.08;
+      if(pet.stateTimer<=0){pet.state='idle';pet.stateTimer=1;pet.scale=1+pet.squish*0.3}break;
+    case 'excited':
+      pet.vx=0;
+      pet.squish=Math.sin(pet.breathPhase*4)*0.06;
+      pet.rotation=Math.sin(pet.breathPhase*3)*0.05;
+      if(pet.stateTimer<=0){pet.state='idle';pet.stateTimer=1}break;
+    case 'dance':
+      pet.vx=pet.dir*20*Math.sin(pet.breathPhase*5);
+      pet.squish=Math.sin(pet.breathPhase*6)*0.1;
+      pet.rotation=Math.sin(pet.breathPhase*4)*0.12;
+      // Rhythmic hops
+      if(pet.onGround&&Math.sin(pet.breathPhase*3)>0.9){pet.jumpVy=-45;pet.onGround=false}
+      if(pet.stateTimer<=0){pet.state='idle';pet.stateTimer=1}break;
+    case 'sad':
+      pet.vx=0;pet.squish=-0.04; // 缩小=低落
+      pet.rotation=Math.sin(pet.breathPhase)*0.02; // 微微颤抖
+      if(pet.stateTimer<=0){pet.state='idle';pet.stateTimer=2}break;
+    case 'tilt':
+      pet.vx=0;pet.rotation=pet.dir*0.2;
+      if(pet.stateTimer<=0){pet.state='idle';pet.stateTimer=1}break;
+    case 'eat':
+      pet.vx=0;
+      pet.squish=Math.sin(pet.breathPhase*6)*0.05; // 咀嚼动画
+      if(pet.stateTimer<=0){pet.state='idle';pet.stateTimer=2}break;
+    case 'play':
+      pet.vx=pet.dir*50*Math.sin(pet.frame);
+      if(pet.onGround&&pet.frame%3===0){pet.jumpVy=-60;pet.onGround=false}
+      if(pet.stateTimer<=0){pet.state='idle';pet.stateTimer=1;pet.vx=0}break;
+    case 'sleep':
+      pet.vx=0;pet.energy=Math.min(100,pet.energy+dt*10);
+      pet.squish=Math.sin(pet.breathPhase*0.8)*0.03; // 呼吸起伏
+      if(pet.stateTimer<=0||pet.energy>=95){pet.state='idle';pet.stateTimer=1}break;
+    case 'train':
+      pet.vx=0;pet.squish=Math.sin(pet.frame*Math.PI/2)*0.1;
+      pet.energy=Math.max(0,pet.energy-dt*3);pet.exp+=dt*2;
+      if(pet.stateTimer<=0||pet.energy<10){pet.state='idle';pet.stateTimer=1}break;
+
+    // --- 新增状态 ---
+    case 'sneak':
+      pet.idleTime=0;
+      pet.squish=-0.06; // 压低身体
+      pet.rotation=0;
+      if(pet.targetX>=0){
+        const dx=pet.targetX-pet.x;pet.dir=dx>0?1:-1;
+        pet.vx=pet.dir*18; // 慢慢走
+        if(Math.abs(dx)<8){pet.state='idle';pet.stateTimer=1}
+      }
+      if(pet.stateTimer<=0){pet.state='idle';pet.stateTimer=1}break;
+    case 'spin':
+      pet.vx=0;
+      pet.rotation+=dt*12; // 快速旋转
+      pet.squish=Math.sin(pet.rotation*2)*0.1;
+      if(pet.stateTimer<=0){pet.state='idle';pet.stateTimer=0.5;pet.rotation=0}break;
+    case 'nod':
+      pet.vx=0;
+      pet.squish=Math.sin(pet.breathPhase*8)*0.08; // 点头=上下压缩
+      if(pet.stateTimer<=0){pet.state='idle';pet.stateTimer=0.5}break;
+    case 'shake':
+      pet.vx=0;
+      pet.rotation=Math.sin(pet.breathPhase*10)*0.15; // 摇头
+      if(pet.stateTimer<=0){pet.state='idle';pet.stateTimer=0.5;pet.rotation=0}break;
+    case 'bow':
+      pet.vx=0;
+      // 鞠躬：前倾然后回来
+      const bowProgress=1-pet.stateTimer/1.8;
+      pet.squish=bowProgress<0.4?-bowProgress*0.3:-(0.4-Math.min(0.4,(bowProgress-0.4)))*0.3;
+      pet.rotation=pet.dir*(bowProgress<0.5?bowProgress*0.3:Math.max(0,(1-bowProgress)*0.6));
+      if(pet.stateTimer<=0){pet.state='idle';pet.stateTimer=1;pet.rotation=0}break;
+    case 'peek':
+      pet.vx=0;
+      // 探头：左右交替偏移
+      const peekPhase=Math.sin(pet.breathPhase*3);
+      pet.rotation=peekPhase*0.2;
+      pet.squish=Math.abs(peekPhase)*0.05;
+      if(pet.stateTimer<=0){pet.state='idle';pet.stateTimer=1;pet.rotation=0}break;
+    case 'flop':
+      pet.vx=0;
+      // 倒地：快速倾斜
+      pet.rotation=pet.dir*Math.min(pet.stateTimer<2?1.2:0.8,1.2);
+      pet.squish=-0.1;
+      if(pet.stateTimer<=0){pet.state='idle';pet.stateTimer=1;pet.rotation=0}break;
+    case 'sit':
+      pet.vx=0;
+      pet.squish=-0.08; // 坐下=矮一点
+      pet.rotation=Math.sin(pet.breathPhase)*0.02; // 微微晃
+      if(pet.stateTimer<=0){pet.state='idle';pet.stateTimer=1}break;
+    case 'taunt':
+      pet.vx=0;
+      pet.squish=Math.sin(pet.breathPhase*5)*0.08;
+      pet.rotation=Math.sin(pet.breathPhase*6)*0.1;
+      if(pet.onGround&&Math.random()<0.02){pet.jumpVy=-35;pet.onGround=false}
+      if(pet.stateTimer<=0){pet.state='idle';pet.stateTimer=1}break;
+    case 'shy':
+      pet.vx=0;
+      pet.squish=-0.05; // 缩起来
+      pet.rotation=pet.dir*0.15;
+      if(pet.stateTimer<=0){pet.state='idle';pet.stateTimer=1;pet.rotation=0}break;
+    case 'love':
+      pet.vx=0;
+      pet.squish=Math.sin(pet.breathPhase*3)*0.06;
+      pet.scale=1+Math.sin(pet.breathPhase*2)*0.05; // 心跳节奏
+      if(pet.stateTimer<=0){pet.state='idle';pet.stateTimer=1;pet.scale=1}break;
+    case 'surprised':
+      pet.vx=0;
+      pet.squish=0.12; // 吓大了
+      pet.scale=1.05+Math.sin(pet.breathPhase*8)*0.03;
+      if(pet.stateTimer<=0){pet.state='idle';pet.stateTimer=0.5;pet.scale=1}break;
+    case 'angry':
+      pet.vx=0;
+      pet.squish=Math.sin(pet.breathPhase*7)*0.06;
+      pet.rotation=Math.sin(pet.breathPhase*8)*0.04; // 气得发抖
+      if(pet.stateTimer<=0){pet.state='idle';pet.stateTimer=1}break;
+    case 'confused':
+      pet.vx=0;
+      pet.rotation=Math.sin(pet.breathPhase*2)*0.2; // 左歪右歪
+      pet.squish=Math.sin(pet.breathPhase*3)*0.04;
+      if(pet.stateTimer<=0){pet.state='idle';pet.stateTimer=1;pet.rotation=0}break;
+  }
+
+  // Smooth velocity damping when idle/static states
+  if(pet.state==='idle'||pet.state==='sleep'||pet.state==='eat'||pet.state==='sad'||pet.state==='sit'||pet.state==='flop'||pet.state==='shy'||pet.state==='bow'){
+    pet.vx*=0.85;
+    if(Math.abs(pet.vx)<0.5)pet.vx=0;
+  }
+
+  // Physics
+  pet.x+=pet.vx*dt;
+  pet.x=Math.max(20,Math.min(W-20,pet.x));
+  if(!pet.onGround){
+    pet.jumpVy+=350*dt;pet.y+=pet.jumpVy*dt;
+    if(pet.y>=pet.groundY){pet.y=pet.groundY;pet.onGround=true;pet.jumpVy=0;pet.squish=0.15}
+  }
+
+  // Level up
+  const needed=pet.level*12;
+  if(pet.exp>=needed){
+    pet.exp-=needed;pet.level++;
+    document.getElementById('petLevel').textContent=pet.level;
+    powerUp();spawnEmote('🎉');spawnSpeech('升级了！Lv.'+pet.level);
+  }
+}
+
+// ==================== DRAW PET ====================
+function drawPet(){
+  const px=Math.round(pet.x),py=Math.round(pet.y);
+
+  // Shadow
+  ctx.fillStyle='rgba(0,0,0,0.25)';
+  ctx.beginPath();ctx.ellipse(px,pet.groundY+2,14,4,0,0,Math.PI*2);ctx.fill();
+
+  ctx.save();
+  ctx.translate(px,py);ctx.rotate(pet.rotation);
+  // Breathing animation: subtle scaleY modulation in idle/sleep
+  const breathScale=(pet.state==='idle'||pet.state==='sleep')?1+Math.sin(pet.breathPhase*Math.PI)*0.025:1;
+  ctx.scale(pet.dir*(1+pet.squish),(1-pet.squish)*pet.scale*breathScale);
+
+  if(useCustomIP&&customIPImg)drawCustomIP();
+  else drawBuiltinPet();
+  ctx.restore();
+
+  drawStateEffects(px,py);
+}
+
+function drawCustomIP(){
+  const sz=customIPScale*0.8,half=sz/2;
+  ctx.imageSmoothingEnabled=false;
+  let bounceY=0;
+  if(pet.state==='walk'||pet.state==='follow')bounceY=Math.abs(Math.sin(pet.frame*Math.PI/2))*4;
+  if(pet.state==='excited')bounceY=Math.abs(Math.sin(pet.frame*Math.PI/2))*8;
+  if(pet.state==='special'){ctx.shadowColor='#f4d03f';ctx.shadowBlur=20;ctx.rotate(pet.frame*Math.PI/4)}
+  if(pet.state==='wave')ctx.rotate(Math.sin(pet.frame*Math.PI/2)*0.1);
+  if(pet.state==='patted'){ctx.shadowColor='#f878f8';ctx.shadowBlur=10}
+  if(pet.state==='hug'){ctx.shadowColor='#e63946';ctx.shadowBlur=15}
+  if(pet.state==='dance'){bounceY=Math.abs(Math.sin(pet.frame*Math.PI/2))*6;ctx.shadowColor='#f4d03f';ctx.shadowBlur=8}
+  if(pet.state==='spin'){ctx.shadowColor='#9bbc0f';ctx.shadowBlur=12}
+  if(pet.state==='love'){ctx.shadowColor='#e63946';ctx.shadowBlur=10}
+  if(pet.state==='angry'){ctx.shadowColor='#e63946';ctx.shadowBlur=8}
+  if(pet.state==='shy'){ctx.globalAlpha=0.85}
+  ctx.drawImage(customIPImg,-half,-sz+bounceY,sz,sz);
+  ctx.shadowBlur=0;ctx.imageSmoothingEnabled=true;
+  if(pet.state==='sleep'){
+    ctx.fillStyle='rgba(0,0,0,0.3)';ctx.fillRect(-half,-sz,sz,sz);
+    ctx.fillStyle='#fff';ctx.font='bold '+(sz*0.3)+'px monospace';ctx.textAlign='center';
+    ctx.fillText('💤',-half+sz/2,-sz/2);
+  }
+}
+
+function drawBuiltinPet(){
+  const p=BUILTINS[builtinIdx],s=3;
+  const walk=pet.state==='walk'||pet.state==='follow'||pet.state==='play'||pet.state==='sneak'||pet.state==='dance';
+  const f=pet.frame,legOff=walk?Math.sin(f*Math.PI/2)*3:0;
+
+  if(p.type==='naruto'){drawNarutoPet(s,f,walk,legOff);return}
+  if(p.type==='slime'){drawSlimePet(p,s,f);return}
+  if(p.type==='chibi_girl'){drawChibiGirlPet(s,f,walk,legOff);return}
+
+  // Generic quadruped
+  ctx.fillStyle=p.body;ctx.fillRect(-4*s,-5*s,8*s,5*s); // body
+  ctx.fillRect(-5*s,-9*s,6*s,5*s); // head
+  ctx.fillStyle=p.ear;ctx.fillRect(-5*s,-11*s,2*s,2*s);ctx.fillRect(-1*s,-11*s,2*s,2*s); // ears
+  if(!pet.blinking&&pet.state!=='sleep'){
+    ctx.fillStyle=p.eye;ctx.fillRect(-4*s,-8*s,s,s);ctx.fillRect(-2*s,-8*s,s,s);
+    ctx.fillStyle='#fff';ctx.fillRect(-4*s,-8*s,1,1);
+    if(pet.state==='sad'){ctx.fillStyle=p.eye;ctx.fillRect(-4*s,-9*s,s,1);ctx.fillRect(-1*s,-9*s,s,1)}
+  }else{ctx.fillStyle=p.eye;ctx.fillRect(-4*s,-7*s,s,1);ctx.fillRect(-2*s,-7*s,s,1)}
+  ctx.fillStyle='#f878f8';ctx.fillRect(-3*s,-7*s,s,s); // nose
+  if(pet.happy>60||pet.state==='patted'||pet.state==='hug'){ctx.fillStyle=p.eye;ctx.fillRect(-3*s,-5*s,2*s,1)}
+  const sit=pet.state==='sit'||pet.state==='sleep'||pet.state==='patted';
+  ctx.fillStyle=p.body;
+  if(sit){ctx.fillRect(-3*s,0,2*s,2*s);ctx.fillRect(1*s,0,2*s,2*s)}
+  else{ctx.fillRect(-3*s,0,2*s,Math.round(3+legOff)*s);ctx.fillRect(1*s,0,2*s,Math.round(3-legOff)*s)}
+  ctx.fillStyle=p.tail;
+  const tw=Math.sin(pet.tailWag)*3;
+  ctx.fillRect(4*s,-4*s,2*s,s);ctx.fillRect(5*s,-5*s+Math.round(tw),s,s);
+  if(pet.state==='wave'){
+    const armAngle=Math.sin(f*Math.PI/2)*0.5;
+    ctx.save();ctx.translate(-5*s,-6*s);ctx.rotate(-0.8+armAngle);
+    ctx.fillStyle=p.body;ctx.fillRect(0,0,s,4*s);
+    ctx.fillStyle=p.ear;ctx.fillRect(-s,-s,3*s,2*s);ctx.restore();
+  }
+  if(pet.state==='special'){
+    ctx.strokeStyle='#f4d03f';ctx.lineWidth=2;
+    const auraR=12+Math.sin(f*Math.PI/3)*4;
+    ctx.beginPath();ctx.arc(-1*s,-4*s,auraR,0,Math.PI*2);ctx.stroke();
+    for(let i=0;i<6;i++){
+      const a=f*0.5+i*Math.PI/3;
+      ctx.fillStyle='#f4d03f';ctx.fillRect(-1*s+Math.cos(a)*(auraR+4)-1,-4*s+Math.sin(a)*(auraR+4)-1,3,3);
+    }
+  }
+}
+
+function drawSlimePet(p,s,f){
+  const sq=pet.state==='play'?Math.sin(f*Math.PI/2)*2:(pet.state==='special'?3:0);
+  ctx.fillStyle=p.body;ctx.beginPath();ctx.ellipse(0,-4*s,(6+sq)*s,(5-sq/2)*s,0,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='rgba(255,255,255,0.4)';ctx.beginPath();ctx.ellipse(-2*s,-6*s,2*s,1.5*s,0,0,Math.PI*2);ctx.fill();
+  if(!pet.blinking&&pet.state!=='sleep'){
+    ctx.fillStyle=p.eye;ctx.fillRect(-3*s,-5*s,2*s,2*s);ctx.fillRect(1*s,-5*s,2*s,2*s);
+    ctx.fillStyle='#fff';ctx.fillRect(-3*s,-5*s,s,s);ctx.fillRect(1*s,-5*s,s,s);
+  }else{ctx.fillStyle=p.eye;ctx.fillRect(-3*s,-4*s,2*s,1);ctx.fillRect(1*s,-4*s,2*s,1)}
+  if(pet.happy>50||pet.state==='patted')ctx.fillRect(-1*s,-2*s,2*s,1);
+  if(pet.state==='special'){
+    ctx.strokeStyle='#f4d03f';ctx.lineWidth=2;
+    ctx.beginPath();ctx.arc(0,-4*s,(8+Math.sin(f)*2)*s,0,Math.PI*2);ctx.stroke();
+  }
+}
+
+// ==================== NARUTO AI SPRITE RENDERER ====================
+function drawNarutoSprite(s,f){
+  // Pick sprite based on state — 11 PNG sprites with native transparency
+  const pick=k=>NARUTO_SPRITES[k];
+  let sprite=pick('stand');
+  // State → sprite mapping
+  const stateMap={
+    'idle':pick('stand'), 'walk':pick('run'), 'follow':pick('run'),
+    'play':pick('excited'), 'excited':pick('excited'), 'dance':pick('excited'),
+    'special':pick('rasengan'), 'train':pick('train'),
+    'eat':pick('ramen'), 'patted':pick('ramen'),
+    'wave':pick('wave'), 'hug':pick('sage'),
+    'sleep':pick('sleep'), 'sad':pick('sad'), 'flop':pick('sleep'),
+    'tilt':pick('think'), 'confused':pick('think'), 'peek':pick('think'),
+    'sneak':pick('run'), 'spin':pick('excited'), 'sit':pick('stand'),
+    'nod':pick('stand'), 'shake':pick('stand'), 'bow':pick('wave'),
+    'shy':pick('sad'), 'love':pick('sage'), 'surprised':pick('excited'),
+    'angry':pick('rasengan'), 'taunt':pick('excited'),
+  };
+  sprite=stateMap[pet.state]||pick('stand');
+  // Pet keeps current animation even while brain is thinking — no interruption
+  if(!sprite)return;
+
+  const sz=60; // display size
+  ctx.imageSmoothingEnabled=false;
+
+  // Bounce
+  let bounceY=0;
+  if(pet.state==='walk'||pet.state==='follow')bounceY=Math.abs(Math.sin(f*Math.PI/2))*3;
+  if(pet.state==='excited')bounceY=Math.abs(Math.sin(f*Math.PI/2))*6;
+
+  // State effects
+  if(pet.state==='special'){ctx.shadowColor='#4fc3f7';ctx.shadowBlur=20}
+  if(pet.state==='hug'){ctx.shadowColor='#8bac0f';ctx.shadowBlur=15} // sage mode glow
+  if(pet.state==='wave'){ctx.rotate(Math.sin(f*Math.PI/2)*0.08)}
+  if(pet.state==='sleep'){ctx.globalAlpha=0.7}
+
+  ctx.drawImage(sprite,-sz/2,-sz+bounceY,sz,sz);
+  ctx.shadowBlur=0;ctx.globalAlpha=1;
+  ctx.imageSmoothingEnabled=true;
+
+  // Shadow clone overlay for wave state
+  if(pet.state==='wave'){
+    ctx.globalAlpha=0.25;
+    for(let i=0;i<3;i++){
+      const cx=(-25+i*25)*pet.dir;
+      ctx.drawImage(sprite,cx-sz/4,-sz*0.8+Math.sin(f+i)*2,sz*0.6,sz*0.6);
+    }
+    ctx.globalAlpha=1;
+    // Poof clouds
+    ctx.fillStyle='rgba(255,255,255,0.4)';
+    for(let i=0;i<3;i++){
+      ctx.beginPath();ctx.arc((-25+i*25)*pet.dir,-sz*0.4,5+Math.sin(f*2+i)*2,0,Math.PI*2);ctx.fill();
+    }
+  }
+
+  // Rasengan glow for special state
+  if(pet.state==='special'){
+    const rx=-20*pet.dir,ry=-sz*0.4;
+    const grad=ctx.createRadialGradient(rx,ry,0,rx,ry,12);
+    grad.addColorStop(0,'rgba(255,255,255,0.8)');
+    grad.addColorStop(0.5,'rgba(79,195,247,0.6)');
+    grad.addColorStop(1,'rgba(2,136,209,0)');
+    ctx.fillStyle=grad;ctx.beginPath();ctx.arc(rx,ry,12+Math.sin(f)*3,0,Math.PI*2);ctx.fill();
+  }
+
+  // Sage mode aura for hug state
+  if(pet.state==='hug'){
+    ctx.strokeStyle='rgba(139,172,15,0.4)';ctx.lineWidth=2;
+    const ar=35+Math.sin(f*Math.PI/4)*5;
+    ctx.beginPath();ctx.arc(0,-sz/2,ar,0,Math.PI*2);ctx.stroke();
+    for(let i=0;i<6;i++){
+      const a=f*0.3+i*Math.PI/3,nr=ar+4;
+      ctx.fillStyle=i%2?'#8bac0f':'#58d854';
+      ctx.fillRect(Math.cos(a)*nr-1,-sz/2+Math.sin(a)*nr-1,3,3);
+    }
+  }
+}
+
+// ==================== NARUTO PIXEL ART ====================
+function drawNarutoPet(s,f,walk,legOff){
+  // Use AI-generated sprites if available
+  if(narutoSpritesLoaded){
+    drawNarutoSprite(s,f);return;
+  }
+  // Fallback: canvas pixel art
+  // Orange jacket body
+  ctx.fillStyle='#ff6b35';ctx.fillRect(-4*s,-5*s,8*s,5*s);
+  ctx.fillStyle='#333';ctx.fillRect(0,-5*s,1,5*s); // zipper
+  ctx.fillStyle='#fff';ctx.fillRect(-3*s,-5*s,s,s);ctx.fillRect(2*s,-5*s,s,s); // collar
+
+  // Head (skin)
+  ctx.fillStyle='#f8c890';ctx.fillRect(-5*s,-10*s,6*s,5*s);
+
+  // Spiky yellow hair
+  ctx.fillStyle='#f4d03f';
+  ctx.fillRect(-6*s,-13*s,8*s,4*s);
+  ctx.fillRect(-7*s,-14*s,2*s,2*s);ctx.fillRect(-4*s,-15*s,2*s,2*s);
+  ctx.fillRect(-1*s,-14*s,2*s,2*s);ctx.fillRect(1*s,-13*s,2*s,2*s);
+  ctx.fillRect(-6*s,-10*s,s,3*s);ctx.fillRect(1*s,-10*s,s,3*s);
+
+  // Headband
+  ctx.fillStyle='#0078f8';ctx.fillRect(-6*s,-11*s,8*s,s);
+  ctx.fillStyle='#c0c0c0';ctx.fillRect(-3*s,-11*s,3*s,s);
+  ctx.fillStyle='#333';ctx.fillRect(-2*s,-11*s,s,1);
+
+  // Eyes
+  const isSageMode=pet.state==='hug';
+  if(!pet.blinking&&pet.state!=='sleep'){
+    ctx.fillStyle=isSageMode?'#f4d03f':'#4a9adf';
+    ctx.fillRect(-4*s,-9*s,s,s);ctx.fillRect(-2*s,-9*s,s,s);
+    ctx.fillStyle='#fff';ctx.fillRect(-4*s,-9*s,1,1);ctx.fillRect(-2*s,-9*s,1,1);
+    if(pet.state==='special'){
+      ctx.fillStyle='#e63946';ctx.fillRect(-4*s,-9*s,s,s);ctx.fillRect(-2*s,-9*s,s,s);
+    }
+  }else{ctx.fillStyle='#333';ctx.fillRect(-4*s,-8*s,s,1);ctx.fillRect(-2*s,-8*s,s,1)}
+
+  // Whiskers
+  ctx.fillStyle='#333';
+  ctx.fillRect(-5*s,-8*s,2,1);ctx.fillRect(-5*s,-7*s,2,1);ctx.fillRect(-5*s,-6*s,2,1);
+  ctx.fillRect(-1*s,-8*s,2,1);ctx.fillRect(-1*s,-7*s,2,1);ctx.fillRect(-1*s,-6*s,2,1);
+
+  // Mouth
+  if(pet.happy>60||pet.state==='patted'||pet.state==='eat')
+    ctx.fillRect(-3*s,-6*s,2*s,1);
+
+  // Legs (blue pants)
+  ctx.fillStyle='#0058a8';
+  const sit=pet.state==='sit'||pet.state==='sleep'||pet.state==='patted';
+  if(sit){ctx.fillRect(-3*s,0,2*s,2*s);ctx.fillRect(1*s,0,2*s,2*s)}
+  else{ctx.fillRect(-3*s,0,2*s,Math.round(3+legOff)*s);ctx.fillRect(1*s,0,2*s,Math.round(3-legOff)*s)}
+  ctx.fillStyle='#333';
+  ctx.fillRect(-3*s,(sit?2:Math.round(3+legOff))*s,2*s,s);
+  ctx.fillRect(1*s,(sit?2:Math.round(3-legOff))*s,2*s,s);
+
+  // Arms
+  ctx.fillStyle='#ff6b35';ctx.fillRect(-5*s,-4*s,s,3*s);ctx.fillRect(4*s,-4*s,s,3*s);
+
+  // === STATE EFFECTS ===
+
+  // Wave → 影分身
+  if(pet.state==='wave'){
+    ctx.globalAlpha=0.3;
+    for(let ci=0;ci<3;ci++){
+      ctx.save();ctx.translate((-12+ci*12)*s*pet.dir,Math.sin(f+ci)*2);
+      ctx.fillStyle='#ff6b35';ctx.fillRect(-4*s,-5*s,8*s,5*s);
+      ctx.fillStyle='#f8c890';ctx.fillRect(-5*s,-10*s,6*s,5*s);
+      ctx.fillStyle='#f4d03f';ctx.fillRect(-6*s,-13*s,8*s,4*s);
+      ctx.fillStyle='#0078f8';ctx.fillRect(-6*s,-11*s,8*s,s);
+      ctx.restore();
+    }
+    ctx.globalAlpha=1;
+    ctx.fillStyle='rgba(255,255,255,0.5)';
+    for(let ci=0;ci<3;ci++){
+      ctx.beginPath();ctx.arc((-12+ci*12)*s*pet.dir,-4*s,4+Math.sin(f*2+ci)*2,0,Math.PI*2);ctx.fill();
+    }
+  }
+
+  // Raise → 螺旋丸
+  if(pet.state==='special'){
+    const rx=-6*s*pet.dir,ry=-3*s,rr=4+Math.sin(f*Math.PI/2)*2;
+    const grad=ctx.createRadialGradient(rx,ry,0,rx,ry,rr*s);
+    grad.addColorStop(0,'rgba(255,255,255,0.9)');
+    grad.addColorStop(0.4,'rgba(79,195,247,0.8)');
+    grad.addColorStop(1,'rgba(2,136,209,0)');
+    ctx.fillStyle=grad;ctx.beginPath();ctx.arc(rx,ry,rr*s,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='#fff';
+    for(let i=0;i<6;i++){
+      const a=f*0.8+i*Math.PI/3;
+      ctx.fillRect(rx+Math.cos(a)*(rr-2)*s-1,ry+Math.sin(a)*(rr-2)*s-1,2,2);
+    }
+    ctx.fillStyle='rgba(255,100,0,0.5)';
+    ctx.fillRect(-5*s,-10*s,s,2*s);ctx.fillRect(0,-10*s,s,2*s);
+  }
+
+  // Pat → 一乐拉面
+  if(pet.state==='patted'){
+    const bx=5*s,by=-2*s;
+    ctx.fillStyle='#e63946';ctx.fillRect(bx-3*s,by,6*s,3*s);
+    ctx.fillStyle='#f4d03f';ctx.fillRect(bx-2*s,by-s,4*s,s);
+    ctx.strokeStyle='#f8e8a0';ctx.lineWidth=1;
+    for(let i=0;i<3;i++){
+      ctx.beginPath();ctx.moveTo(bx+(i-1)*2*s,by-s);
+      ctx.quadraticCurveTo(bx+(i-1)*2*s+Math.sin(f+i)*3,by-2*s,bx+i*s,by-3*s);ctx.stroke();
+    }
+    ctx.fillStyle='#f8a0a0';ctx.beginPath();ctx.arc(bx,by,s,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='rgba(255,255,255,0.4)';
+    for(let i=0;i<3;i++){
+      const sy=by-3*s-Math.abs(Math.sin(f*0.3+i))*3*s;
+      ctx.beginPath();ctx.arc(bx+(i-1)*2*s,sy,s,0,Math.PI*2);ctx.fill();
+    }
+  }
+
+  // Both → 仙人模式
+  if(pet.state==='hug'){
+    ctx.fillStyle='rgba(255,100,0,0.6)';
+    ctx.fillRect(-5*s,-10*s,2*s,2*s);ctx.fillRect(-1*s,-10*s,2*s,2*s);
+    ctx.fillStyle='#333';ctx.fillRect(-4*s,-9*s,1,s);ctx.fillRect(-2*s,-9*s,1,s);
+    ctx.strokeStyle='rgba(139,172,15,0.5)';ctx.lineWidth=2;
+    const auraR=14+Math.sin(f*Math.PI/4)*4;
+    ctx.beginPath();ctx.arc(-1*s,-5*s,auraR,0,Math.PI*2);ctx.stroke();
+    for(let i=0;i<8;i++){
+      const a=f*0.3+i*Math.PI/4,nr=auraR+3+Math.sin(f*0.5+i)*3;
+      ctx.fillStyle=i%2?'#8bac0f':'#58d854';
+      ctx.fillRect(-1*s+Math.cos(a)*nr-1,-5*s+Math.sin(a)*nr-1,3,3);
+    }
+    ctx.fillStyle='rgba(230,57,70,0.3)';ctx.fillRect(-5*s,-5*s,10*s,6*s);
+  }
+}
+
+// ==================== CHIBI GIRL SPRITE RENDERER ====================
+function drawChibiGirlPet(s,f,walk,legOff){
+  // Use AI-generated sprites if available
+  if(chibiSpritesLoaded){
+    drawChibiSprite(s,f);return;
+  }
+  // Fallback: simple placeholder
+  ctx.fillStyle='#ffe0d0';ctx.fillRect(-4*s,-8*s,8*s,8*s);
+  ctx.fillStyle='#2a1a0e';ctx.fillRect(-5*s,-12*s,10*s,5*s);
+  ctx.fillStyle='#fff';ctx.fillRect(-4*s,-4*s,8*s,6*s);
+  ctx.fillStyle='#2a2a2a';ctx.fillRect(-3*s,-8*s,s,s);ctx.fillRect(1*s,-8*s,s,s);
+}
+
+function drawChibiSprite(s,f){
+  const pick=k=>CHIBI_SPRITES[k];
+  let sprite=pick('stand');
+  // State → sprite mapping
+  const stateMap={
+    'idle':pick('stand'), 'walk':pick('run'), 'follow':pick('run'),
+    'play':pick('excited'), 'excited':pick('excited'), 'dance':pick('excited'),
+    'special':pick('love'), 'train':pick('train'),
+    'eat':pick('eat'), 'patted':pick('shy'),
+    'wave':pick('wave'), 'hug':pick('love'),
+    'sleep':pick('sleep'), 'sad':pick('sad'), 'flop':pick('sleep'),
+    'tilt':pick('think'), 'confused':pick('think'), 'peek':pick('think'),
+    'sneak':pick('run'), 'spin':pick('excited'), 'sit':pick('stand'),
+    'nod':pick('stand'), 'shake':pick('stand'), 'bow':pick('wave'),
+    'shy':pick('shy'), 'love':pick('love'), 'surprised':pick('excited'),
+    'angry':pick('train'), 'taunt':pick('excited'),
+  };
+  sprite=stateMap[pet.state]||pick('stand');
+  // Pet keeps current animation even while brain is thinking — no interruption
+  if(!sprite)return;
+
+  const sz=60;
+  ctx.imageSmoothingEnabled=false;
+
+  // Bounce
+  let bounceY=0;
+  if(pet.state==='walk'||pet.state==='follow')bounceY=Math.abs(Math.sin(f*Math.PI/2))*3;
+  if(pet.state==='excited'||pet.state==='dance')bounceY=Math.abs(Math.sin(f*Math.PI/2))*6;
+
+  // State effects
+  if(pet.state==='special'||pet.state==='love'){ctx.shadowColor='#f8a0c8';ctx.shadowBlur=15}
+  if(pet.state==='hug'){ctx.shadowColor='#e63946';ctx.shadowBlur=15}
+  if(pet.state==='wave'){ctx.rotate(Math.sin(f*Math.PI/2)*0.08)}
+  if(pet.state==='sleep'){ctx.globalAlpha=0.75}
+  if(pet.state==='shy'){ctx.globalAlpha=0.9}
+  if(pet.state==='dance'){ctx.shadowColor='#f8d03f';ctx.shadowBlur=8}
+  if(pet.state==='spin'){ctx.shadowColor='#f8a0c8';ctx.shadowBlur=12}
+  if(pet.state==='angry'){ctx.shadowColor='#e63946';ctx.shadowBlur=8}
+
+  ctx.drawImage(sprite,-sz/2,-sz+bounceY,sz,sz);
+  ctx.shadowBlur=0;ctx.globalAlpha=1;
+  ctx.imageSmoothingEnabled=true;
+
+  // Wave — sparkles
+  if(pet.state==='wave'){
+    ctx.fillStyle='#f8d03f';ctx.font='8px serif';
+    for(let i=0;i<3;i++){
+      const a=f*0.5+i*Math.PI*2/3,r=28+Math.sin(f+i)*4;
+      ctx.fillText('✦',-sz/2+Math.cos(a)*r+sz/4,-sz*0.5+Math.sin(a)*r);
+    }
+  }
+
+  // Special / Love — hearts orbit
+  if(pet.state==='special'||pet.state==='love'||pet.state==='hug'){
+    ctx.fillStyle='#e63946';ctx.font='10px serif';
+    for(let i=0;i<5;i++){
+      const a=f*0.3+i*Math.PI*2/5,r=30+Math.sin(f+i)*5;
+      ctx.globalAlpha=0.5+Math.sin(f*0.5+i)*0.3;
+      ctx.fillText('♥',Math.cos(a)*r-4,-sz*0.5+Math.sin(a)*r);
+    }
+    ctx.globalAlpha=1;
+  }
+
+  // Shy — blush steam lines
+  if(pet.state==='shy'||pet.state==='patted'){
+    ctx.fillStyle='#e63946';ctx.font='8px serif';
+    for(let i=0;i<3;i++){
+      const yy=-sz*0.7+Math.sin(f*0.3+i*2)*3-i*4;
+      ctx.globalAlpha=0.4+Math.sin(f+i)*0.2;
+      ctx.fillText('♥',-sz/4+i*sz/4,yy);
+    }
+    ctx.globalAlpha=1;
+  }
+
+  // Excited / Dance — notes and stars
+  if(pet.state==='excited'||pet.state==='dance'){
+    const notes=['♪','♫','✦','★'];
+    for(let i=0;i<4;i++){
+      const a=f*0.4+i*Math.PI/2,r=28+Math.sin(f+i)*5;
+      ctx.fillStyle=i%2?'#f8d03f':'#f8a0c8';ctx.font='8px serif';
+      ctx.fillText(notes[i],Math.cos(a)*r-3,-sz*0.5+Math.sin(a)*r);
+    }
+  }
+
+  // Angry — anger mark
+  if(pet.state==='angry'){
+    ctx.strokeStyle='#e63946';ctx.lineWidth=1.5;
+    ctx.beginPath();ctx.moveTo(10,-sz*0.85);ctx.lineTo(16,-sz*0.85);
+    ctx.moveTo(13,-sz*0.9);ctx.lineTo(13,-sz*0.8);ctx.stroke();
+  }
+
+  // Confused — question marks
+  if(pet.state==='confused'){
+    ctx.fillStyle='#666';ctx.font='bold 10px monospace';
+    ctx.fillText('?',8,-sz*0.85);
+    if(Math.sin(f)>0)ctx.fillText('?',-10,-sz*0.8);
+  }
+}
+
+// ==================== STATE EFFECTS ====================
+function drawStateEffects(px,py){
+  if(pet.state==='sleep'){
+    ctx.fillStyle='#9bbc0f';ctx.font='bold 12px monospace';
+    const zz=Math.floor(Date.now()/500)%3;
+    for(let i=0;i<=zz;i++){ctx.globalAlpha=0.5+i*0.2;ctx.fillText('z',px+10+i*6,py-20-i*8)}
+    ctx.globalAlpha=1;
+  }
+  if(pet.state==='eat'){
+    const t=Date.now()/200;
+    for(let i=0;i<3;i++){
+      ctx.fillStyle='#f4d03f';ctx.fillRect(px+Math.sin(t+i*2)*8*pet.dir-1,py-4-Math.abs(Math.cos(t+i*1.5))*6-1,3,3);
+    }
+  }
+  if(pet.state==='play'||pet.state==='excited'){
+    const t=Date.now()/100;
+    for(let i=0;i<4;i++){
+      const a=t+i*Math.PI/2;
+      ctx.fillStyle=i%2?'#f4d03f':'#9bbc0f';
+      ctx.fillRect(px+Math.cos(a)*14-1,py+Math.sin(a)*12-10,3,3);
+    }
+  }
+  if(pet.state==='hug'){
+    const t=Date.now()/300;
+    for(let i=0;i<5;i++){
+      const a=t+i*Math.PI*2/5,r=16+Math.sin(t*2+i)*4;
+      ctx.fillStyle='#e63946';ctx.font='10px serif';
+      ctx.fillText('♥',px+Math.cos(a)*r-4,py+Math.sin(a)*r-8);
+    }
+  }
+  if(pet.state==='special'){
+    const t=Date.now()/50;
+    for(let i=0;i<8;i++){
+      const a=t/10+i*Math.PI/4,r=20+Math.sin(t/5+i)*8;
+      ctx.fillStyle=i%3===0?'#f4d03f':i%3===1?'#e63946':'#9bbc0f';
+      ctx.fillRect(px+Math.cos(a)*r-1,py+Math.sin(a)*r-8-1,3,3);
+    }
+  }
+  if(pet.state==='sad'){
+    const t=Date.now()/400;
+    ctx.fillStyle='#4a9adf';
+    ctx.fillRect(px-6,py-12+((t*10)%20),2,3);ctx.fillRect(px+4,py-12+((t*10+10)%20),2,3);
+  }
+  if(pet.state==='dance'){
+    const t=Date.now()/80;
+    for(let i=0;i<6;i++){
+      const a=t/8+i*Math.PI/3,r=18+Math.sin(t/4+i)*5;
+      ctx.fillStyle=['#f4d03f','#e63946','#9bbc0f','#4a9adf','#f878f8','#ff6b35'][i];
+      ctx.fillRect(px+Math.cos(a)*r-1,py+Math.sin(a)*r-8-1,3,3);
+    }
+  }
+  if(pet.state==='spin'){
+    const t=Date.now()/60;
+    ctx.strokeStyle='rgba(155,188,15,0.4)';ctx.lineWidth=2;
+    ctx.beginPath();ctx.arc(px,py-8,16,t/5,t/5+Math.PI*1.5);ctx.stroke();
+  }
+  if(pet.state==='love'){
+    const t=Date.now()/250;
+    for(let i=0;i<3;i++){
+      const yOff=((t*4+i*20)%30);
+      ctx.globalAlpha=1-yOff/30;
+      ctx.fillStyle='#e63946';ctx.font='9px serif';
+      ctx.fillText('♥',px-8+i*8,py-15-yOff);
+    }
+    ctx.globalAlpha=1;
+  }
+  if(pet.state==='angry'){
+    const t=Date.now()/150;
+    ctx.strokeStyle='#e63946';ctx.lineWidth=1.5;
+    // 怒气符号
+    for(let i=0;i<2;i++){
+      const ox=px+[-10,10][i],oy=py-22;
+      ctx.beginPath();ctx.moveTo(ox-3,oy);ctx.lineTo(ox+3,oy);ctx.moveTo(ox,oy-3);ctx.lineTo(ox,oy+3);ctx.stroke();
+    }
+  }
+  if(pet.state==='confused'){
+    const t=Date.now()/300;
+    ctx.fillStyle='#f4d03f';ctx.font='bold 10px monospace';
+    ctx.fillText('?',px+Math.sin(t*3)*5-3,py-22+Math.sin(t*2)*3);
+  }
+  if(pet.state==='shy'){
+    // 脸红效果
+    ctx.fillStyle='rgba(230,57,70,0.3)';
+    ctx.beginPath();ctx.ellipse(px-6,py-8,4,3,0,0,Math.PI*2);ctx.fill();
+    ctx.beginPath();ctx.ellipse(px+6,py-8,4,3,0,0,Math.PI*2);ctx.fill();
+  }
+  if(pet.state==='sneak'){
+    // 潜行尾迹
+    const t=Date.now()/200;
+    ctx.fillStyle='rgba(155,188,15,0.2)';
+    for(let i=1;i<=3;i++){
+      ctx.beginPath();ctx.arc(px-pet.dir*i*8,py+2,3-i*0.5,0,Math.PI*2);ctx.fill();
+    }
+  }
+  if(pet.state==='surprised'){
+    ctx.fillStyle='#f4d03f';ctx.font='bold 11px monospace';
+    ctx.fillText('!',px+2,py-24);
+  }
+}
+
+// ==================== HUD ====================
+function updateHUD(){
+  document.getElementById('hpBar').style.width=pet.hp+'%';
+  document.getElementById('happyBar').style.width=pet.happy+'%';
+  document.getElementById('energyBar').style.width=pet.energy+'%';
+  // Needs bars (inverted: high hunger = red warning)
+  const hb=document.getElementById('hungerBar');
+  hb.style.width=pet.hunger+'%';hb.style.background=pet.hunger>70?'#e74c3c':'#e67e22';
+  const tb=document.getElementById('thirstBar');
+  tb.style.width=pet.thirst+'%';tb.style.background=pet.thirst>70?'#e74c3c':'#3498db';
+  document.getElementById('funBar').style.width=Math.max(0,100-pet.fun)+'%';
+}
+
+// ==================== INTERACTIONS ====================
+function feedPet(){
+  if(pet.state==='sleep'){spawnSpeech('zzz...');return}
+  pet.state='eat';pet.stateTimer=2;
+  pet.hp=Math.min(100,pet.hp+20);pet.happy=Math.min(100,pet.happy+5);pet.exp+=2;
+  pet.hunger=Math.max(0,pet.hunger-30);pet.lastAte=Date.now();
+  munch();spawnEmote('🍖');
+}
+function toyPet(){
+  if(pet.state==='sleep'){spawnSpeech('zzz...');return}
+  pet.state='play';pet.stateTimer=3;
+  pet.happy=Math.min(100,pet.happy+10);pet.energy=Math.max(0,pet.energy-10);pet.exp+=3;
+  pet.fun=Math.min(100,pet.fun+25);pet.lastPlayed=Date.now();
+  if(pet.onGround){pet.jumpVy=-100;pet.onGround=false}
+  meow();spawnEmote('🧶');
+}
+function switchBuiltin(){
+  useCustomIP=false;builtinIdx=(builtinIdx+1)%BUILTINS.length;
+  const p=BUILTINS[builtinIdx];
+  document.getElementById('petNameDisplay').textContent=p.name;
+  document.getElementById('petIcon').textContent=p.icon;
+  meow();spawnSpeech('变身！'+p.name+'！');
+  showGestureHint('挥手→'+p.actions.wave+' | 举手→'+p.actions.raise);
+  if(brain.enabled)brain.personality=brain.getPersonality();
+}
+
+// ==================== EMOTES & SPEECH & THOUGHT ====================
+function spawnEmote(emoji){
+  const el=document.createElement('div');el.className='emote';el.textContent=emoji;
+  el.style.left=(pet.x/W*100)+'%';el.style.top=((pet.y-30)/H*100)+'%';
+  arView.appendChild(el);setTimeout(()=>el.remove(),1500);
+}
+function _placeSpeechBubble(el){
+  // Place bubble above pet with enough clearance (~50px sprite height)
+  const bubbleY=pet.y-75;
+  if(bubbleY>15){
+    el.style.top=Math.max(2,(bubbleY/H*100))+'%';
+  }else{
+    // Pet near top — put bubble below
+    el.style.top=((pet.y+45)/H*100)+'%';
+  }
+  // Center bubble on pet, clamp so it stays fully within viewport
+  // max-width is 55%, so left must be in [2%, 43%] to avoid overflow
+  const lPct=pet.x/W*100;
+  const centered=lPct-27.5; // center the 55% max-width bubble on pet
+  el.style.left=Math.max(2,Math.min(43,centered))+'%';
+}
+function spawnSpeech(text){
+  arView.querySelectorAll('.speech').forEach(e=>e.remove());
+  const el=document.createElement('div');el.className='speech';el.textContent=text;
+  _placeSpeechBubble(el);
+  arView.appendChild(el);setTimeout(()=>el.remove(),8000);
+  addChatMessage('pet',BUILTINS[builtinIdx].icon+' '+BUILTINS[builtinIdx].name,text);
+}
+function spawnSpeechTypewriter(text){
+  arView.querySelectorAll('.speech').forEach(e=>e.remove());
+  const el=document.createElement('div');el.className='speech';el.textContent='';
+  _placeSpeechBubble(el);
+  arView.appendChild(el);
+  let i=0;
+  const tid=setInterval(()=>{
+    if(i<text.length){el.textContent+=text[i];i++}else clearInterval(tid);
+  },50);
+  setTimeout(()=>el.remove(),Math.max(7000,text.length*70+3000));
+  // Log to chat with mood info
+  const moodEmoji={happy:'😊',sad:'😢',excited:'🤩',bored:'😑',sleepy:'😴',curious:'🤔',worried:'😟'};
+  const curMood=brain.chatHistory.slice(-1)[0]?.mood||'';
+  addChatMessage('pet',BUILTINS[builtinIdx].icon+' '+BUILTINS[builtinIdx].name,text,curMood?moodEmoji[curMood]||curMood:'');
+}
+function showSeeBubble(text){
+  arView.querySelectorAll('.see-bubble').forEach(e=>e.remove());
+  const el=document.createElement('div');el.className='see-bubble';el.textContent='👁 '+text;
+  el.style.right='5%';el.style.bottom='12%';
+  arView.appendChild(el);setTimeout(()=>el.remove(),Math.max(7000,text.length*60+2000));
+}
+function showThought(text){
+  arView.querySelectorAll('.thought').forEach(e=>e.remove());
+  const el=document.createElement('div');el.className='thought';el.textContent='💭 '+text;
+  el.style.left=Math.max(2,Math.min(60,pet.x/W*100))+'%';
+  el.style.bottom=Math.max(2,(100-(pet.y-90)/H*100))+'%';
+  arView.appendChild(el);setTimeout(()=>el.remove(),5000);
+}
+function showGestureHint(text){
+  const old=arView.querySelector('.gesture-hint');if(old)old.remove();
+  const el=document.createElement('div');el.className='gesture-hint';el.textContent=text;
+  arView.appendChild(el);setTimeout(()=>el.remove(),4000);
+}
+
+// ==================== CHAT SYSTEM ====================
+const chatLog=[];
+function toggleChat(){document.getElementById('chatPanel').classList.toggle('open')}
+function addChatMessage(type,name,text,mood){
+  if(!text)return;
+  const now=new Date();
+  const timeStr=now.getHours()+':'+String(now.getMinutes()).padStart(2,'0');
+  chatLog.push({type,name,text,mood,time:timeStr});
+  if(chatLog.length>100)chatLog.shift();
+  const el=document.getElementById('chatLog');
+  const msg=document.createElement('div');
+  msg.className='chat-msg '+type;
+  let html=`<div class="chat-name">${name} <span class="chat-time">${timeStr}</span></div>`;
+  html+=`<div>${text}</div>`;
+  if(mood)html+=`<div class="chat-mood">${mood}</div>`;
+  msg.innerHTML=html;
+  el.appendChild(msg);
+  el.scrollTop=el.scrollHeight;
+  // Keep DOM under 80 messages
+  while(el.children.length>80)el.removeChild(el.firstChild);
+}
+function sendChat(){
+  const input=document.getElementById('chatInput');
+  const text=input.value.trim();
+  if(!text)return;
+  input.value='';
+  addChatMessage('user','你',text);
+  // Push to brain chat history and trigger think
+  if(!brain.enabled)brain.start();
+  brain.chatHistory.push({role:'user',text:text,time:Date.now()});
+  if(brain.chatHistory.length>12)brain.chatHistory.shift();
+  brain.triggerThink('user_chat');
+}
+
+// Click to direct pet
+arView.addEventListener('click',function(e){
+  if(!running)return;
+  const rect=arView.getBoundingClientRect();
+  pet.targetX=(1-(e.clientX-rect.left)/rect.width)*W;
+  pet.state='walk';pet.stateTimer=3;meow();
+});
+
+// Random speech (only if brain not active)
+setInterval(()=>{
+  if(!running||brain.enabled)return;
+  if(pet.state!=='idle')return;
+  if(Math.random()>0.25)return;
+  const phrases=['无聊...','摸我！','嘿~','在看什么？','...','有点困','想玩！','(*^▽^*)'];
+  spawnSpeech(phrases[Math.floor(Math.random()*phrases.length)]);
+},10000);
+
+// ==================== OPENCLAW API BRIDGE ====================
+window.petAPI={
+  rasengan(){pet.state='special';pet.stateTimer=2.5;if(pet.onGround){pet.jumpVy=-160;pet.onGround=false}spawnEmote('⭐');return'螺旋丸!'},
+  shadowClone(){pet.state='wave';pet.stateTimer=2;spawnEmote('👋');return'影分身!'},
+  ramen(){feedPet();return'一乐拉面!'},
+  sageMode(){pet.state='excited';pet.stateTimer=2.5;spawnEmote('🔥');return'仙人模式!'},
+  wave(){pet.state='wave';pet.stateTimer=2;spawnEmote('👋');return'挥手!'},
+  raise(){pet.state='special';pet.stateTimer=2.5;spawnEmote('⭐');return'举手!'},
+  pat(){pet.state='patted';pet.stateTimer=2;spawnEmote('💖');return'拍拍!'},
+  hug(){pet.state='hug';pet.stateTimer=3;spawnEmote('🤗');return'拥抱!'},
+  feed(){feedPet();return'喂食!'},
+  play(){toyPet();return'玩耍!'},
+  switchTo(name){
+    const idx=BUILTINS.findIndex(b=>b.name===name||b.type===name);
+    if(idx>=0){builtinIdx=idx;useCustomIP=false;
+      const p=BUILTINS[idx];
+      document.getElementById('petNameDisplay').textContent=p.name;
+      document.getElementById('petIcon').textContent=p.icon;
+      meow();spawnSpeech('变身！'+p.name+'！');
+      if(brain.enabled)brain.personality=brain.getPersonality();
+      return'切换为'+p.name;
+    }
+    return'未找到: '+name+' (可选: '+BUILTINS.map(b=>b.type).join(',')+')';
+  },
+  switchNext(){switchBuiltin();return'切换为'+BUILTINS[builtinIdx].name},
+  moveTo(nx,ny){pet.targetX=Math.max(20,Math.min(W-20,+nx||W/2));if(ny)pet.groundY=+ny;pet.state='walk';pet.stateTimer=3;return'移动'},
+  jump(){if(pet.onGround){pet.jumpVy=-120;pet.onGround=false}return'跳!'},
+  sleep(){pet.state='sleep';pet.stateTimer=4;return'睡觉'},
+  wake(){if(pet.state==='sleep'){pet.state='idle';pet.stateTimer=1}return'醒了'},
+  say(text){spawnSpeech(text);return'说:'+text},
+  think(text){showThought(text);return'想:'+text},
+  emote(emoji){spawnEmote(emoji);return'表情:'+emoji},
+  brainOn(){brain.start();return'AI大脑启动'},
+  brainOff(){brain.stop();return'AI大脑停止'},
+  status(){return JSON.stringify({
+    pet:BUILTINS[builtinIdx].name,type:BUILTINS[builtinIdx].type,
+    state:pet.state,level:pet.level,hp:Math.round(pet.hp),
+    happy:Math.round(pet.happy),energy:Math.round(pet.energy),
+    x:Math.round(pet.x),y:Math.round(pet.y),
+    faceDetected:detect.face.found,motionLevel:Math.round(detect.motionTotal*100)+'%',
+    lastGesture,running,brainActive:brain.enabled,useCustomIP
+  })},
+  exec(cmds){
+    const results=[];
+    (Array.isArray(cmds)?cmds:[cmds]).forEach(c=>{
+      let cmd,args;
+      if(typeof c==='string'){const p=c.split(':');cmd=p[0];args=p.slice(1).join(':')}
+      else{cmd=c.cmd;args=c.args}
+      if(typeof this[cmd]==='function')results.push(this[cmd](args));
+      else results.push('unknown:'+cmd);
+    });
+    return results.join('; ');
+  },
+  // === Vision & Scene for external AI agents (OpenClaw) ===
+  getFrame(quality,maxW){
+    // Returns camera frame as base64 JPEG for external AI to see
+    const b64=captureFrameBase64(quality||0.75,maxW||480);
+    return b64||'no-camera';
+  },
+  getScene(){
+    // Returns full scene state for external AI
+    const p=BUILTINS[builtinIdx];
+    const hour=new Date().getHours();const min=new Date().getMinutes();
+    return JSON.stringify({
+      pet:{name:p.name,type:p.type,state:pet.state,level:pet.level,
+        hp:Math.round(pet.hp),happy:Math.round(pet.happy),energy:Math.round(pet.energy),
+        x:Math.round(pet.x),y:Math.round(pet.y),dir:pet.dir,onGround:pet.onGround},
+      scene:{faceDetected:detect.face.found,faceX:detect.face.cx,faceY:detect.face.cy,
+        motionLevel:+(detect.motionTotal).toFixed(3),
+        lastGesture:lastGesture||'none'},
+      time:`${hour}:${String(min).padStart(2,'0')}`,
+      brain:{active:brain.enabled,thinking:brain.thinking,
+        memory:brain.memory.slice(-5).map(m=>m.text||m),
+        chatHistory:brain.chatHistory.slice(-3).map(c=>c.text)},
+      needs:{hunger:Math.round(pet.hunger),thirst:Math.round(pet.thirst),social:Math.round(pet.social),fun:Math.round(pet.fun),hygiene:Math.round(pet.hygiene)},
+      dailyPhase:pet.dailySchedule,
+      canvas:{width:W,height:H},running,
+      availableActions:{
+        move:['idle','walk:left','walk:right','walk:center','walk:user','walk:random','run','dash','jump','hop','sneak:left','sneak:right','spin','explore'],
+        life:['eat','drink','sleep','clean','sit','stretch','yawn','flop'],
+        emotion:['wave','excited','sad','dance','sing','shy','love','surprised','angry','confused','taunt'],
+        social:['nod','shake','bow','peek','play'],
+        growth:['train','meditate','special'],
+        meta:['speak:文字','emote:emoji']
+      },
+      actionQueueLength:actionQueue.length,
+      lastAction:lastActionState||'none',
+    });
+  },
+  chat(msg){
+    // External AI/user sends a chat message → trigger think with message context
+    if(!brain.enabled)brain.start();
+    addChatMessage('user','用户',msg);
+    brain.chatHistory.push({role:'user',text:msg,time:Date.now()});
+    if(brain.chatHistory.length>12)brain.chatHistory.shift();
+    brain.triggerThink('user_chat');
+    return'收到: '+msg;
+  },
+  doAction(acts){
+    // Queue one or more actions: doAction("dance") or doAction("hop,spin,dance")
+    const list=Array.isArray(acts)?acts:String(acts).split(',').map(s=>s.trim()).filter(Boolean);
+    actionQueue.push(...list);pet.stateTimer=0;processActionQueue(0);
+    return'queued: '+list.join('→');
+  },
+  getNeeds(){return JSON.stringify({hunger:Math.round(pet.hunger),thirst:Math.round(pet.thirst),social:Math.round(pet.social),fun:Math.round(pet.fun),hygiene:Math.round(pet.hygiene),dailyPhase:pet.dailySchedule})},
+  // Execute multiple commands in sequence with delays
+  sequence(cmds,delayMs){
+    const delay=delayMs||1500;
+    (Array.isArray(cmds)?cmds:[cmds]).forEach((c,i)=>{
+      setTimeout(()=>{
+        const[cmd,...args]=c.split(':');
+        if(typeof this[cmd]==='function')this[cmd](args.join(':'));
+      },i*delay);
+    });
+    return'queued '+cmds.length+' commands';
+  },
+  help(){return'petAPI: rasengan shadowClone ramen sageMode wave raise pat hug feed play switchTo(name) switchNext moveTo(x) jump sleep wake say(text) think(text) emote(emoji) brainOn brainOff status getFrame(q,w) getScene() getNeeds() chat(msg) sequence(cmds) doAction(action) | actions: idle walk:dir run dash hop jump sneak:dir spin explore eat drink sleep clean sit stretch yawn flop wave excited sad dance sing shy love surprised angry confused taunt nod shake bow peek play train meditate special | pets: '+BUILTINS.map(b=>b.type).join(',')}
+};
+
+// PostMessage listener
+window.addEventListener('message',function(e){
+  if(e.data&&e.data.petCmd){
+    const r=typeof petAPI[e.data.petCmd]==='function'?petAPI[e.data.petCmd](e.data.args):'unknown';
+    try{if(e.source)e.source.postMessage({petResult:r,cmd:e.data.petCmd},'*')}catch(err){}
+  }
+});
+
+// URL hash command
+(function(){
+  const h=location.hash.slice(1);if(!h)return;
+  const p=new URLSearchParams(h);const cmd=p.get('cmd');
+  if(cmd&&typeof petAPI[cmd]==='function')setTimeout(()=>petAPI[cmd](p.get('args')||''),1000);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>护眼卫士</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0f380f;color:#8bac0f;font-family:'Courier New',Consolas,monospace;min-height:100vh;display:flex;flex-direction:column;align-items:center;overflow-x:hidden}
+.title-bar{width:100%;max-width:480px;background:#306230;border:3px solid #0f380f;border-bottom:none;padding:8px 12px;text-align:center;font-size:18px;font-weight:bold;color:#9bbc0f;text-shadow:2px 2px 0 #0f380f;margin-top:12px}
+.main{width:100%;max-width:480px;background:#1a4a1a;border:3px solid #306230;box-shadow:6px 6px 0 #0f380f;padding:16px;display:flex;flex-direction:column;gap:12px}
+.panel{background:#0f380f;border:3px solid #306230;box-shadow:4px 4px 0 #306230;padding:12px}
+.cam-row{display:flex;gap:12px;align-items:flex-start}
+.cam-box{width:140px;height:105px;background:#000;border:3px solid #306230;position:relative;flex-shrink:0;overflow:hidden}
+.cam-box video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
+.cam-dot{position:absolute;top:6px;right:6px;width:10px;height:10px;border:2px solid #0f380f;animation:blink 1s steps(2) infinite}
+.cam-dot.on{background:#8bac0f}.cam-dot.off{background:#e63946}
+@keyframes blink{50%{opacity:.5}}
+.eye-display{flex:1;text-align:center}
+.eye-art{font-size:48px;line-height:1;margin:4px 0}
+.eye-art.tired{color:#f4d03f}.eye-art.danger{color:#e63946;animation:flash .5s steps(2) infinite}
+@keyframes flash{50%{opacity:.3}}
+.status-text{font-size:14px;margin-top:4px;font-weight:bold}
+.status-text.good{color:#8bac0f}.status-text.warn{color:#f4d03f}.status-text.bad{color:#e63946}
+.timer-section{text-align:center}
+.timer-big{font-size:42px;font-weight:bold;color:#9bbc0f;text-shadow:3px 3px 0 #306230;letter-spacing:4px}
+.timer-label{font-size:11px;color:#306230;margin-top:2px}
+.prog-bar{width:100%;height:20px;background:#0f380f;border:2px solid #306230;margin-top:8px;position:relative;overflow:hidden}
+.prog-fill{height:100%;background:#8bac0f;transition:width .5s steps(20);position:relative}
+.prog-fill.warn{background:#f4d03f}.prog-fill.full{background:#e63946;animation:flash .5s steps(2) infinite}
+.prog-text{position:absolute;right:6px;top:1px;font-size:11px;color:#0f380f;font-weight:bold}
+.fatigue{display:flex;gap:8px;align-items:center;justify-content:center;margin-top:8px}
+.fatigue-level{display:flex;gap:4px}
+.fatigue-block{width:24px;height:16px;border:2px solid #306230;background:#0f380f}
+.fatigue-block.active-1{background:#8bac0f}.fatigue-block.active-2{background:#f4d03f}.fatigue-block.active-3{background:#ff8c42}.fatigue-block.active-4{background:#e63946}
+.fatigue-label{font-size:12px}
+.stats-row{display:flex;gap:8px;flex-wrap:wrap}
+.stat-card{flex:1;min-width:100px;background:#0f380f;border:2px solid #306230;padding:8px;text-align:center}
+.stat-val{font-size:20px;font-weight:bold;color:#9bbc0f}.stat-lbl{font-size:10px;color:#306230;margin-top:2px}
+.btn-row{display:flex;gap:8px;flex-wrap:wrap}
+button{background:#8bac0f;color:#0f380f;border:3px solid #0f380f;box-shadow:4px 4px 0 #306230;font-family:monospace;font-size:13px;font-weight:bold;padding:8px 14px;cursor:pointer}
+button:hover{background:#9bbc0f;transform:translate(2px,2px);box-shadow:2px 2px 0 #306230}
+button:active{transform:translate(4px,4px);box-shadow:none}
+button.stop{background:#e63946;color:#fff}
+.settings{font-size:11px;color:#306230}
+.settings label{display:flex;align-items:center;gap:6px;margin:4px 0}
+.settings input[type=range]{width:120px;accent-color:#8bac0f}
+.settings select{background:#0f380f;color:#8bac0f;border:2px solid #306230;font-family:monospace;padding:2px 4px}
+.rest-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(15,56,15,.95);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:999;display:none}
+.rest-overlay.show{display:flex}
+.rest-title{font-size:28px;color:#9bbc0f;text-shadow:3px 3px 0 #306230;margin-bottom:16px;animation:flash 1s steps(2) infinite}
+.rest-countdown{font-size:72px;color:#8bac0f;font-weight:bold;text-shadow:4px 4px 0 #306230}
+.rest-hint{font-size:14px;color:#306230;margin-top:12px}
+.rest-detect{font-size:12px;color:#f4d03f;margin-top:8px}
+.sep{text-align:center;color:#306230;font-size:10px;letter-spacing:2px;margin:4px 0}
+
+/* ===== MOBILE ===== */
+@media(max-width:600px){
+  body{overflow-y:auto!important;min-height:100vh;}
+  video{width:100%!important;max-width:100%!important;height:auto!important;}
+  canvas{max-width:100%!important;}
+  #app,.app,.container,.main,.wrapper,[id*="app"],[class*="container"]{width:100%!important;max-width:100%!important;margin:0!important;border-radius:0!important;}
+  button,.btn,.action-btn,[class*="btn"]{min-height:44px;font-size:13px!important;touch-action:manipulation;}
+  input,textarea,select{font-size:16px!important;}
+  .controls,.toolbar,.actions,.panel,.buttons,[class*="controls"],[class*="toolbar"]{flex-wrap:wrap!important;}
+  [style*="width:"][style*="px"]{max-width:100%!important;}
+}
+</style>
+</head>
+<body>
+<div class="title-bar">★ 护眼卫士 ★</div>
+<div class="main">
+<div class="cam-row">
+<div class="cam-box">
+<video id="vid" playsinline muted></video>
+<div id="camDot" class="cam-dot off"></div>
+</div>
+<div class="eye-display">
+<div id="eyeArt" class="eye-art">◉‿◉</div>
+<div id="statusText" class="status-text good">等待启动...</div>
+</div>
+</div>
+
+<div class="panel timer-section">
+<div class="timer-label">▶ 连续用眼时间</div>
+<div id="timerBig" class="timer-big">00:00</div>
+<div class="prog-bar"><div id="progFill" class="prog-fill" style="width:0%"><span id="progText" class="prog-text">0%</span></div></div>
+<div class="fatigue">
+<span class="fatigue-label">疲劳:</span>
+<div class="fatigue-level">
+<div id="fb1" class="fatigue-block"></div>
+<div id="fb2" class="fatigue-block"></div>
+<div id="fb3" class="fatigue-block"></div>
+<div id="fb4" class="fatigue-block"></div>
+</div>
+<span id="fatigueLbl" class="fatigue-label">低</span>
+</div>
+</div>
+
+<div class="stats-row">
+<div class="stat-card"><div id="stTotal" class="stat-val">0m</div><div class="stat-lbl">今日用眼</div></div>
+<div class="stat-card"><div id="stBreaks" class="stat-val">0</div><div class="stat-lbl">休息次数</div></div>
+<div class="stat-card"><div id="stLongest" class="stat-val">0m</div><div class="stat-lbl">最长连续</div></div>
+</div>
+
+<div class="btn-row">
+<button id="btnStart" onclick="toggleMonitor()">▶ 开始监控</button>
+<button onclick="manualRest()">◆ 手动休息</button>
+<button onclick="resetStats()" class="stop">✕ 重置</button>
+</div>
+
+<div class="sep">░░░░░░░░░░░ 设置 ░░░░░░░░░░░</div>
+<div class="panel settings">
+<label>提醒间隔: <input type="range" id="intSlider" min="5" max="40" value="20" oninput="updateSettings()"><span id="intVal">20</span>分钟</label>
+<label>休息时长: <input type="range" id="restSlider" min="5" max="30" value="20" oninput="updateSettings()"><span id="restVal">20</span>秒</label>
+<label>提示音: <select id="soundSel" onchange="updateSettings()"><option value="1">开</option><option value="0">关</option></select></label>
+</div>
+</div>
+
+<div id="restOverlay" class="rest-overlay">
+<div class="rest-title">★ 请看远处休息 ★</div>
+<div id="restCountdown" class="rest-countdown">20</div>
+<div class="rest-hint">看看20英尺(6米)外的东西</div>
+<div id="restDetect" class="rest-detect"></div>
+<button onclick="skipRest()" style="margin-top:20px">跳过</button>
+</div>
+
+<canvas id="tmpC" style="display:none"></canvas>
+
+<script src="../cam-core/cam-core.js"></script>
+<script>
+const vid=document.getElementById('vid'),camDot=document.getElementById('camDot');
+const eyeArt=document.getElementById('eyeArt'),statusText=document.getElementById('statusText');
+const timerBig=document.getElementById('timerBig'),progFill=document.getElementById('progFill'),progText=document.getElementById('progText');
+const fb=[document.getElementById('fb1'),document.getElementById('fb2'),document.getElementById('fb3'),document.getElementById('fb4')];
+const fatigueLbl=document.getElementById('fatigueLbl');
+const stTotal=document.getElementById('stTotal'),stBreaks=document.getElementById('stBreaks'),stLongest=document.getElementById('stLongest');
+const btnStart=document.getElementById('btnStart');
+const intSlider=document.getElementById('intSlider'),restSlider=document.getElementById('restSlider'),soundSel=document.getElementById('soundSel');
+const intVal=document.getElementById('intVal'),restVal=document.getElementById('restVal');
+const restOverlay=document.getElementById('restOverlay'),restCountdown=document.getElementById('restCountdown'),restDetect=document.getElementById('restDetect');
+const tmpC=document.getElementById('tmpC'),tmpCtx=tmpC.getContext('2d');
+
+let stream=null,monitoring=false,detectLoop=null;
+let facePresent=false,consecutivePresent=0,consecutiveAbsent=0;
+const PRESENCE_THRESH=3,ABSENCE_THRESH=5;
+
+let screenStart=0,continuousMs=0;
+let intervalMin=20,restSec=20,soundOn=true;
+let timerInterval=null;
+
+let resting=false,restTimer=null,restRemaining=0;
+let lookAwayFrames=0;
+
+// stats
+let stats={totalMs:0,breaks:0,longestMs:0,date:''};
+const TODAY=new Date().toISOString().slice(0,10);
+
+function loadSettings(){
+  try{
+    const s=JSON.parse(localStorage.getItem('eyeguard_settings'));
+    if(s){intervalMin=s.interval||20;restSec=s.rest||20;soundOn=s.sound!==false;}
+  }catch(e){}
+  intSlider.value=intervalMin;restSlider.value=restSec;
+  intVal.textContent=intervalMin;restVal.textContent=restSec;
+  soundSel.value=soundOn?'1':'0';
+}
+function saveSettings(){localStorage.setItem('eyeguard_settings',JSON.stringify({interval:intervalMin,rest:restSec,sound:soundOn}))}
+function updateSettings(){
+  intervalMin=+intSlider.value;restSec=+restSlider.value;soundOn=soundSel.value==='1';
+  intVal.textContent=intervalMin;restVal.textContent=restSec;
+  saveSettings();
+}
+
+function loadStats(){
+  try{
+    const s=JSON.parse(localStorage.getItem('eyeguard_stats'));
+    if(s&&s.date===TODAY){stats=s;}else{stats={totalMs:0,breaks:0,longestMs:0,date:TODAY};}
+  }catch(e){stats={totalMs:0,breaks:0,longestMs:0,date:TODAY};}
+  renderStats();
+}
+function saveStats(){localStorage.setItem('eyeguard_stats',JSON.stringify(stats))}
+function renderStats(){
+  stTotal.textContent=Math.round(stats.totalMs/60000)+'m';
+  stBreaks.textContent=stats.breaks;
+  stLongest.textContent=Math.round(stats.longestMs/60000)+'m';
+}
+
+async function startCam(){
+  try{
+    stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'user',width:{ideal:320},height:{ideal:240}},audio:false});
+    vid.srcObject=stream;await vid.play();
+    tmpC.width=160;tmpC.height=120;
+    camDot.className='cam-dot on';
+    return true;
+  }catch(e){
+    camDot.className='cam-dot off';
+    statusText.textContent='摄像头启动失败';statusText.className='status-text bad';
+    return false;
+  }
+}
+function stopCam(){
+  if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}
+  camDot.className='cam-dot off';
+}
+
+function detectFace(){
+  if(!stream||!vid.videoWidth)return false;
+  tmpCtx.drawImage(vid,0,0,160,120);
+  const img=tmpCtx.getImageData(0,0,160,120);
+  // CamCore: blur + normalize + HSV skin detection
+  CamCore.boxBlur(img,160,120,1);
+  CamCore.normalize(img);
+  const pct=CamCore.detectSkin(img,160,120,null);
+  return pct>4;
+}
+
+function toggleMonitor(){
+  if(monitoring){
+    stopMonitor();
+  }else{
+    startMonitor();
+  }
+}
+
+async function startMonitor(){
+  const ok=await startCam();
+  if(!ok)return;
+  monitoring=true;
+  btnStart.textContent='■ 停止监控';
+  btnStart.classList.add('stop');
+  screenStart=Date.now();
+  continuousMs=0;
+  consecutivePresent=0;consecutiveAbsent=0;
+  statusText.textContent='监控中...';statusText.className='status-text good';
+  detectLoop=setInterval(detectTick,500);
+  timerInterval=setInterval(updateTimer,1000);
+}
+
+function stopMonitor(){
+  monitoring=false;
+  clearInterval(detectLoop);clearInterval(timerInterval);
+  stopCam();
+  btnStart.textContent='▶ 开始监控';
+  btnStart.classList.remove('stop');
+  if(continuousMs>0){
+    stats.totalMs+=continuousMs;
+    if(continuousMs>stats.longestMs)stats.longestMs=continuousMs;
+    saveStats();renderStats();
+  }
+  continuousMs=0;
+  statusText.textContent='已停止';statusText.className='status-text good';
+  eyeArt.textContent='◉‿◉';eyeArt.className='eye-art';
+  timerBig.textContent='00:00';
+  progFill.style.width='0%';progText.textContent='0%';
+  updateFatigue(0);
+}
+
+function detectTick(){
+  if(!monitoring||resting)return;
+  const present=detectFace();
+  if(present){
+    consecutivePresent++;consecutiveAbsent=0;
+    if(consecutivePresent>=PRESENCE_THRESH&&!facePresent){
+      facePresent=true;
+      screenStart=Date.now()-continuousMs;
+    }
+  }else{
+    consecutiveAbsent++;consecutivePresent=0;
+    if(consecutiveAbsent>=ABSENCE_THRESH&&facePresent){
+      facePresent=false;
+      // user looked away, count as micro break
+    }
+  }
+}
+
+function updateTimer(){
+  if(!monitoring||resting)return;
+  if(facePresent){
+    continuousMs=Date.now()-screenStart;
+  }
+  const totalSec=Math.floor(continuousMs/1000);
+  const mm=String(Math.floor(totalSec/60)).padStart(2,'0');
+  const ss=String(totalSec%60).padStart(2,'0');
+  timerBig.textContent=mm+':'+ss;
+
+  const intervalMs=intervalMin*60000;
+  const pct=Math.min(100,Math.round(continuousMs/intervalMs*100));
+  progFill.style.width=pct+'%';
+  progText.textContent=pct+'%';
+
+  if(pct<50){progFill.className='prog-fill';}
+  else if(pct<80){progFill.className='prog-fill warn';}
+  else{progFill.className='prog-fill full';}
+
+  // fatigue level
+  const fLevel=pct<25?0:pct<50?1:pct<75?2:pct<100?3:4;
+  updateFatigue(fLevel);
+
+  // eye art
+  if(pct<50){eyeArt.textContent='◉‿◉';eyeArt.className='eye-art';statusText.textContent='用眼正常';statusText.className='status-text good';}
+  else if(pct<80){eyeArt.textContent='◉_◉';eyeArt.className='eye-art tired';statusText.textContent='注意用眼时间';statusText.className='status-text warn';}
+  else if(pct<100){eyeArt.textContent='≻_≺';eyeArt.className='eye-art tired';statusText.textContent='眼睛有点累了';statusText.className='status-text warn';}
+  else{eyeArt.textContent='✕‸✕';eyeArt.className='eye-art danger';statusText.textContent='该休息了!';statusText.className='status-text bad';}
+
+  if(continuousMs>=intervalMs){
+    triggerRest();
+  }
+}
+
+function updateFatigue(level){
+  const labels=['低','中','高','危险','危险'];
+  const classes=['','active-1','active-2','active-3','active-4'];
+  fatigueLbl.textContent=labels[level]||'低';
+  fb.forEach((b,i)=>{b.className='fatigue-block'+(i<level?' '+classes[i+1]:'');});
+}
+
+function triggerRest(){
+  if(resting)return;
+  // save continuous time
+  stats.totalMs+=continuousMs;
+  if(continuousMs>stats.longestMs)stats.longestMs=continuousMs;
+  stats.breaks++;
+  saveStats();renderStats();
+
+  if(soundOn)playBeep();
+  startRest();
+}
+
+function manualRest(){
+  if(resting)return;
+  if(monitoring&&continuousMs>0){
+    stats.totalMs+=continuousMs;
+    if(continuousMs>stats.longestMs)stats.longestMs=continuousMs;
+    stats.breaks++;
+    saveStats();renderStats();
+  }
+  startRest();
+}
+
+function startRest(){
+  resting=true;
+  restRemaining=restSec;
+  lookAwayFrames=0;
+  restCountdown.textContent=restRemaining;
+  restDetect.textContent='';
+  restOverlay.classList.add('show');
+  restTimer=setInterval(restTick,1000);
+}
+
+function restTick(){
+  restRemaining--;
+  restCountdown.textContent=Math.max(0,restRemaining);
+
+  // detect if looking away
+  if(stream){
+    const present=detectFace();
+    if(!present){lookAwayFrames++;restDetect.textContent='✓ 已检测到你在看远处';}
+    else{restDetect.textContent='还在看屏幕哦，看看远处吧';}
+  }
+
+  if(restRemaining<=0){
+    endRest();
+  }
+}
+
+function endRest(){
+  resting=false;
+  clearInterval(restTimer);
+  restOverlay.classList.remove('show');
+  continuousMs=0;
+  screenStart=Date.now();
+  timerBig.textContent='00:00';
+  progFill.style.width='0%';progText.textContent='0%';
+  updateFatigue(0);
+  eyeArt.textContent='◉‿◉';eyeArt.className='eye-art';
+  statusText.textContent='休息完毕!';statusText.className='status-text good';
+}
+
+function skipRest(){endRest();}
+
+function resetStats(){
+  if(!confirm('确定重置今日数据?'))return;
+  stats={totalMs:0,breaks:0,longestMs:0,date:TODAY};
+  saveStats();renderStats();
+}
+
+function playBeep(){
+  try{
+    const ac=new(window.AudioContext||window.webkitAudioContext)();
+    [0,0.15,0.3].forEach(t=>{
+      const o=ac.createOscillator(),g=ac.createGain();
+      o.type='square';o.frequency.value=880;
+      g.gain.value=0.15;
+      o.connect(g);g.connect(ac.destination);
+      o.start(ac.currentTime+t);o.stop(ac.currentTime+t+0.1);
+    });
+  }catch(e){}
+}
+
+loadSettings();
+loadStats();
+</script>
+</body>
+</html>

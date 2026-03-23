@@ -1,0 +1,858 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>★ 坐姿矫正器 ★</title>
+<style>
+  @keyframes blink {
+    0%, 49% { opacity: 1; }
+    50%, 100% { opacity: 0; }
+  }
+  @keyframes flash-red {
+    0%, 49% { background-color: #e63946; color: #fff; }
+    50%, 100% { background-color: #0f380f; color: #e63946; }
+  }
+  @keyframes scan {
+    0% { top: 0; }
+    100% { top: calc(100% - 2px); }
+  }
+  @keyframes pulse {
+    0%, 49% { box-shadow: 0 0 0 2px #8bac0f; }
+    50%, 100% { box-shadow: 0 0 0 2px #306230; }
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #0f380f;
+    color: #8bac0f;
+    font-family: monospace, "Courier New", Courier;
+    font-size: 14px;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    min-height: 100vh;
+    padding: 16px;
+    image-rendering: pixelated;
+  }
+
+  .container {
+    width: 520px;
+    max-width: 100%;
+  }
+
+  /* Title Bar */
+  .title-bar {
+    background: #306230;
+    border: 3px solid #8bac0f;
+    box-shadow: 4px 4px 0 #0a2a0a;
+    padding: 8px 12px;
+    text-align: center;
+    font-size: 18px;
+    font-weight: bold;
+    letter-spacing: 4px;
+    color: #9bbc0f;
+    margin-bottom: 8px;
+  }
+
+  /* Panel */
+  .panel {
+    background: #0f380f;
+    border: 3px solid #306230;
+    box-shadow: 4px 4px 0 #0a2a0a;
+    margin-bottom: 8px;
+    padding: 10px;
+    position: relative;
+  }
+  .panel-title {
+    font-size: 11px;
+    color: #306230;
+    margin-bottom: 6px;
+    letter-spacing: 2px;
+  }
+
+  /* Camera View */
+  .camera-wrap {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 4/3;
+    background: #0a2a0a;
+    border: 3px solid #306230;
+    overflow: hidden;
+  }
+  .camera-wrap video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transform: scaleX(-1);
+    display: block;
+  }
+  .camera-wrap canvas {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    transform: scaleX(-1);
+  }
+  .camera-overlay-status {
+    position: absolute;
+    bottom: 6px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 4px 14px;
+    font-size: 14px;
+    font-weight: bold;
+    letter-spacing: 2px;
+    border: 2px solid;
+    z-index: 5;
+    pointer-events: none;
+    white-space: nowrap;
+  }
+  .status-good {
+    background: #0f380f;
+    color: #8bac0f;
+    border-color: #8bac0f;
+  }
+  .status-bad {
+    animation: flash-red 0.5s steps(1) infinite;
+    border-color: #e63946;
+  }
+  .camera-placeholder {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    color: #306230;
+    font-size: 13px;
+    line-height: 2;
+  }
+  .scanline {
+    position: absolute;
+    left: 0; width: 100%;
+    height: 2px;
+    background: rgba(139,172,15,0.08);
+    animation: scan 4s linear infinite;
+    pointer-events: none;
+    z-index: 3;
+  }
+
+  /* Buttons */
+  .btn {
+    background: #306230;
+    color: #9bbc0f;
+    border: 3px solid #8bac0f;
+    box-shadow: 4px 4px 0 #0a2a0a;
+    padding: 8px 16px;
+    font-family: monospace;
+    font-size: 14px;
+    cursor: pointer;
+    letter-spacing: 2px;
+    transition: none;
+    display: inline-block;
+    text-align: center;
+  }
+  .btn:hover {
+    background: #8bac0f;
+    color: #0f380f;
+  }
+  .btn:active {
+    box-shadow: 1px 1px 0 #0a2a0a;
+    transform: translate(3px, 3px);
+  }
+  .btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+  .btn-row {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+  }
+  .btn-row .btn { flex: 1; }
+
+  /* Indicators */
+  .indicators {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 6px;
+    margin-top: 8px;
+  }
+  .indicator {
+    border: 2px solid #306230;
+    padding: 6px;
+    text-align: center;
+  }
+  .indicator .label {
+    font-size: 11px;
+    color: #306230;
+    margin-bottom: 4px;
+  }
+  .indicator .value {
+    font-size: 14px;
+    font-weight: bold;
+    letter-spacing: 1px;
+  }
+  .ind-ok .value { color: #8bac0f; }
+  .ind-ok { border-color: #8bac0f; }
+  .ind-warn .value { color: #e63946; }
+  .ind-warn { border-color: #e63946; animation: pulse 0.6s steps(1) infinite; }
+
+  /* Stats */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 6px;
+  }
+  .stat-item {
+    text-align: center;
+    border: 2px solid #306230;
+    padding: 6px;
+  }
+  .stat-item .label {
+    font-size: 10px;
+    color: #306230;
+    margin-bottom: 2px;
+  }
+  .stat-item .value {
+    font-size: 16px;
+    color: #9bbc0f;
+    font-weight: bold;
+  }
+
+  /* Slider */
+  .slider-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 8px;
+  }
+  .slider-row label {
+    font-size: 12px;
+    color: #306230;
+    white-space: nowrap;
+  }
+  .slider-row input[type=range] {
+    flex: 1;
+    -webkit-appearance: none;
+    appearance: none;
+    height: 8px;
+    background: #306230;
+    outline: none;
+    border: 2px solid #8bac0f;
+  }
+  .slider-row input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px; height: 14px;
+    background: #9bbc0f;
+    border: 2px solid #0f380f;
+    cursor: pointer;
+  }
+  .slider-val {
+    font-size: 12px;
+    color: #8bac0f;
+    min-width: 30px;
+    text-align: right;
+  }
+
+  /* Pixel art decorations */
+  .pixel-heart::before { content: "♥"; }
+  .pixel-star::before { content: "★"; }
+
+  /* Notification toast */
+  .toast {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #306230;
+    color: #9bbc0f;
+    border: 3px solid #8bac0f;
+    box-shadow: 4px 4px 0 #0a2a0a;
+    padding: 8px 20px;
+    font-family: monospace;
+    font-size: 14px;
+    z-index: 999;
+    display: none;
+    letter-spacing: 2px;
+  }
+  .toast.show {
+    display: block;
+    animation: blink 1s steps(1) 3;
+  }
+
+/* ===== MOBILE ===== */
+@media(max-width:600px){
+  body{overflow-y:auto!important;min-height:100vh;}
+  video{width:100%!important;max-width:100%!important;height:auto!important;}
+  canvas{max-width:100%!important;}
+  #app,.app,.container,.main,.wrapper,[id*="app"],[class*="container"]{width:100%!important;max-width:100%!important;margin:0!important;border-radius:0!important;}
+  button,.btn,.action-btn,[class*="btn"]{min-height:44px;font-size:13px!important;touch-action:manipulation;}
+  input,textarea,select{font-size:16px!important;}
+  [style*="width:"][style*="px"]{max-width:100%!important;}
+}
+</style>
+</head>
+<body>
+
+<div class="container">
+  <!-- Title -->
+  <div class="title-bar">★ 坐姿矫正器 ★</div>
+
+  <!-- Camera -->
+  <div class="panel">
+    <div class="panel-title">[ 摄像头 CAMERA ]</div>
+    <div class="camera-wrap" id="cameraWrap">
+      <video id="video" autoplay playsinline></video>
+      <canvas id="overlay"></canvas>
+      <div class="scanline"></div>
+      <div class="camera-placeholder" id="placeholder">
+        ▶ 点击下方按钮开启摄像头<br>
+        ░░░░░░░░░░░░░░░░
+      </div>
+      <div class="camera-overlay-status status-good" id="overlayStatus" style="display:none;">
+        坐姿良好
+      </div>
+    </div>
+
+    <!-- Buttons -->
+    <div class="btn-row">
+      <button class="btn" id="btnStart" onclick="toggleCamera()">▶ 开启摄像头</button>
+      <button class="btn" id="btnCalibrate" onclick="calibrate()" disabled>◎ 校准正确坐姿</button>
+    </div>
+  </div>
+
+  <!-- Indicators -->
+  <div class="panel">
+    <div class="panel-title">[ 实时检测 DETECTION ]</div>
+    <div class="indicators">
+      <div class="indicator ind-ok" id="indDistance">
+        <div class="label">距离 DIST</div>
+        <div class="value" id="valDistance">--</div>
+      </div>
+      <div class="indicator ind-ok" id="indTilt">
+        <div class="label">倾斜 TILT</div>
+        <div class="value" id="valTilt">--</div>
+      </div>
+      <div class="indicator ind-ok" id="indHeight">
+        <div class="label">高度 H-POS</div>
+        <div class="value" id="valHeight">--</div>
+      </div>
+    </div>
+
+    <!-- Sensitivity Slider -->
+    <div class="slider-row">
+      <label>灵敏度:</label>
+      <input type="range" id="sensitivity" min="1" max="10" value="5" oninput="updateSensitivity()">
+      <span class="slider-val" id="sensVal">5</span>
+    </div>
+  </div>
+
+  <!-- Stats -->
+  <div class="panel">
+    <div class="panel-title">[ 统计 STATS ]</div>
+    <div class="stats-grid">
+      <div class="stat-item">
+        <div class="label">监测时长</div>
+        <div class="value" id="statTime">00:00</div>
+      </div>
+      <div class="stat-item">
+        <div class="label">良好坐姿</div>
+        <div class="value" id="statGood">--%</div>
+      </div>
+      <div class="stat-item">
+        <div class="label">今日警告</div>
+        <div class="value" id="statEvents">0</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="../cam-core/cam-core.js"></script>
+<script>
+// ==================== STATE ====================
+const state = {
+  cameraOn: false,
+  calibrated: false,
+  monitoring: false,
+  ref: null,           // { cx, cy, w, h } reference face metrics
+  current: null,       // current face metrics
+  badSince: 0,         // timestamp when bad posture started (0 = good)
+  warningPlaying: false,
+  sensitivity: 5,      // 1-10
+
+  // stats
+  monitorStart: 0,
+  goodFrames: 0,
+  totalFrames: 0,
+  eventsToday: 0,
+};
+
+let video, overlay, ctx;
+let animId = null;
+let audioCtx = null;
+let beepTimeout = null;
+
+// ==================== INIT ====================
+window.addEventListener('DOMContentLoaded', () => {
+  video = document.getElementById('video');
+  overlay = document.getElementById('overlay');
+  ctx = overlay.getContext('2d', { willReadFrequently: true });
+  loadStats();
+  updateStatsUI();
+});
+
+// ==================== CAMERA ====================
+async function toggleCamera() {
+  if (state.cameraOn) {
+    stopCamera();
+  } else {
+    await startCamera();
+  }
+}
+
+async function startCamera() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } }
+    });
+    video.srcObject = stream;
+    await video.play();
+    state.cameraOn = true;
+
+    overlay.width = video.videoWidth || 640;
+    overlay.height = video.videoHeight || 480;
+
+    document.getElementById('placeholder').style.display = 'none';
+    document.getElementById('btnStart').textContent = '■ 关闭摄像头';
+    document.getElementById('btnCalibrate').disabled = false;
+
+    startDetection();
+    showToast('摄像头已开启');
+  } catch (e) {
+    showToast('无法访问摄像头: ' + e.message);
+  }
+}
+
+function stopCamera() {
+  if (video.srcObject) {
+    video.srcObject.getTracks().forEach(t => t.stop());
+    video.srcObject = null;
+  }
+  state.cameraOn = false;
+  state.calibrated = false;
+  state.monitoring = false;
+  state.ref = null;
+  state.badSince = 0;
+
+  if (animId) { cancelAnimationFrame(animId); animId = null; }
+
+  document.getElementById('placeholder').style.display = '';
+  document.getElementById('btnStart').textContent = '▶ 开启摄像头';
+  document.getElementById('btnCalibrate').disabled = true;
+  document.getElementById('overlayStatus').style.display = 'none';
+  ctx.clearRect(0, 0, overlay.width, overlay.height);
+
+  resetIndicators();
+  saveStats();
+}
+
+// ==================== CALIBRATION ====================
+function calibrate() {
+  if (!state.cameraOn) return;
+  const face = detectFace();
+  if (!face) {
+    showToast('未检测到面部，请正对摄像头');
+    return;
+  }
+  state.ref = { ...face };
+  state.calibrated = true;
+  state.monitoring = true;
+  state.monitorStart = Date.now();
+  state.goodFrames = 0;
+  state.totalFrames = 0;
+  state.badSince = 0;
+
+  document.getElementById('overlayStatus').style.display = '';
+  showToast('校准完成！请保持正确坐姿');
+}
+
+// ==================== FACE DETECTION (Skin Color) ====================
+function detectFace() {
+  const w = overlay.width;
+  const h = overlay.height;
+  if (w === 0 || h === 0) return null;
+
+  // Draw current video frame to canvas
+  ctx.drawImage(video, 0, 0, w, h);
+  const imageData = ctx.getImageData(0, 0, w, h);
+  const data = imageData.data;
+
+  // Skin color detection - find bounding box of skin pixels
+  let minX = w, maxX = 0, minY = h, maxY = 0;
+  let skinCount = 0;
+
+  // Sample every 3rd pixel for performance
+  for (let y = 0; y < h; y += 3) {
+    for (let x = 0; x < w; x += 3) {
+      const i = (y * w + x) * 4;
+      const r = data[i], g = data[i+1], b = data[i+2];
+
+      if (isSkinColor(r, g, b)) {
+        skinCount++;
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+      }
+    }
+  }
+
+  // Need minimum skin pixels to be a face
+  const totalSampled = (w / 3) * (h / 3);
+  if (skinCount < totalSampled * 0.02) return null;
+
+  // Find the largest connected-ish skin region using a simple approach:
+  // Divide into grid cells, find the cell cluster with the most skin pixels
+  const cellSize = 20;
+  const cols = Math.ceil(w / cellSize);
+  const rows = Math.ceil(h / cellSize);
+  const grid = new Uint16Array(cols * rows);
+
+  for (let y = 0; y < h; y += 2) {
+    for (let x = 0; x < w; x += 2) {
+      const i = (y * w + x) * 4;
+      const r = data[i], g = data[i+1], b = data[i+2];
+      if (isSkinColor(r, g, b)) {
+        const cx = Math.floor(x / cellSize);
+        const cy = Math.floor(y / cellSize);
+        if (cx < cols && cy < rows) grid[cy * cols + cx]++;
+      }
+    }
+  }
+
+  // Find the cell with the most skin pixels
+  let bestCell = 0, bestVal = 0;
+  for (let i = 0; i < grid.length; i++) {
+    if (grid[i] > bestVal) { bestVal = grid[i]; bestCell = i; }
+  }
+
+  if (bestVal < 10) return null;
+
+  // Flood fill from best cell to find connected region
+  const visited = new Uint8Array(cols * rows);
+  const queue = [bestCell];
+  visited[bestCell] = 1;
+  const threshold = bestVal * 0.15;
+  let rMinX = cols, rMaxX = 0, rMinY = rows, rMaxY = 0;
+
+  while (queue.length > 0) {
+    const cell = queue.pop();
+    const cy = Math.floor(cell / cols);
+    const cx = cell % cols;
+    if (cx < rMinX) rMinX = cx;
+    if (cx > rMaxX) rMaxX = cx;
+    if (cy < rMinY) rMinY = cy;
+    if (cy > rMaxY) rMaxY = cy;
+
+    // Check 4 neighbors
+    const neighbors = [
+      cy > 0 ? (cy-1)*cols+cx : -1,
+      cy < rows-1 ? (cy+1)*cols+cx : -1,
+      cx > 0 ? cy*cols+(cx-1) : -1,
+      cx < cols-1 ? cy*cols+(cx+1) : -1,
+    ];
+    for (const n of neighbors) {
+      if (n >= 0 && !visited[n] && grid[n] > threshold) {
+        visited[n] = 1;
+        queue.push(n);
+      }
+    }
+  }
+
+  // Convert cell coordinates back to pixel coordinates
+  const faceX = rMinX * cellSize;
+  const faceY = rMinY * cellSize;
+  const faceW = (rMaxX - rMinX + 1) * cellSize;
+  const faceH = (rMaxY - rMinY + 1) * cellSize;
+
+  // Filter out unlikely face dimensions
+  if (faceW < 30 || faceH < 30) return null;
+  if (faceW > w * 0.9 || faceH > h * 0.95) return null;
+
+  return {
+    x: faceX,
+    y: faceY,
+    w: faceW,
+    h: faceH,
+    cx: faceX + faceW / 2,
+    cy: faceY + faceH / 2,
+  };
+}
+
+function isSkinColor(r, g, b) {
+  // CamCore: HSV-based skin detection (more robust to lighting)
+  const hsv = CamCore.rgb2hsv(r, g, b);
+  return (hsv[0] >= 0 && hsv[0] <= 55) && (hsv[1] >= 0.12 && hsv[1] <= 0.75) && (hsv[2] >= 0.18);
+}
+
+// ==================== DETECTION LOOP ====================
+function startDetection() {
+  function loop() {
+    if (!state.cameraOn) return;
+
+    const face = detectFace();
+    drawOverlay(face);
+
+    if (state.calibrated && state.monitoring) {
+      analyzePosture(face);
+      state.totalFrames++;
+    }
+
+    updateStatsUI();
+    animId = requestAnimationFrame(loop);
+  }
+  animId = requestAnimationFrame(loop);
+}
+
+function drawOverlay(face) {
+  const w = overlay.width, h = overlay.height;
+  ctx.clearRect(0, 0, w, h);
+
+  if (!face) return;
+
+  // Draw face bounding box (pixel style - dashed)
+  ctx.strokeStyle = state.calibrated ? '#8bac0f' : '#9bbc0f';
+  ctx.lineWidth = 2;
+  ctx.setLineDash([6, 4]);
+  ctx.strokeRect(face.x, face.y, face.w, face.h);
+  ctx.setLineDash([]);
+
+  // Draw center crosshair
+  const cx = face.cx, cy = face.cy;
+  ctx.strokeStyle = '#8bac0f';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(cx - 8, cy); ctx.lineTo(cx + 8, cy);
+  ctx.moveTo(cx, cy - 8); ctx.lineTo(cx, cy + 8);
+  ctx.stroke();
+
+  // Draw reference position if calibrated
+  if (state.ref) {
+    ctx.strokeStyle = '#306230';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 3]);
+    ctx.strokeRect(state.ref.x, state.ref.y, state.ref.w, state.ref.h);
+    ctx.setLineDash([]);
+
+    // Reference center
+    ctx.fillStyle = '#306230';
+    ctx.fillRect(state.ref.cx - 3, state.ref.cy - 3, 6, 6);
+  }
+
+  // Corner brackets on face box (pixel style)
+  const bLen = 10;
+  ctx.strokeStyle = '#9bbc0f';
+  ctx.lineWidth = 2;
+  ctx.setLineDash([]);
+  // Top-left
+  ctx.beginPath();
+  ctx.moveTo(face.x, face.y + bLen); ctx.lineTo(face.x, face.y); ctx.lineTo(face.x + bLen, face.y);
+  ctx.stroke();
+  // Top-right
+  ctx.beginPath();
+  ctx.moveTo(face.x + face.w - bLen, face.y); ctx.lineTo(face.x + face.w, face.y); ctx.lineTo(face.x + face.w, face.y + bLen);
+  ctx.stroke();
+  // Bottom-left
+  ctx.beginPath();
+  ctx.moveTo(face.x, face.y + face.h - bLen); ctx.lineTo(face.x, face.y + face.h); ctx.lineTo(face.x + bLen, face.y + face.h);
+  ctx.stroke();
+  // Bottom-right
+  ctx.beginPath();
+  ctx.moveTo(face.x + face.w - bLen, face.y + face.h); ctx.lineTo(face.x + face.w, face.y + face.h); ctx.lineTo(face.x + face.w, face.y + face.h - bLen);
+  ctx.stroke();
+}
+
+// ==================== POSTURE ANALYSIS ====================
+function analyzePosture(face) {
+  const statusEl = document.getElementById('overlayStatus');
+  const sensFactor = 1.5 - (state.sensitivity - 1) * 0.1; // sens 1 = lenient (1.4), sens 10 = strict (0.5)
+
+  if (!face || !state.ref) {
+    // No face detected
+    setIndicator('indDistance', 'valDistance', '--', false);
+    setIndicator('indTilt', 'valTilt', '--', false);
+    setIndicator('indHeight', 'valHeight', '--', false);
+    return;
+  }
+
+  const ref = state.ref;
+
+  // 1. Distance check - face size vs reference (bigger = closer)
+  const sizeRatio = (face.w * face.h) / (ref.w * ref.h);
+  const distThreshold = 0.25 * sensFactor;
+  const tooClose = sizeRatio > (1 + distThreshold);
+  const tooFar = sizeRatio < (1 - distThreshold * 0.8);
+  const distBad = tooClose || tooFar;
+
+  // 2. Tilt check - horizontal shift of face center
+  const hShift = Math.abs(face.cx - ref.cx) / ref.w;
+  const tiltThreshold = 0.3 * sensFactor;
+  const tiltBad = hShift > tiltThreshold;
+
+  // 3. Height check - vertical shift (down = slouching)
+  const vShift = (face.cy - ref.cy) / ref.h;
+  const heightThreshold = 0.25 * sensFactor;
+  const heightBad = vShift > heightThreshold;
+
+  // Update indicators
+  if (distBad) {
+    setIndicator('indDistance', 'valDistance', tooClose ? '太近!' : '太远!', true);
+  } else {
+    setIndicator('indDistance', 'valDistance', 'OK', false);
+  }
+  setIndicator('indTilt', 'valTilt', tiltBad ? '偏移!' : 'OK', tiltBad);
+  setIndicator('indHeight', 'valHeight', heightBad ? '太低!' : 'OK', heightBad);
+
+  const anyBad = distBad || tiltBad || heightBad;
+
+  if (anyBad) {
+    // Bad posture
+    if (state.badSince === 0) state.badSince = Date.now();
+
+    statusEl.textContent = '⚠ 请调整坐姿!';
+    statusEl.className = 'camera-overlay-status status-bad';
+
+    // Warning beep after 5 seconds of continuous bad posture
+    const badDuration = Date.now() - state.badSince;
+    if (badDuration > 5000 && !state.warningPlaying) {
+      playWarningBeep();
+      state.warningPlaying = true;
+      state.eventsToday++;
+      saveStats();
+    }
+  } else {
+    // Good posture
+    state.badSince = 0;
+    state.warningPlaying = false;
+    state.goodFrames++;
+
+    statusEl.textContent = '● 坐姿良好';
+    statusEl.className = 'camera-overlay-status status-good';
+  }
+}
+
+function setIndicator(boxId, valId, text, isWarn) {
+  const box = document.getElementById(boxId);
+  const val = document.getElementById(valId);
+  val.textContent = text;
+  box.className = 'indicator ' + (isWarn ? 'ind-warn' : 'ind-ok');
+}
+
+function resetIndicators() {
+  setIndicator('indDistance', 'valDistance', '--', false);
+  setIndicator('indTilt', 'valTilt', '--', false);
+  setIndicator('indHeight', 'valHeight', '--', false);
+}
+
+// ==================== AUDIO (8-bit beep) ====================
+function playWarningBeep() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+  const now = audioCtx.currentTime;
+
+  // 8-bit style warning: three short beeps
+  const frequencies = [440, 520, 440];
+  const beepDur = 0.12;
+  const gap = 0.08;
+
+  frequencies.forEach((freq, i) => {
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = 'square'; // 8-bit sound
+    osc.frequency.value = freq;
+    gain.gain.value = 0.15;
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+
+    const start = now + i * (beepDur + gap);
+    osc.start(start);
+    osc.stop(start + beepDur);
+    gain.gain.setValueAtTime(0.15, start);
+    gain.gain.setValueAtTime(0, start + beepDur);
+  });
+
+  // Allow another beep after 8 seconds
+  if (beepTimeout) clearTimeout(beepTimeout);
+  beepTimeout = setTimeout(() => {
+    if (state.badSince > 0) state.warningPlaying = false;
+  }, 8000);
+}
+
+// ==================== SENSITIVITY ====================
+function updateSensitivity() {
+  const val = document.getElementById('sensitivity').value;
+  state.sensitivity = parseInt(val);
+  document.getElementById('sensVal').textContent = val;
+}
+
+// ==================== STATS ====================
+function loadStats() {
+  const today = new Date().toDateString();
+  const saved = localStorage.getItem('postureCheck_stats');
+  if (saved) {
+    try {
+      const d = JSON.parse(saved);
+      if (d.date === today) {
+        state.eventsToday = d.eventsToday || 0;
+      }
+    } catch (e) {}
+  }
+}
+
+function saveStats() {
+  const today = new Date().toDateString();
+  localStorage.setItem('postureCheck_stats', JSON.stringify({
+    date: today,
+    eventsToday: state.eventsToday,
+  }));
+}
+
+function updateStatsUI() {
+  // Time
+  let elapsed = 0;
+  if (state.monitoring && state.monitorStart) {
+    elapsed = Math.floor((Date.now() - state.monitorStart) / 1000);
+  }
+  const mm = String(Math.floor(elapsed / 60)).padStart(2, '0');
+  const ss = String(elapsed % 60).padStart(2, '0');
+  document.getElementById('statTime').textContent = mm + ':' + ss;
+
+  // Good posture %
+  if (state.totalFrames > 0) {
+    const pct = Math.round((state.goodFrames / state.totalFrames) * 100);
+    document.getElementById('statGood').textContent = pct + '%';
+  } else {
+    document.getElementById('statGood').textContent = '--%';
+  }
+
+  // Events
+  document.getElementById('statEvents').textContent = state.eventsToday;
+}
+
+// ==================== TOAST ====================
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = '[ ' + msg + ' ]';
+  t.classList.remove('show');
+  void t.offsetWidth; // reflow
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+</script>
+
+</body>
+</html>

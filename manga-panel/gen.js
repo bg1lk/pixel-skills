@@ -1,0 +1,450 @@
+const fs = require('fs');
+const path = require('path');
+
+const html = `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>\u2605 \u6f2b\u753b\u5206\u955c\u673a \u2605</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0f380f;color:#9bbc0f;font-family:'Courier New',monospace;overflow-y:auto;min-height:100vh;display:flex;flex-direction:column}
+h1{text-align:center;padding:8px;font-size:20px;color:#9bbc0f;text-shadow:2px 2px #0f380f;background:#1a4a1a;border-bottom:2px solid #306230}
+.toolbar{display:flex;flex-wrap:wrap;gap:6px;padding:8px;background:#1a4a1a;border-bottom:2px solid #306230;align-items:center;justify-content:center}
+button{background:#306230;color:#9bbc0f;border:2px solid #9bbc0f;padding:6px 14px;font-family:'Courier New',monospace;font-size:13px;cursor:pointer}
+button:hover{background:#9bbc0f;color:#0f380f}
+button.active{background:#9bbc0f;color:#0f380f;font-weight:bold}
+.camera-area{display:flex;justify-content:center;padding:10px;position:relative}
+.cam-wrap{position:relative;display:inline-block}
+video{transform:scaleX(-1);display:block;max-width:400px;width:100%}
+canvas.preview-overlay{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none}
+.panels-area{padding:10px;display:flex;justify-content:center}
+.manga-grid{display:grid;gap:3px;background:#000;border:4px solid #9bbc0f;max-width:700px;width:100%}
+.manga-grid.layout-2{grid-template-columns:1fr 1fr;grid-template-rows:1fr}
+.manga-grid.layout-4{grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr}
+.manga-grid.layout-6{grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr 1fr}
+.panel{background:#fff;position:relative;aspect-ratio:4/3;overflow:hidden;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#666;font-size:14px}
+.panel img{width:100%;height:100%;object-fit:cover}
+.panel .bubble{position:absolute;background:#fff;border:2px solid #000;border-radius:20px;padding:6px 12px;font-size:13px;color:#000;cursor:move;user-select:none;max-width:140px;word-wrap:break-word;z-index:5;font-family:'Courier New',monospace}
+.panel .bubble::after{content:'';position:absolute;bottom:-10px;left:20px;border:6px solid transparent;border-top-color:#000}
+.panel .sfx{position:absolute;font-size:28px;font-weight:bold;color:#000;cursor:move;user-select:none;z-index:5;text-shadow:2px 2px #fff,-1px -1px #fff,1px -1px #fff,-1px 1px #fff;font-family:serif}
+.sfx-bar{display:flex;gap:4px;align-items:center}
+.sfx-bar span{color:#9bbc0f;font-size:12px}
+.status{text-align:center;padding:4px;font-size:11px;background:#1a4a1a;border-top:2px solid #306230;margin-top:auto}
+</style>
+</head>
+<body>
+<h1>\u2605 \u6f2b\u753b\u5206\u955c\u673a \u2605</h1>
+<div class="toolbar">
+  <button onclick="capture()">\u62cd\u6444 (Space)</button>
+  <span style="color:#306230">|</span>
+  <button onclick="setLayout(2)" id="btn2" class="active">2\u683c</button>
+  <button onclick="setLayout(4)" id="btn4">4\u683c</button>
+  <button onclick="setLayout(6)" id="btn6">6\u683c</button>
+  <span style="color:#306230">|</span>
+  <div class="sfx-bar">
+    <span>\u97f3\u6548:</span>
+    <button onclick="setSfx('\u30c9\u30c9\u30c9')">\u30c9\u30c9\u30c9</button>
+    <button onclick="setSfx('\u30d0\u30fc\u30f3')">\u30d0\u30fc\u30f3</button>
+    <button onclick="setSfx('\u30b4\u30b4\u30b4')">\u30b4\u30b4\u30b4</button>
+    <button onclick="setSfx('\u30c9\u30ad\u30c9\u30ad')">\u30c9\u30ad\u30c9\u30ad</button>
+  </div>
+  <span style="color:#306230">|</span>
+  <button onclick="exportManga()">\u5bfc\u51fa PNG</button>
+  <button onclick="clearAll()">\u6e05\u7a7a\u5168\u90e8</button>
+</div>
+<div class="camera-area">
+  <div class="cam-wrap">
+    <video id="video" autoplay playsinline></video>
+    <canvas class="preview-overlay" id="previewCanvas"></canvas>
+  </div>
+</div>
+<div class="panels-area">
+  <div class="manga-grid layout-2" id="mangaGrid"></div>
+</div>
+<div class="status" id="status">\u6b63\u5728\u521d\u59cb\u5316...</div>
+
+<script>
+const video = document.getElementById('video');
+const previewCanvas = document.getElementById('previewCanvas');
+const previewCtx = previewCanvas.getContext('2d');
+const grid = document.getElementById('mangaGrid');
+const statusEl = document.getElementById('status');
+
+let layout = 2;
+let panels = [];
+let pendingSfx = null;
+let currentPanel = 0;
+
+function setLayout(n) {
+  layout = n;
+  document.getElementById('btn2').className = n===2?'active':'';
+  document.getElementById('btn4').className = n===4?'active':'';
+  document.getElementById('btn6').className = n===6?'active':'';
+  grid.className = 'manga-grid layout-' + n;
+  buildPanels();
+}
+
+function buildPanels() {
+  grid.innerHTML = '';
+  // Keep existing captured images
+  const oldPanels = [...panels];
+  panels = [];
+  for (let i = 0; i < layout; i++) {
+    const div = document.createElement('div');
+    div.className = 'panel';
+    div.dataset.index = i;
+    if (oldPanels[i] && oldPanels[i].imageData) {
+      const img = document.createElement('img');
+      img.src = oldPanels[i].imageData;
+      div.appendChild(img);
+      panels[i] = { imageData: oldPanels[i].imageData, bubbles: [], sfxs: [] };
+      // Restore bubbles
+      if (oldPanels[i].bubbles) {
+        oldPanels[i].bubbles.forEach(b => addBubbleToPanel(div, i, b.text, b.x, b.y));
+        panels[i].bubbles = oldPanels[i].bubbles;
+      }
+      if (oldPanels[i].sfxs) {
+        oldPanels[i].sfxs.forEach(s => addSfxToPanel(div, i, s.text, s.x, s.y));
+        panels[i].sfxs = oldPanels[i].sfxs;
+      }
+    } else {
+      div.textContent = '\u70b9\u51fb\u62cd\u6444\u586b\u5145 #' + (i+1);
+      panels[i] = { imageData: null, bubbles: [], sfxs: [] };
+    }
+    div.addEventListener('click', (e) => onPanelClick(e, i));
+    grid.appendChild(div);
+  }
+  currentPanel = panels.findIndex(p => !p.imageData);
+  if (currentPanel < 0) currentPanel = 0;
+}
+
+async function initCamera() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:'user',width:{ideal:640},height:{ideal:480}}});
+    video.srcObject = stream;
+    video.addEventListener('loadedmetadata', () => {
+      previewCanvas.width = video.videoWidth;
+      previewCanvas.height = video.videoHeight;
+      drawPreview();
+    });
+    statusEl.textContent = '\u6444\u50cf\u5934\u5df2\u542f\u52a8 - \u6309\u7a7a\u683c\u6216\u70b9\u62cd\u6444\u6309\u94ae\u6355\u6349\u753b\u9762';
+  } catch(e) {
+    statusEl.textContent = '\u6444\u50cf\u5934\u542f\u52a8\u5931\u8d25: ' + e.message;
+  }
+}
+
+function drawPreview() {
+  const w = previewCanvas.width, h = previewCanvas.height;
+  previewCtx.save();
+  previewCtx.translate(w, 0);
+  previewCtx.scale(-1, 1);
+  previewCtx.drawImage(video, 0, 0, w, h);
+  previewCtx.restore();
+
+  const imageData = previewCtx.getImageData(0, 0, w, h);
+  applyMangaEffect(imageData);
+  previewCtx.putImageData(imageData, 0, 0);
+  requestAnimationFrame(drawPreview);
+}
+
+function applyMangaEffect(imageData) {
+  const d = imageData.data;
+  const w = imageData.width, h = imageData.height;
+
+  // Grayscale
+  for (let i = 0; i < d.length; i += 4) {
+    const gray = d[i] * 0.299 + d[i+1] * 0.587 + d[i+2] * 0.114;
+    d[i] = d[i+1] = d[i+2] = gray;
+  }
+
+  // Copy grayscale for edge detection
+  const gray = new Float32Array(w * h);
+  for (let i = 0; i < w * h; i++) {
+    gray[i] = d[i * 4];
+  }
+
+  // Sobel edge detection
+  const edges = new Float32Array(w * h);
+  for (let y = 1; y < h - 1; y++) {
+    for (let x = 1; x < w - 1; x++) {
+      const idx = y * w + x;
+      const gx = -gray[(y-1)*w+x-1] + gray[(y-1)*w+x+1]
+                -2*gray[y*w+x-1] + 2*gray[y*w+x+1]
+                -gray[(y+1)*w+x-1] + gray[(y+1)*w+x+1];
+      const gy = -gray[(y-1)*w+x-1] - 2*gray[(y-1)*w+x] - gray[(y-1)*w+x+1]
+                +gray[(y+1)*w+x-1] + 2*gray[(y+1)*w+x] + gray[(y+1)*w+x+1];
+      edges[idx] = Math.min(255, Math.sqrt(gx*gx + gy*gy));
+    }
+  }
+
+  // Combine: halftone dots for shading + edges as black lines
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const idx = y * w + x;
+      const i4 = idx * 4;
+      const edge = edges[idx];
+      const g = gray[idx];
+
+      // Halftone: use dot pattern for mid-tones
+      const dotSize = 4;
+      const cx = x % dotSize - dotSize/2;
+      const cy = y % dotSize - dotSize/2;
+      const dist = Math.sqrt(cx*cx + cy*cy);
+      const threshold = (255 - g) / 255 * (dotSize * 0.8);
+      const halftone = dist < threshold ? 0 : 255;
+
+      // Combine
+      let val = halftone;
+      if (edge > 80) val = 0; // Strong edges become black
+      if (g > 220) val = 255; // Keep highlights white
+
+      d[i4] = d[i4+1] = d[i4+2] = val;
+      d[i4+3] = 255;
+    }
+  }
+}
+
+function capture() {
+  // Find next empty panel
+  let target = panels.findIndex(p => !p.imageData);
+  if (target < 0) target = currentPanel;
+
+  const w = previewCanvas.width, h = previewCanvas.height;
+  const capCanvas = document.createElement('canvas');
+  capCanvas.width = w; capCanvas.height = h;
+  const cctx = capCanvas.getContext('2d');
+
+  // Draw mirrored video
+  cctx.save();
+  cctx.translate(w, 0);
+  cctx.scale(-1, 1);
+  cctx.drawImage(video, 0, 0, w, h);
+  cctx.restore();
+
+  // Apply manga effect
+  const imageData = cctx.getImageData(0, 0, w, h);
+  applyMangaEffect(imageData);
+  cctx.putImageData(imageData, 0, 0);
+
+  const dataUrl = capCanvas.toDataURL('image/png');
+  panels[target] = { imageData: dataUrl, bubbles: [], sfxs: [] };
+
+  // Update panel display
+  const panelDiv = grid.children[target];
+  panelDiv.innerHTML = '';
+  const img = document.createElement('img');
+  img.src = dataUrl;
+  panelDiv.appendChild(img);
+
+  currentPanel = (target + 1) % layout;
+  statusEl.textContent = '\u5df2\u62cd\u6444\u7b2c ' + (target + 1) + ' \u683c\uff01\u70b9\u51fb\u9762\u677f\u6dfb\u52a0\u5bf9\u8bdd\u6846';
+}
+
+function onPanelClick(e, idx) {
+  if (!panels[idx].imageData) return;
+  const panelDiv = grid.children[idx];
+  const rect = panelDiv.getBoundingClientRect();
+  const x = ((e.clientX - rect.left) / rect.width * 100);
+  const y = ((e.clientY - rect.top) / rect.height * 100);
+
+  if (pendingSfx) {
+    const sfxText = pendingSfx;
+    pendingSfx = null;
+    panels[idx].sfxs.push({text: sfxText, x, y});
+    addSfxToPanel(panelDiv, idx, sfxText, x, y);
+    statusEl.textContent = '\u5df2\u6dfb\u52a0\u97f3\u6548: ' + sfxText;
+    return;
+  }
+
+  // Add speech bubble
+  const text = prompt('\u8f93\u5165\u5bf9\u8bdd\u5185\u5bb9:');
+  if (text && text.trim()) {
+    panels[idx].bubbles.push({text: text.trim(), x, y});
+    addBubbleToPanel(panelDiv, idx, text.trim(), x, y);
+    statusEl.textContent = '\u5df2\u6dfb\u52a0\u5bf9\u8bdd\u6846';
+  }
+}
+
+function addBubbleToPanel(panelDiv, idx, text, xPct, yPct) {
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble';
+  bubble.textContent = text;
+  bubble.style.left = xPct + '%';
+  bubble.style.top = yPct + '%';
+  makeDraggable(bubble, panelDiv, idx, 'bubbles', panels[idx].bubbles.length - 1);
+  panelDiv.appendChild(bubble);
+}
+
+function addSfxToPanel(panelDiv, idx, text, xPct, yPct) {
+  const sfx = document.createElement('div');
+  sfx.className = 'sfx';
+  sfx.textContent = text;
+  sfx.style.left = xPct + '%';
+  sfx.style.top = yPct + '%';
+  makeDraggable(sfx, panelDiv, idx, 'sfxs', panels[idx].sfxs.length - 1);
+  panelDiv.appendChild(sfx);
+}
+
+function makeDraggable(el, panelDiv, pIdx, type, itemIdx) {
+  let startX, startY, origLeft, origTop;
+  el.addEventListener('mousedown', (e) => {
+    e.stopPropagation();
+    startX = e.clientX; startY = e.clientY;
+    origLeft = parseFloat(el.style.left);
+    origTop = parseFloat(el.style.top);
+    const onMove = (ev) => {
+      const rect = panelDiv.getBoundingClientRect();
+      const dx = (ev.clientX - startX) / rect.width * 100;
+      const dy = (ev.clientY - startY) / rect.height * 100;
+      el.style.left = (origLeft + dx) + '%';
+      el.style.top = (origTop + dy) + '%';
+    };
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      if (panels[pIdx] && panels[pIdx][type] && panels[pIdx][type][itemIdx]) {
+        panels[pIdx][type][itemIdx].x = parseFloat(el.style.left);
+        panels[pIdx][type][itemIdx].y = parseFloat(el.style.top);
+      }
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+}
+
+function setSfx(text) {
+  pendingSfx = text;
+  statusEl.textContent = '\u5df2\u9009\u62e9\u97f3\u6548 "' + text + '" - \u70b9\u51fb\u4efb\u610f\u9762\u677f\u653e\u7f6e';
+}
+
+function clearAll() {
+  panels = [];
+  buildPanels();
+  statusEl.textContent = '\u5df2\u6e05\u7a7a\u6240\u6709\u9762\u677f';
+}
+
+function exportManga() {
+  const cols = 2;
+  const rows = layout / 2;
+  const pw = 350, ph = 263; // panel size
+  const gap = 3, border = 4;
+  const totalW = cols * pw + (cols - 1) * gap + border * 2;
+  const totalH = rows * ph + (rows - 1) * gap + border * 2;
+
+  const expCanvas = document.createElement('canvas');
+  expCanvas.width = totalW;
+  expCanvas.height = totalH;
+  const ectx = expCanvas.getContext('2d');
+
+  // Background
+  ectx.fillStyle = '#000';
+  ectx.fillRect(0, 0, totalW, totalH);
+
+  // Border
+  ectx.strokeStyle = '#000';
+  ectx.lineWidth = border;
+
+  let loaded = 0;
+  const total = panels.filter(p => p.imageData).length;
+  if (total === 0) { statusEl.textContent = '\u6ca1\u6709\u53ef\u5bfc\u51fa\u7684\u9762\u677f\uff01'; return; }
+
+  panels.forEach((p, i) => {
+    const col = i % cols;
+    const row = Math.floor(i / cols);
+    const x = border + col * (pw + gap);
+    const y = border + row * (ph + gap);
+
+    // White panel background
+    ectx.fillStyle = '#fff';
+    ectx.fillRect(x, y, pw, ph);
+
+    if (p.imageData) {
+      const img = new Image();
+      img.onload = () => {
+        ectx.drawImage(img, x, y, pw, ph);
+
+        // Draw bubbles
+        if (p.bubbles) {
+          p.bubbles.forEach(b => {
+            const bx = x + b.x / 100 * pw;
+            const by = y + b.y / 100 * ph;
+            ectx.fillStyle = '#fff';
+            ectx.strokeStyle = '#000';
+            ectx.lineWidth = 2;
+            const metrics = ectx.measureText(b.text);
+            const tw = Math.min(metrics.width + 20, 140);
+            const th = 30;
+            roundRect(ectx, bx - 5, by - 5, tw, th, 10);
+            ectx.fillStyle = '#000';
+            ectx.font = '13px Courier New';
+            ectx.fillText(b.text, bx + 5, by + 15);
+          });
+        }
+
+        // Draw SFX
+        if (p.sfxs) {
+          p.sfxs.forEach(s => {
+            const sx = x + s.x / 100 * pw;
+            const sy = y + s.y / 100 * ph;
+            ectx.font = 'bold 28px serif';
+            ectx.strokeStyle = '#fff';
+            ectx.lineWidth = 3;
+            ectx.strokeText(s.text, sx, sy);
+            ectx.fillStyle = '#000';
+            ectx.fillText(s.text, sx, sy);
+          });
+        }
+
+        loaded++;
+        if (loaded === total) downloadExport(expCanvas);
+      };
+      img.src = p.imageData;
+    }
+  });
+
+  if (total === 0) downloadExport(expCanvas);
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+}
+
+function downloadExport(canvas) {
+  const link = document.createElement('a');
+  link.download = 'manga_' + Date.now() + '.png';
+  link.href = canvas.toDataURL('image/png');
+  link.click();
+  statusEl.textContent = '\u5df2\u5bfc\u51fa\u6f2b\u753b\u9875 PNG\uff01';
+}
+
+// Keyboard shortcut
+document.addEventListener('keydown', e => {
+  if (e.code === 'Space' && e.target.tagName !== 'INPUT') {
+    e.preventDefault();
+    capture();
+  }
+});
+
+// Init
+buildPanels();
+initCamera();
+</script>
+</body>
+</html>`;
+
+fs.writeFileSync(path.join(__dirname, 'app.html'), html, 'utf-8');
+console.log('manga-panel/app.html created successfully');

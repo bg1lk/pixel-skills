@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>久坐提醒</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0f380f;color:#8bac0f;font-family:'Courier New',Consolas,monospace;min-height:100vh;display:flex;flex-direction:column;align-items:center;overflow-x:hidden}
+.title-bar{width:100%;max-width:500px;background:#306230;border:3px solid #0f380f;border-bottom:none;padding:8px 12px;text-align:center;font-size:18px;font-weight:bold;color:#9bbc0f;text-shadow:2px 2px 0 #0f380f;margin-top:12px}
+.main{width:100%;max-width:500px;background:#1a4a1a;border:3px solid #306230;box-shadow:6px 6px 0 #0f380f;padding:16px;display:flex;flex-direction:column;gap:12px}
+.panel{background:#0f380f;border:3px solid #306230;box-shadow:4px 4px 0 #306230;padding:12px}
+.top-row{display:flex;gap:12px;align-items:flex-start}
+.cam-box{width:120px;height:90px;background:#000;border:3px solid #306230;position:relative;flex-shrink:0;overflow:hidden}
+.cam-box video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
+.cam-dot{position:absolute;top:4px;right:4px;width:10px;height:10px;border:2px solid #0f380f}
+.cam-dot.on{background:#8bac0f}.cam-dot.off{background:#e63946}
+.presence-lbl{position:absolute;bottom:2px;left:0;width:100%;text-align:center;font-size:9px;font-weight:bold;background:rgba(15,56,15,.7);padding:1px}
+.char-area{flex:1;text-align:center}
+.ascii-char{font-size:11px;line-height:1.15;white-space:pre;color:#9bbc0f;text-shadow:1px 1px 0 #306230}
+.status-badge{display:inline-block;padding:4px 12px;border:2px solid;font-size:13px;font-weight:bold;margin-top:6px}
+.status-badge.working{border-color:#8bac0f;color:#8bac0f;background:#1a4a1a}
+.status-badge.warning{border-color:#e63946;color:#e63946;background:#2a1010;animation:flash .6s steps(2) infinite}
+.status-badge.resting{border-color:#f4d03f;color:#f4d03f;background:#2a2a10}
+.status-badge.idle{border-color:#306230;color:#306230}
+@keyframes flash{50%{opacity:.4}}
+
+.timer-section{text-align:center}
+.timer-big{font-size:48px;font-weight:bold;color:#9bbc0f;text-shadow:3px 3px 0 #306230;letter-spacing:4px}
+.timer-label{font-size:11px;color:#306230}
+.prog-bar{width:100%;height:18px;background:#0f380f;border:2px solid #306230;margin-top:6px;position:relative;overflow:hidden}
+.prog-fill{height:100%;background:#8bac0f;transition:width 1s steps(20)}
+.prog-fill.warn{background:#f4d03f}.prog-fill.full{background:#e63946;animation:flash .5s steps(2) infinite}
+.prog-pct{position:absolute;right:6px;top:0;font-size:11px;color:#0f380f;font-weight:bold;line-height:18px}
+
+.stats-row{display:flex;gap:8px;flex-wrap:wrap}
+.stat-card{flex:1;min-width:90px;background:#0f380f;border:2px solid #306230;padding:6px;text-align:center}
+.stat-val{font-size:18px;font-weight:bold;color:#9bbc0f}.stat-lbl{font-size:9px;color:#306230;margin-top:2px}
+
+.chart-panel{position:relative;height:80px;background:#0f380f;border:2px solid #306230;padding:4px 4px 14px 4px;display:flex;align-items:flex-end;gap:2px}
+.chart-bar{flex:1;background:#8bac0f;min-width:4px;position:relative;transition:height .3s steps(5)}
+.chart-bar.break-bar{background:#f4d03f}
+.chart-label{position:absolute;bottom:-12px;left:50%;transform:translateX(-50%);font-size:7px;color:#306230}
+.chart-title{font-size:10px;color:#306230;margin-bottom:4px}
+
+.btn-row{display:flex;gap:8px;flex-wrap:wrap}
+button{background:#8bac0f;color:#0f380f;border:3px solid #0f380f;box-shadow:4px 4px 0 #306230;font-family:monospace;font-size:13px;font-weight:bold;padding:8px 14px;cursor:pointer}
+button:hover{background:#9bbc0f;transform:translate(2px,2px);box-shadow:2px 2px 0 #306230}
+button:active{transform:translate(4px,4px);box-shadow:none}
+button.stop{background:#e63946;color:#fff}
+.sep{text-align:center;color:#306230;font-size:10px;letter-spacing:2px;margin:2px 0}
+.settings label{display:flex;align-items:center;gap:6px;margin:3px 0;font-size:11px;color:#306230}
+.settings input[type=range]{width:100px;accent-color:#8bac0f}
+.settings select{background:#0f380f;color:#8bac0f;border:2px solid #306230;font-family:monospace;font-size:11px}
+
+.rest-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(15,56,15,.95);display:none;flex-direction:column;align-items:center;justify-content:center;z-index:999}
+.rest-overlay.show{display:flex}
+.rest-title{font-size:26px;color:#9bbc0f;text-shadow:3px 3px 0 #306230;margin-bottom:12px;animation:flash 1s steps(2) infinite}
+.rest-countdown{font-size:64px;color:#8bac0f;font-weight:bold;text-shadow:4px 4px 0 #306230}
+.exercise-box{background:#1a4a1a;border:3px solid #306230;padding:16px;margin:16px;max-width:360px;text-align:center}
+.exercise-name{font-size:18px;color:#f4d03f;font-weight:bold;margin-bottom:6px}
+.exercise-desc{font-size:13px;color:#8bac0f}
+.health-score{display:flex;align-items:center;gap:6px;justify-content:center}
+.health-bar{display:flex;gap:3px}
+.health-heart{font-size:16px;color:#306230}.health-heart.active{color:#e63946}
+
+/* ===== MOBILE ===== */
+@media(max-width:600px){
+  body{overflow-y:auto!important;min-height:100vh;}
+  video{width:100%!important;max-width:100%!important;height:auto!important;}
+  canvas{max-width:100%!important;}
+  #app,.app,.container,.main,.wrapper,[id*="app"],[class*="container"]{width:100%!important;max-width:100%!important;margin:0!important;border-radius:0!important;}
+  button,.btn,.action-btn,[class*="btn"]{min-height:44px;font-size:13px!important;touch-action:manipulation;}
+  input,textarea,select{font-size:16px!important;}
+  .controls,.toolbar,.actions,.panel,.buttons,[class*="controls"],[class*="toolbar"]{flex-wrap:wrap!important;}
+  [style*="width:"][style*="px"]{max-width:100%!important;}
+}
+</style>
+</head>
+<body>
+<div class="title-bar">★ 久坐提醒 ★</div>
+<div class="main">
+
+<div class="top-row">
+<div class="cam-box">
+<video id="vid" playsinline muted></video>
+<div id="camDot" class="cam-dot off"></div>
+<div id="presLbl" class="presence-lbl" style="color:#306230">未启动</div>
+</div>
+<div class="char-area">
+<pre id="asciiChar" class="ascii-char">
+  O
+ /|\
+ / \
+_____
+|   |
+</pre>
+<div id="statusBadge" class="status-badge idle">等待启动</div>
+</div>
+</div>
+
+<div class="panel timer-section">
+<div class="timer-label">▶ 连续坐着时间</div>
+<div id="timerBig" class="timer-big">00:00</div>
+<div class="prog-bar"><div id="progFill" class="prog-fill" style="width:0%"></div><span id="progPct" class="prog-pct">0%</span></div>
+</div>
+
+<div class="stats-row">
+<div class="stat-card"><div id="stSit" class="stat-val">0m</div><div class="stat-lbl">今日坐了</div></div>
+<div class="stat-card"><div id="stBreaks" class="stat-val">0</div><div class="stat-lbl">休息次数</div></div>
+<div class="stat-card"><div id="stLong" class="stat-val">0m</div><div class="stat-lbl">最长连坐</div></div>
+<div class="stat-card">
+<div class="health-score"><div class="health-bar" id="healthBar"></div></div>
+<div class="stat-lbl">健康评分</div>
+</div>
+</div>
+
+<div>
+<div class="chart-title">░ 今日时段分布</div>
+<div class="chart-panel" id="chartPanel"></div>
+</div>
+
+<div class="btn-row">
+<button id="btnStart" onclick="toggleMonitor()">▶ 开始监控</button>
+<button onclick="manualBreak()">◆ 手动休息</button>
+<button onclick="resetStats()" class="stop">✕ 重置</button>
+</div>
+
+<div class="sep">░░░░░░░░░░░ 设置 ░░░░░░░░░░░</div>
+<div class="panel settings">
+<label>久坐提醒: <input type="range" id="sitSlider" min="15" max="90" value="45" step="5" oninput="updateCfg()"><span id="sitVal">45</span>分钟</label>
+<label>休息时长: <input type="range" id="brkSlider" min="3" max="10" value="5" oninput="updateCfg()"><span id="brkVal">5</span>分钟</label>
+<label>提示音: <select id="sndSel" onchange="updateCfg()"><option value="1">开</option><option value="0">关</option></select></label>
+</div>
+</div>
+
+<div id="restOverlay" class="rest-overlay">
+<div class="rest-title">★ 站起来活动一下! ★</div>
+<div id="restCountdown" class="rest-countdown">5:00</div>
+<div class="exercise-box">
+<div id="exName" class="exercise-name">🧘</div>
+<div id="exDesc" class="exercise-desc"></div>
+</div>
+<button onclick="skipBreak()" style="margin-top:12px">跳过休息</button>
+</div>
+
+<canvas id="tmpC" style="display:none" width="160" height="120"></canvas>
+
+<script src="../cam-core/cam-core.js"></script>
+<script>
+const EXERCISES=[
+{name:'转转脖子',desc:'顺时针逆时针各转5圈，放松颈椎'},
+{name:'伸展手臂',desc:'双手交叉向上伸展，保持10秒'},
+{name:'扭扭腰',desc:'双手叉腰，左右各转5次'},
+{name:'踮脚尖',desc:'踮起脚尖再放下，重复10次'},
+{name:'深呼吸',desc:'吸气4秒 → 屏气4秒 → 呼气4秒，重复3次'},
+{name:'眼部放松',desc:'闭眼，轻揉太阳穴10秒'},
+{name:'肩部环绕',desc:'双肩前后各转10圈'},
+{name:'侧弯拉伸',desc:'左右各侧弯身体，保持5秒'}
+];
+
+const SITTING=`  O\n /|\\\n / \\\n_____\n|   |`;
+const STANDING=`  O\n /|\\\n / \\\n |  \n/ \\`;
+const STRETCH=`\\O/\n |\n/ \\\n |  \n/ \\`;
+
+const vid=document.getElementById('vid'),camDot=document.getElementById('camDot'),presLbl=document.getElementById('presLbl');
+const asciiChar=document.getElementById('asciiChar'),statusBadge=document.getElementById('statusBadge');
+const timerBig=document.getElementById('timerBig'),progFill=document.getElementById('progFill'),progPct=document.getElementById('progPct');
+const stSit=document.getElementById('stSit'),stBreaks=document.getElementById('stBreaks'),stLong=document.getElementById('stLong');
+const healthBar=document.getElementById('healthBar'),chartPanel=document.getElementById('chartPanel');
+const btnStart=document.getElementById('btnStart');
+const sitSlider=document.getElementById('sitSlider'),brkSlider=document.getElementById('brkSlider'),sndSel=document.getElementById('sndSel');
+const sitVal=document.getElementById('sitVal'),brkVal=document.getElementById('brkVal');
+const restOverlay=document.getElementById('restOverlay'),restCountdown=document.getElementById('restCountdown');
+const exName=document.getElementById('exName'),exDesc=document.getElementById('exDesc');
+const tmpC=document.getElementById('tmpC'),tmpCtx=tmpC.getContext('2d');
+
+let stream=null,monitoring=false,loop1=null,loop2=null;
+let seated=false,consP=0,consA=0;
+const P_THRESH=4,A_THRESH=8;
+
+let sitStartMs=0,continuousMs=0;
+let sitIntervalMin=45,breakDurMin=5,soundOn=true;
+
+let breaking=false,breakTimer=null,breakRemainSec=0;
+
+const TODAY=new Date().toISOString().slice(0,10);
+let stats={totalSitMs:0,breaks:0,longestMs:0,hourly:Array(24).fill(0),hourlyBreak:Array(24).fill(0),date:TODAY};
+
+function loadCfg(){
+  try{const c=JSON.parse(localStorage.getItem('seat_cfg'));if(c){sitIntervalMin=c.sit||45;breakDurMin=c.brk||5;soundOn=c.snd!==false;}}catch(e){}
+  sitSlider.value=sitIntervalMin;brkSlider.value=breakDurMin;
+  sitVal.textContent=sitIntervalMin;brkVal.textContent=breakDurMin;
+  sndSel.value=soundOn?'1':'0';
+}
+function saveCfg(){localStorage.setItem('seat_cfg',JSON.stringify({sit:sitIntervalMin,brk:breakDurMin,snd:soundOn}))}
+function updateCfg(){sitIntervalMin=+sitSlider.value;breakDurMin=+brkSlider.value;soundOn=sndSel.value==='1';sitVal.textContent=sitIntervalMin;brkVal.textContent=breakDurMin;saveCfg();}
+
+function loadStats(){
+  try{const s=JSON.parse(localStorage.getItem('seat_stats'));if(s&&s.date===TODAY){stats=s;if(!stats.hourly)stats.hourly=Array(24).fill(0);if(!stats.hourlyBreak)stats.hourlyBreak=Array(24).fill(0);}}catch(e){}
+  renderStats();
+}
+function saveStats(){localStorage.setItem('seat_stats',JSON.stringify(stats))}
+function renderStats(){
+  stSit.textContent=Math.round(stats.totalSitMs/60000)+'m';
+  stBreaks.textContent=stats.breaks;
+  stLong.textContent=Math.round(stats.longestMs/60000)+'m';
+  renderHealth();
+  renderChart();
+}
+
+function renderHealth(){
+  const sitH=stats.totalSitMs/3600000;
+  const idealBreaks=Math.floor(sitH*(60/sitIntervalMin));
+  let score=5;
+  if(idealBreaks>0)score=Math.min(5,Math.round(stats.breaks/idealBreaks*5));
+  if(stats.totalSitMs<60000)score=5;
+  let h='';for(let i=0;i<5;i++)h+=`<span class="health-heart${i<score?' active':''}">♥</span>`;
+  healthBar.innerHTML=h;
+}
+
+function renderChart(){
+  const h=new Date().getHours();
+  let html='';
+  const maxV=Math.max(1,...stats.hourly,...stats.hourlyBreak);
+  for(let i=Math.max(0,h-11);i<=h;i++){
+    const sitH=Math.max(2,stats.hourly[i]/maxV*55);
+    const brkH=Math.max(0,stats.hourlyBreak[i]/maxV*55);
+    html+=`<div style="display:flex;flex-direction:column;align-items:center;flex:1;gap:1px;align-self:flex-end">`;
+    if(brkH>0)html+=`<div class="chart-bar break-bar" style="height:${brkH}px"></div>`;
+    html+=`<div class="chart-bar" style="height:${sitH}px"><span class="chart-label">${i}</span></div>`;
+    html+=`</div>`;
+  }
+  chartPanel.innerHTML=html;
+}
+
+async function startCam(){
+  try{
+    stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'user',width:{ideal:320},height:{ideal:240}},audio:false});
+    vid.srcObject=stream;await vid.play();
+    camDot.className='cam-dot on';return true;
+  }catch(e){camDot.className='cam-dot off';presLbl.textContent='摄像头失败';presLbl.style.color='#e63946';return false;}
+}
+function stopCam(){if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}camDot.className='cam-dot off';}
+
+function detectPresence(){
+  if(!stream||!vid.videoWidth)return false;
+  tmpCtx.drawImage(vid,0,0,160,120);
+  const img=tmpCtx.getImageData(0,0,160,120);
+  // CamCore: blur + normalize + HSV skin detection
+  CamCore.boxBlur(img,160,120,1);
+  CamCore.normalize(img);
+  const pct=CamCore.detectSkin(img,160,120,null);
+  return pct>4;
+}
+
+function toggleMonitor(){monitoring?stopMonitor():startMonitor();}
+
+async function startMonitor(){
+  if(!await startCam())return;
+  monitoring=true;
+  btnStart.textContent='■ 停止';btnStart.classList.add('stop');
+  sitStartMs=Date.now();continuousMs=0;
+  consP=0;consA=0;seated=false;
+  loop1=setInterval(detectTick,500);
+  loop2=setInterval(timerTick,1000);
+  statusBadge.textContent='检测中...';statusBadge.className='status-badge working';
+  asciiChar.textContent=SITTING;
+  presLbl.textContent='检测中';presLbl.style.color='#8bac0f';
+}
+
+function stopMonitor(){
+  monitoring=false;
+  clearInterval(loop1);clearInterval(loop2);
+  stopCam();
+  btnStart.textContent='▶ 开始监控';btnStart.classList.remove('stop');
+  flushSitTime();
+  continuousMs=0;
+  statusBadge.textContent='已停止';statusBadge.className='status-badge idle';
+  timerBig.textContent='00:00';progFill.style.width='0%';progPct.textContent='0%';
+  presLbl.textContent='未启动';presLbl.style.color='#306230';
+}
+
+function flushSitTime(){
+  if(continuousMs>0){
+    stats.totalSitMs+=continuousMs;
+    if(continuousMs>stats.longestMs)stats.longestMs=continuousMs;
+    const h=new Date().getHours();
+    stats.hourly[h]+=continuousMs;
+    saveStats();renderStats();
+  }
+}
+
+function detectTick(){
+  if(!monitoring||breaking)return;
+  const present=detectPresence();
+  if(present){
+    consP++;consA=0;
+    if(consP>=P_THRESH&&!seated){
+      seated=true;
+      sitStartMs=Date.now()-continuousMs;
+      presLbl.textContent='在座位上';presLbl.style.color='#8bac0f';
+      asciiChar.textContent=SITTING;
+      statusBadge.textContent='正在工作';statusBadge.className='status-badge working';
+    }
+  }else{
+    consA++;consP=0;
+    if(consA>=A_THRESH&&seated){
+      seated=false;
+      presLbl.textContent='已离开';presLbl.style.color='#f4d03f';
+      asciiChar.textContent=STANDING;
+      // natural break
+      if(continuousMs>60000){
+        flushSitTime();
+        stats.breaks++;
+        const h=new Date().getHours();
+        stats.hourlyBreak[h]+=30000;
+        saveStats();renderStats();
+        continuousMs=0;
+        sitStartMs=Date.now();
+      }
+      statusBadge.textContent='已离开座位';statusBadge.className='status-badge resting';
+    }
+  }
+}
+
+function timerTick(){
+  if(!monitoring||breaking)return;
+  if(seated){continuousMs=Date.now()-sitStartMs;}
+  const sec=Math.floor(continuousMs/1000);
+  timerBig.textContent=String(Math.floor(sec/60)).padStart(2,'0')+':'+String(sec%60).padStart(2,'0');
+  const intMs=sitIntervalMin*60000;
+  const pct=Math.min(100,Math.round(continuousMs/intMs*100));
+  progFill.style.width=pct+'%';progPct.textContent=pct+'%';
+  if(pct<60)progFill.className='prog-fill';
+  else if(pct<90)progFill.className='prog-fill warn';
+  else progFill.className='prog-fill full';
+
+  if(pct>=80&&pct<100){statusBadge.textContent='快该活动了';statusBadge.className='status-badge warning';}
+  if(continuousMs>=intMs)triggerBreak();
+}
+
+function triggerBreak(){
+  flushSitTime();
+  stats.breaks++;
+  const h=new Date().getHours();
+  stats.hourlyBreak[h]+=breakDurMin*60000;
+  saveStats();renderStats();
+  if(soundOn)playBeep();
+  startBreak();
+}
+
+function manualBreak(){
+  if(breaking)return;
+  if(monitoring&&continuousMs>0){flushSitTime();stats.breaks++;saveStats();renderStats();}
+  startBreak();
+}
+
+function startBreak(){
+  breaking=true;
+  breakRemainSec=breakDurMin*60;
+  const ex=EXERCISES[Math.floor(Math.random()*EXERCISES.length)];
+  exName.textContent=ex.name;exDesc.textContent=ex.desc;
+  restCountdown.textContent=fmtBreak(breakRemainSec);
+  restOverlay.classList.add('show');
+  asciiChar.textContent=STRETCH;
+  statusBadge.textContent='休息中';statusBadge.className='status-badge resting';
+  breakTimer=setInterval(()=>{
+    breakRemainSec--;
+    restCountdown.textContent=fmtBreak(breakRemainSec);
+    if(breakRemainSec<=0)endBreak();
+  },1000);
+}
+
+function fmtBreak(s){return Math.floor(s/60)+':'+String(s%60).padStart(2,'0');}
+
+function endBreak(){
+  breaking=false;clearInterval(breakTimer);
+  restOverlay.classList.remove('show');
+  continuousMs=0;sitStartMs=Date.now();
+  timerBig.textContent='00:00';progFill.style.width='0%';progPct.textContent='0%';progFill.className='prog-fill';
+  asciiChar.textContent=SITTING;
+  statusBadge.textContent='休息完毕!';statusBadge.className='status-badge working';
+}
+function skipBreak(){endBreak();}
+
+function resetStats(){
+  if(!confirm('确定重置今日数据?'))return;
+  stats={totalSitMs:0,breaks:0,longestMs:0,hourly:Array(24).fill(0),hourlyBreak:Array(24).fill(0),date:TODAY};
+  saveStats();renderStats();
+}
+
+function playBeep(){
+  try{
+    const ac=new(window.AudioContext||window.webkitAudioContext)();
+    const freqs=[523,659,784];
+    freqs.forEach((f,i)=>{
+      const o=ac.createOscillator(),g=ac.createGain();
+      o.type='square';o.frequency.value=f;g.gain.value=0.12;
+      o.connect(g);g.connect(ac.destination);
+      o.start(ac.currentTime+i*0.15);o.stop(ac.currentTime+i*0.15+0.12);
+    });
+  }catch(e){}
+}
+
+loadCfg();loadStats();
+</script>
+</body>
+</html>

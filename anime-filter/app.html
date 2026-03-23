@@ -1,0 +1,223 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>二次元滤镜</title>
+<style>*{margin:0;padding:0;box-sizing:border-box}body{background:#0f380f;color:#8bac0f;font-family:'Courier New',Consolas,monospace;min-height:100vh;display:flex;flex-direction:column;align-items:center}.title-bar{width:100%;max-width:720px;background:#306230;border:3px solid #0f380f;border-bottom:none;padding:6px 12px;text-align:center;font-size:18px;font-weight:bold;color:#9bbc0f;text-shadow:2px 2px 0 #0f380f;margin-top:8px}.main{width:100%;max-width:720px;background:#1a4a1a;border:3px solid #306230;box-shadow:6px 6px 0 #0f380f;padding:12px;display:flex;flex-direction:column;gap:10px}.view-box{position:relative;width:100%;background:#000;border:3px solid #306230;overflow:hidden}.view-box canvas{width:100%;display:block}.fps{position:absolute;top:6px;right:6px;background:rgba(15,56,15,.8);color:#8bac0f;font-size:10px;padding:2px 6px;border:1px solid #306230}.filter-row{display:flex;gap:6px;flex-wrap:wrap}.fbtn{background:#306230;color:#8bac0f;border:3px solid #0f380f;box-shadow:3px 3px 0 #0f380f;font-family:monospace;font-size:12px;font-weight:bold;padding:6px 10px;cursor:pointer;flex:1;min-width:60px;text-align:center}.fbtn:hover{background:#8bac0f;color:#0f380f}.fbtn.active{background:#8bac0f;color:#0f380f;transform:translate(2px,2px);box-shadow:1px 1px 0 #0f380f}.panel{background:#0f380f;border:2px solid #306230;padding:8px}.panel label{display:flex;align-items:center;gap:6px;font-size:11px;color:#306230;margin:3px 0}.panel input[type=range]{width:120px;accent-color:#8bac0f}.btn-row{display:flex;gap:6px;flex-wrap:wrap}button{background:#8bac0f;color:#0f380f;border:3px solid #0f380f;box-shadow:4px 4px 0 #306230;font-family:monospace;font-size:12px;font-weight:bold;padding:6px 12px;cursor:pointer}button:hover{background:#9bbc0f;transform:translate(2px,2px);box-shadow:2px 2px 0 #306230}button:active{transform:translate(4px,4px);box-shadow:none}video{display:none}
+/* ===== MOBILE ===== */
+@media(max-width:600px){
+  body{overflow-y:auto!important;min-height:100vh;}
+  video{width:100%!important;max-width:100%!important;height:auto!important;}
+  canvas{max-width:100%!important;}
+  #app,.app,.container,.main,.wrapper,[id*="app"],[class*="container"]{width:100%!important;max-width:100%!important;margin:0!important;border-radius:0!important;}
+  button,.btn,.action-btn,[class*="btn"]{min-height:44px;font-size:13px!important;touch-action:manipulation;}
+  input,textarea,select{font-size:16px!important;}
+  .controls,.toolbar,.actions,.panel,.buttons,[class*="controls"],[class*="toolbar"]{flex-wrap:wrap!important;}
+  [style*="width:"][style*="px"]{max-width:100%!important;}
+}
+</style></head>
+<body><div class="title-bar">★ 二次元滤镜 ★</div><div class="main">
+<div class="view-box"><canvas id="out"></canvas><div id="fps" class="fps">0 FPS</div></div>
+<div class="filter-row"><div class="fbtn active" onclick="setF(0,this)">赛璐珞</div><div class="fbtn" onclick="setF(1,this)">像素风</div><div class="fbtn" onclick="setF(2,this)">新海诚</div><div class="fbtn" onclick="setF(3,this)">漫画</div><div class="fbtn" onclick="setF(4,this)">水彩</div></div>
+<div class="panel"><label>边缘强度: <input type="range" id="sE" min="1" max="10" value="5"><span id="vE">5</span></label><label>色彩层级: <input type="range" id="sC" min="3" max="16" value="6"><span id="vC">6</span></label><label>像素大小: <input type="range" id="sP" min="2" max="16" value="6"><span id="vP">6</span></label></div>
+<div class="btn-row"><button onclick="startCam()">▶ 开启摄像头</button><button onclick="capture()">★ 截图保存</button><button onclick="showO=!showO">◆ 对比原图</button></div></div>
+<video id="vid" playsinline muted></video><canvas id="tmp" style="display:none"></canvas>
+<script src="../cam-core/cam-core.js"></script>
+<script>
+const vid=document.getElementById('vid'),out=document.getElementById('out'),tmp=document.getElementById('tmp');
+const oCtx=out.getContext('2d'),tCtx=tmp.getContext('2d'),fpsEl=document.getElementById('fps');
+let stream=null,run=false,cF=0,showO=false,eS=5,cL=6,pS=6,fc=0,lt=0;
+document.getElementById('sE').oninput=function(){eS=+this.value;document.getElementById('vE').textContent=this.value};
+document.getElementById('sC').oninput=function(){cL=+this.value;document.getElementById('vC').textContent=this.value};
+document.getElementById('sP').oninput=function(){pS=+this.value;document.getElementById('vP').textContent=this.value};
+function setF(i,el){cF=i;document.querySelectorAll('.fbtn').forEach(b=>b.classList.remove('active'));el.classList.add('active')}
+async function startCam(){try{stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'user',width:{ideal:640},height:{ideal:480}},audio:false});vid.srcObject=stream;await vid.play();const pw=Math.min(320,vid.videoWidth),ph=Math.round(pw*vid.videoHeight/vid.videoWidth);tmp.width=pw;tmp.height=ph;out.width=pw;out.height=ph;run=true;requestAnimationFrame(loop);}catch(e){alert('\u6444\u50CF\u5934\u542F\u52A8\u5931\u8D25: '+e.message)}}
+function loop(t){if(!run)return;tCtx.save();tCtx.translate(tmp.width,0);tCtx.scale(-1,1);tCtx.drawImage(vid,0,0,tmp.width,tmp.height);tCtx.restore();if(showO){oCtx.drawImage(tmp,0,0)}else{const s=tCtx.getImageData(0,0,tmp.width,tmp.height);oCtx.putImageData([cel,pix,shin,mng,wc][cF](s),0,0);}fc++;if(t-lt>1000){fpsEl.textContent=fc+' FPS';fc=0;lt=t}requestAnimationFrame(loop);}
+function cl(v){return v<0?0:v>255?255:Math.round(v)}
+// CamCore wrappers for shared algorithms
+function boxBlurRGB(d,w,h,r){const img=new ImageData(new Uint8ClampedArray(d),w,h);CamCore.boxBlur(img,w,h,r);return new Uint8ClampedArray(img.data)}
+function sobelEdges(g,w,h){const e=new Float32Array(w*h);for(let y=1;y<h-1;y++)for(let x=1;x<w-1;x++){const i=y*w+x;const gx=-g[i-w-1]-2*g[i-1]-g[i+w-1]+g[i-w+1]+2*g[i+1]+g[i+w+1];const gy=-g[i-w-1]-2*g[i-w]-g[i-w+1]+g[i+w-1]+2*g[i+w]+g[i+w+1];e[i]=Math.sqrt(gx*gx+gy*gy)}return e}
+function grayArr(d,w,h){return CamCore.grayArray({data:d},w,h)}
+// CamCore: rgb2hsl returns h in degrees (0-360), s/l as 0-1; local code uses h as 0-1
+function rgb2hsl(r,g,b){const hsl=CamCore.rgb2hsl(r,g,b);return[hsl[0]/360,hsl[1],hsl[2]]}
+function hsl2rgb(h,s,l){return CamCore.hsl2rgb(Math.round(h*360),s,l)}
+
+// ===== 1. 赛璐珞 (Cel) — smooth flat colors + clean outlines + saturation boost =====
+function cel(s){const w=s.width,h=s.height,d=s.data,o=new ImageData(w,h),p=o.data;
+// Step 1: Box blur to smooth noise (simulates bilateral)
+const sm=boxBlurRGB(d,w,h,2);
+// Step 2: Quantize colors + boost saturation
+const st=256/cL;
+for(let i=0;i<w*h;i++){const j=i*4;
+let r=sm[j],g=sm[j+1],b=sm[j+2];
+// Boost saturation for anime feel
+let[h2,s2,l2]=rgb2hsl(r,g,b);
+s2=Math.min(1,s2*1.5);
+const[nr,ng,nb]=hsl2rgb(h2,s2,l2);
+// Quantize
+p[j]=Math.round(nr/st)*st;p[j+1]=Math.round(ng/st)*st;p[j+2]=Math.round(nb/st)*st;p[j+3]=255}
+// Step 3: Smooth edges — use grayscale of blurred image for cleaner edges
+const gray=grayArr(sm,w,h);const edges=sobelEdges(gray,w,h);
+const thr=eS*12;
+// Draw dark outlines with slight thickness
+for(let y=1;y<h-1;y++)for(let x=1;x<w-1;x++){const i=y*w+x;
+if(edges[i]>thr){const j=i*4;
+// Soft dark outline (dark brown/blue instead of pure black for anime feel)
+p[j]=cl(p[j]*0.15);p[j+1]=cl(p[j+1]*0.1);p[j+2]=cl(p[j+2]*0.2);
+}}
+// Step 4: Add subtle highlight on bright areas (anime shiny skin)
+for(let i=0;i<w*h;i++){const j=i*4;
+const lum=(p[j]*.299+p[j+1]*.587+p[j+2]*.114)/255;
+if(lum>.75){p[j]=cl(p[j]+25);p[j+1]=cl(p[j+1]+20);p[j+2]=cl(p[j+2]+15)}}
+return o}
+
+// ===== 2. 像素风 (Pixel) — NES palette + grid lines =====
+function pix(s){const w=s.width,h=s.height,d=s.data,o=new ImageData(w,h),p=o.data;
+const ps=pS;
+// Simple NES-inspired palette snapping
+const snap=(v,levels)=>{const st=256/levels;return Math.round(v/st)*st};
+for(let by=0;by<h;by+=ps)for(let bx=0;bx<w;bx+=ps){
+let r=0,g=0,b=0,c=0;
+for(let dy=0;dy<ps&&by+dy<h;dy++)for(let dx=0;dx<ps&&bx+dx<w;dx++){
+const j=((by+dy)*w+(bx+dx))*4;r+=d[j];g+=d[j+1];b+=d[j+2];c++}
+r=snap(r/c,cL);g=snap(g/c,cL);b=snap(b/c,cL);
+// Slight saturation boost
+let[hh,ss,ll]=rgb2hsl(r,g,b);ss=Math.min(1,ss*1.3);
+const[fr,fg,fb]=hsl2rgb(hh,ss,ll);
+r=cl(fr);g=cl(fg);b=cl(fb);
+for(let dy=0;dy<ps&&by+dy<h;dy++)for(let dx=0;dx<ps&&bx+dx<w;dx++){
+const cy=by+dy,cx=bx+dx,j=(cy*w+cx)*4;
+// Subtle grid line (darker border on pixel blocks)
+const edge=(dy===0||dx===0)?0.75:1.0;
+p[j]=cl(r*edge);p[j+1]=cl(g*edge);p[j+2]=cl(b*edge);p[j+3]=255}}
+return o}
+
+// ===== 3. 新海诚 (Shinkai) — dramatic warm/cool split + bloom + vivid sky =====
+function shin(s){const w=s.width,h=s.height,d=s.data,o=new ImageData(w,h),p=o.data;
+// Step 1: Create a bloom layer (blurred bright areas)
+const bloom=boxBlurRGB(d,w,h,3);
+for(let i=0;i<d.length;i+=4){
+let r=d[i],g=d[i+1],b=d[i+2];
+const lum=(r*.299+g*.587+b*.114)/255;
+// Strong saturation boost (Shinkai's vivid colors)
+let[h2,s2,l2]=rgb2hsl(r,g,b);
+s2=Math.min(1,s2*1.8);
+let[nr,ng,nb]=hsl2rgb(h2,s2,l2);
+r=nr;g=ng;b=nb;
+// Warm highlight / cool shadow split
+if(lum>.55){
+// Warm golden glow on highlights
+r=cl(r+45*lum);g=cl(g+25*lum);b=cl(b-5*lum);
+// Add bloom (bright areas glow)
+const bj=i;
+r=cl(r*0.7+bloom[bj]*0.3+20);
+g=cl(g*0.7+bloom[bj+1]*0.3+10);
+b=cl(b*0.7+bloom[bj+2]*0.3);
+}else if(lum>.3){
+// Mid-tones: slight warm tint
+r=cl(r+10);g=cl(g+5);b=cl(b+15);
+}else{
+// Cool blue/purple shadows (Shinkai signature)
+r=cl(r*0.8-10);g=cl(g*0.85);b=cl(b+50*(1-lum));
+}
+// Sky detection heuristic: blue-dominant upper region → enhance
+const pixIdx=i/4,py=Math.floor(pixIdx/w);
+if(py<h*0.4&&b>r&&b>g){
+// Make sky more vivid and dreamy
+r=cl(r*0.85);g=cl(g*0.9+10);b=cl(b*1.1+20);
+}
+// Subtle lens flare: add warm glow near center-top
+const px=pixIdx%w;
+const cx=w/2,cy=h*0.3;
+const dist=Math.sqrt((px-cx)*(px-cx)+(py-cy)*(py-cy));
+const flare=Math.max(0,1-dist/(w*0.4));
+if(flare>0.3){
+r=cl(r+flare*30);g=cl(g+flare*20);b=cl(b+flare*5);
+}
+p[i]=cl(r);p[i+1]=cl(g);p[i+2]=cl(b);p[i+3]=255}
+return o}
+
+// ===== 4. 漫画 (Manga) — proper halftone dots + clean edges =====
+function mng(s){const w=s.width,h=s.height,d=s.data,o=new ImageData(w,h),p=o.data;
+const gray=grayArr(d,w,h);
+// Smooth gray for cleaner halftone
+const sm=boxBlurRGB(d,w,h,1);const sgray=grayArr(sm,w,h);
+const edges=sobelEdges(gray,w,h);
+const thr=eS*10;
+const dotR=3;// halftone dot spacing
+for(let y=0;y<h;y++)for(let x=0;x<w;x++){
+const i=y*w+x,j=i*4;
+// Edge pixels → solid black
+if(edges[i]>thr){p[j]=p[j+1]=p[j+2]=20;p[j+3]=255;continue}
+// Halftone based on brightness
+const v=sgray[i]/255;// 0=dark, 1=bright
+if(v>0.88){
+// White
+p[j]=p[j+1]=p[j+2]=255;
+}else if(v>0.65){
+// Light area: small dots
+const cx=x%6,cy=y%6;
+const dist=Math.sqrt((cx-3)*(cx-3)+(cy-3)*(cy-3));
+const dotSize=(1-v)*5;
+p[j]=p[j+1]=p[j+2]=dist<dotSize?180:255;
+}else if(v>0.4){
+// Mid-tone: medium dots
+const cx=x%5,cy=y%5;
+const dist=Math.sqrt((cx-2.5)*(cx-2.5)+(cy-2.5)*(cy-2.5));
+const dotSize=(1-v)*4.5;
+p[j]=p[j+1]=p[j+2]=dist<dotSize?100:230;
+}else if(v>0.2){
+// Dark area: large dots / dense pattern
+const cx=x%4,cy=y%4;
+const dist=Math.sqrt((cx-2)*(cx-2)+(cy-2)*(cy-2));
+const dotSize=(1-v)*3.5;
+p[j]=p[j+1]=p[j+2]=dist<dotSize?40:180;
+}else{
+// Very dark: near solid black
+const cx=x%3,cy=y%3;
+const dist=Math.sqrt((cx-1.5)*(cx-1.5)+(cy-1.5)*(cy-1.5));
+p[j]=p[j+1]=p[j+2]=dist>1.2?60:15;
+}
+p[j+3]=255}
+// Second edge pass: thicken edges for manga feel
+for(let y=1;y<h-1;y++)for(let x=1;x<w-1;x++){
+const i=y*w+x;
+if(edges[i]>thr*0.7){
+const j=i*4;const dark=Math.min(p[j],40);
+p[j]=p[j+1]=p[j+2]=dark}}
+return o}
+
+// ===== 5. 水彩 (Watercolor) — Kuwahara-like + edge bleed + soft palette =====
+function wc(s){const w=s.width,h=s.height,d=s.data,o=new ImageData(w,h),p=o.data;
+// Step 1: Multi-pass blur for soft watercolor base
+const b1=boxBlurRGB(d,w,h,2);
+const b2=boxBlurRGB(b1,w,h,2);
+// Step 2: Edge detection for watercolor edge darkening
+const gray=grayArr(d,w,h);const edges=sobelEdges(gray,w,h);
+// Step 3: Watercolor rendering
+const st=256/Math.max(6,cL+2);
+for(let y=0;y<h;y++)for(let x=0;x<w;x++){
+const i=y*w+x,j=i*4;
+// Use heavily blurred base with slight position jitter (paint bleed)
+const ox=((x*7+y*13)%3)-1,oy=((x*11+y*3)%3)-1;
+const nx=Math.max(0,Math.min(w-1,x+ox)),ny=Math.max(0,Math.min(h-1,y+oy));
+const nj=(ny*w+nx)*4;
+let r=b2[nj],g=b2[nj+1],b=b2[nj+2];
+// Soft quantize (fewer harsh steps)
+r=Math.round(r/st)*st;g=Math.round(g/st)*st;b=Math.round(b/st)*st;
+// Desaturate slightly + warm tint (watercolor paper feel)
+const avg=(r+g+b)/3;
+r=cl(r*.7+avg*.3+15);
+g=cl(g*.7+avg*.3+10);
+b=cl(b*.7+avg*.3+5);
+// Lighten overall (watercolor is light/airy)
+r=cl(r*0.85+40);g=cl(g*0.85+35);b=cl(b*0.85+30);
+// Edge darkening (watercolor pigment accumulates at edges)
+const edgeVal=Math.min(edges[i]/200,1);
+if(edgeVal>0.2){
+const darken=edgeVal*0.5;
+r=cl(r*(1-darken));g=cl(g*(1-darken));b=cl(b*(1-darken*0.8));
+}
+// Subtle paper grain texture
+const grain=((x*31+y*17)%7-3)*2;
+r=cl(r+grain);g=cl(g+grain);b=cl(b+grain);
+p[j]=r;p[j+1]=g;p[j+2]=b;p[j+3]=255}
+return o}
+function capture(){const a=document.createElement('a');a.download='anime_'+Date.now()+'.png';a.href=out.toDataURL();a.click()}
+</script></body></html>

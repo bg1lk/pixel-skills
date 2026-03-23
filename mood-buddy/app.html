@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mood Buddy - 情绪伙伴</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0f380f;color:#8bac0f;font-family:'Courier New',Consolas,monospace;min-height:100vh;display:flex;flex-direction:column;align-items:center;overflow-x:hidden}
+.title-bar{width:100%;max-width:480px;background:#306230;border:3px solid #0f380f;border-bottom:none;padding:6px 12px;text-align:center;font-size:18px;font-weight:bold;color:#9bbc0f;text-shadow:2px 2px 0 #0f380f;margin-top:8px}
+.main{width:100%;max-width:480px;background:#1a4a1a;border:3px solid #306230;box-shadow:6px 6px 0 #0f380f;padding:12px;display:flex;flex-direction:column;gap:10px}
+.cam-box{position:relative;width:160px;height:120px;background:#000;border:3px solid #306230;overflow:hidden;margin:0 auto;border-radius:4px}
+.cam-box video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
+.cam-box.detecting{border-color:#8bac0f;box-shadow:0 0 8px rgba(139,172,15,0.4)}
+
+/* Buddy character */
+.buddy-area{display:flex;flex-direction:column;align-items:center;gap:6px}
+.buddy{font-size:64px;line-height:1;transition:none;animation:float 2s steps(4) infinite}
+@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
+.buddy.happy{animation:bounce 0.6s steps(3) infinite}
+@keyframes bounce{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-8px) scale(1.05)}}
+.buddy.sad{animation:sway 1.5s steps(4) infinite}
+@keyframes sway{0%,100%{transform:rotate(0)}25%{transform:rotate(-3deg)}75%{transform:rotate(3deg)}}
+.buddy.comfort{animation:hug 1s steps(3) infinite}
+@keyframes hug{0%,100%{transform:scale(1)}50%{transform:scale(1.1)}}
+
+/* Mood display */
+.mood-panel{background:#0f380f;border:2px solid #306230;padding:10px;text-align:center}
+.mood-emoji{font-size:32px;margin:4px 0}
+.mood-label{font-size:16px;font-weight:bold;color:#9bbc0f}
+.mood-bar{display:flex;gap:2px;justify-content:center;margin:6px 0}
+.mood-seg{width:20px;height:8px;background:#306230;border:1px solid #0f380f}
+.mood-seg.active{background:#8bac0f}
+.mood-seg.warn{background:#e63946}
+.mood-seg.gold{background:#f4d03f}
+
+/* Message bubble */
+.bubble{background:#306230;border:3px solid #8bac0f;padding:12px;font-size:13px;line-height:1.6;color:#9bbc0f;position:relative;min-height:60px}
+.bubble::after{content:'';position:absolute;top:-8px;left:50%;transform:translateX(-50%);border:6px solid transparent;border-bottom-color:#8bac0f}
+.bubble .msg{white-space:pre-wrap}
+.bubble .typing{display:inline}
+.bubble .typing::after{content:'_';animation:blink 0.6s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
+
+/* Suggestion cards */
+.suggestions{display:flex;gap:6px;flex-wrap:wrap}
+.sug-card{flex:1;min-width:80px;background:#0f380f;border:2px solid #306230;padding:6px;text-align:center;font-size:10px;cursor:pointer}
+.sug-card:hover{border-color:#8bac0f;background:#1a4a1a}
+.sug-card .sug-icon{font-size:20px;display:block;margin-bottom:2px}
+
+/* History */
+.history{max-height:100px;overflow-y:auto;font-size:10px}
+.history div{padding:2px 0;border-bottom:1px solid #1a4a1a;display:flex;justify-content:space-between}
+.history .h-mood{color:#9bbc0f}.history .h-time{color:#306230}
+
+/* Stats */
+.stats-row{display:flex;gap:8px;font-size:11px;flex-wrap:wrap;justify-content:center}
+.stat{text-align:center}.stat b{color:#9bbc0f;font-size:14px;display:block}
+
+/* Buttons */
+.btn-row{display:flex;gap:6px;flex-wrap:wrap;justify-content:center}
+button{background:#8bac0f;color:#0f380f;border:3px solid #0f380f;box-shadow:3px 3px 0 #306230;font-family:monospace;font-size:12px;font-weight:bold;padding:6px 12px;cursor:pointer}
+button:hover{background:#9bbc0f;transform:translate(1px,1px);box-shadow:2px 2px 0 #306230}
+button:active{transform:translate(3px,3px);box-shadow:none}
+button.small{font-size:10px;padding:4px 8px;box-shadow:2px 2px 0 #306230}
+
+/* Particles */
+.particles{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:999}
+.particle{position:absolute;font-size:16px;animation:fall 3s linear forwards;opacity:0}
+@keyframes fall{0%{opacity:1;transform:translateY(-20px) rotate(0)}100%{opacity:0;transform:translateY(100vh) rotate(360deg)}}
+
+video{display:none}
+canvas{display:none}
+
+/* ===== MOBILE ===== */
+@media(max-width:600px){
+  body{overflow-y:auto!important;min-height:100vh;}
+  video{width:100%!important;max-width:100%!important;height:auto!important;}
+  canvas{max-width:100%!important;}
+  #app,.app,.container,.main,.wrapper,[id*="app"],[class*="container"]{width:100%!important;max-width:100%!important;margin:0!important;border-radius:0!important;}
+  button,.btn,.action-btn,[class*="btn"]{min-height:44px;font-size:13px!important;touch-action:manipulation;}
+  input,textarea,select{font-size:16px!important;}
+  .controls,.toolbar,.actions,.panel,.buttons,[class*="controls"],[class*="toolbar"]{flex-wrap:wrap!important;}
+  [style*="width:"][style*="px"]{max-width:100%!important;}
+}
+</style>
+</head>
+<body>
+<div class="particles" id="particles"></div>
+<div class="title-bar">♥ 情绪伙伴 ♥</div>
+<div class="main">
+  <!-- Camera -->
+  <div class="cam-box" id="camBox">
+    <video id="vid" playsinline muted></video>
+  </div>
+
+  <!-- Buddy -->
+  <div class="buddy-area">
+    <div class="buddy" id="buddy">🤖</div>
+    <div style="font-size:10px;color:#306230" id="buddyName">Pixel 伙伴</div>
+  </div>
+
+  <!-- Mood Panel -->
+  <div class="mood-panel">
+    <div class="mood-emoji" id="moodEmoji">😊</div>
+    <div class="mood-label" id="moodLabel">等待检测...</div>
+    <div class="mood-bar" id="moodBar"></div>
+    <div style="font-size:10px;color:#306230" id="moodDetail">开启摄像头来感知你的情绪</div>
+  </div>
+
+  <!-- Message Bubble -->
+  <div class="bubble">
+    <div class="msg" id="msgText">你好呀！我是你的像素情绪伙伴~ 🌟
+开启摄像头，让我看看你今天心情怎么样？</div>
+  </div>
+
+  <!-- Suggestion Cards -->
+  <div class="suggestions" id="suggestions" style="display:none">
+    <div class="sug-card" onclick="doSuggestion('breathe')"><span class="sug-icon">🌬️</span>深呼吸</div>
+    <div class="sug-card" onclick="doSuggestion('stretch')"><span class="sug-icon">🧘</span>伸展</div>
+    <div class="sug-card" onclick="doSuggestion('music')"><span class="sug-icon">🎵</span>音乐</div>
+    <div class="sug-card" onclick="doSuggestion('joke')"><span class="sug-icon">😄</span>笑话</div>
+  </div>
+
+  <!-- Buttons -->
+  <div class="btn-row">
+    <button onclick="startCam()" id="btnStart">▶ 开始陪伴</button>
+    <button onclick="manualMood()" class="small">✎ 手动输入</button>
+    <button onclick="soundOn=!soundOn;this.textContent=soundOn?'♪ 音效':'♪ 静音'" class="small">♪ 音效</button>
+  </div>
+
+  <!-- Stats -->
+  <div class="mood-panel">
+    <div class="stats-row">
+      <div class="stat">今日检测<b id="statCount">0</b></div>
+      <div class="stat">开心次数<b id="statHappy">0</b></div>
+      <div class="stat">心情均值<b id="statAvg">--</b></div>
+    </div>
+  </div>
+
+  <!-- History -->
+  <div class="mood-panel">
+    <div style="font-size:11px;color:#306230;margin-bottom:4px">♦ 心情记录</div>
+    <div class="history" id="historyList">暂无记录</div>
+  </div>
+</div>
+
+<canvas id="tmpCv"></canvas>
+<script src="../cam-core/cam-core.js"></script>
+<script>
+// ==================== STATE ====================
+const vid = document.getElementById('vid');
+const tmpCv = document.getElementById('tmpCv');
+const tmpCtx = tmpCv.getContext('2d');
+let stream = null, running = false, soundOn = true;
+let currentMood = 'neutral', moodScore = 50;
+let history = [], stats = { count: 0, happy: 0, totalScore: 0 };
+let lastAnalysis = 0, smoothedBright = -1, smoothedSkin = -1, smoothedMotion = -1;
+let prevGray = null;
+
+// Mood definitions
+const MOODS = {
+  happy:   { emoji: '😊', label: '开心', color: '#f4d03f', buddy: '🤗', anim: 'happy' },
+  calm:    { emoji: '😌', label: '平静', color: '#8bac0f', buddy: '🤖', anim: '' },
+  neutral: { emoji: '😐', label: '一般', color: '#9bbc0f', buddy: '🤖', anim: '' },
+  tired:   { emoji: '😴', label: '疲惫', color: '#306230', buddy: '😿', anim: 'sway' },
+  sad:     { emoji: '😢', label: '难过', color: '#4a7a8c', buddy: '🫂', anim: 'comfort' },
+  angry:   { emoji: '😤', label: '烦躁', color: '#e63946', buddy: '🧸', anim: 'sway' },
+  stressed:{ emoji: '😰', label: '焦虑', color: '#c97b2a', buddy: '🌸', anim: 'comfort' }
+};
+
+// Comfort messages per mood
+const MESSAGES = {
+  happy: [
+    '太好了，你现在看起来心情不错呢！✨\n继续保持这份好心情吧~',
+    '哇，你笑起来真好看！🌟\n开心的时候记得分享给身边的人哦~',
+    '你的好心情感染到我了！🎉\n希望每天都这么开心~',
+    '看到你开心我也好高兴呀！💖\n把这份快乐存起来~',
+  ],
+  calm: [
+    '你现在看起来很平静安详~\n这是最好的状态呢 🍃',
+    '宁静的时刻最珍贵~\n享受当下吧 🌿',
+    '平和的心态是最大的力量~\n你做得很好 ☁️',
+  ],
+  neutral: [
+    '感觉你现在状态还不错~\n有什么我能帮你的吗？',
+    '看起来一切平稳~\n需要聊聊天吗？🌻',
+    '稳稳的也很好呀~\n想做点什么有趣的事吗？',
+  ],
+  tired: [
+    '你看起来有点累了...\n要不要休息一下？闭上眼睛30秒 💤',
+    '辛苦了！累了就歇歇~\n喝杯水，做个深呼吸 🍵',
+    '感觉到你有些疲惫...\n适当休息才能走更远的路哦 🌙',
+    '眼睛是不是有点酸？\n看看远处，让眼睛放松一下吧 👀',
+  ],
+  sad: [
+    '嘿...看起来你有点不开心\n没关系，难过也是正常的 🫂',
+    '我在这里陪着你~\n想哭就哭出来，不要忍着 💙',
+    '每朵乌云背后都有阳光~\n现在难过，以后会好的 🌈',
+    '你已经很棒了，不要太苛责自己\n给自己一个温暖的拥抱吧 🤗',
+    '难过的时候，记住这只是暂时的\n明天又是新的一天 🌅',
+  ],
+  angry: [
+    '感觉到你有些烦躁...\n深呼吸，4秒吸气，7秒呼气 🌬️',
+    '生气是正常的情绪表达~\n但别让它伤害到你自己哦 🧸',
+    '来，我们一起数到10...\n1...2...3... 感觉好一点了吗？',
+    '把烦恼写下来，然后合上本子~\n有些事情放一放就好了 📖',
+  ],
+  stressed: [
+    '感觉你有些紧张焦虑...\n先停下来，什么都不想，就60秒 🕐',
+    '压力大的时候，把任务分成小块~\n一步一步来，不着急 🧩',
+    '你在担心什么呢？\n很多担心的事情其实不会发生的 🌸',
+    '试试478呼吸法：吸4秒，屏7秒，呼8秒\n重复3次，会好很多的 🌬️',
+  ]
+};
+
+const JOKES = [
+  '程序员最怕什么？NullPointerException 和产品经理~ 😆',
+  '为什么程序员喜欢暗色主题？\n因为 bugs 怕光！🐛',
+  '今天也是充满 bug 的一天呢~\n但你比 bug 更强！💪',
+  'A: 你知道 0 和 1 的关系吗？\nB: 不知道\nA: 一开一合，就是一扇门~🚪',
+  '你知道吗？每次编译成功\n都有一个像素精灵在庆祝🎊',
+  '为什么键盘从来不睡觉？\n因为它有两个 shift（班）！⌨️',
+];
+
+// ==================== AUDIO ====================
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+function beep(freq, dur, type='square', vol=0.06) {
+  if (!soundOn) return;
+  const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+  o.connect(g); g.connect(audioCtx.destination);
+  o.type = type; o.frequency.value = freq; g.gain.value = vol;
+  o.start(); o.stop(audioCtx.currentTime + dur);
+}
+function comfortSound() {
+  [262, 330, 392, 523].forEach((f,i) => setTimeout(() => beep(f, 0.15, 'sine', 0.04), i * 120));
+}
+function happySound() {
+  [523, 659, 784, 1047].forEach((f,i) => setTimeout(() => beep(f, 0.1, 'sine', 0.05), i * 80));
+}
+function sadSound() {
+  [392, 330, 262].forEach((f,i) => setTimeout(() => beep(f, 0.2, 'sine', 0.03), i * 200));
+}
+
+// ==================== CAMERA ====================
+async function startCam() {
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'user', width: { ideal: 320 }, height: { ideal: 240 } },
+      audio: false
+    });
+    vid.srcObject = stream;
+    vid.style.display = 'block';
+    await vid.play();
+    tmpCv.width = 160; tmpCv.height = 120;
+    running = true;
+    document.getElementById('camBox').classList.add('detecting');
+    document.getElementById('btnStart').textContent = '⏹ 停止';
+    document.getElementById('btnStart').onclick = stopCam;
+    showMsg('摄像头已开启！让我感知你的情绪~ 🔍\n保持自然表情就好，不用刻意哦~');
+    requestAnimationFrame(loop);
+  } catch(e) {
+    showMsg('摄像头启动失败: ' + e.message + '\n你可以用下面的「手动输入」按钮告诉我你的心情~');
+  }
+}
+
+function stopCam() {
+  running = false;
+  if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+  vid.style.display = 'none';
+  document.getElementById('camBox').classList.remove('detecting');
+  document.getElementById('btnStart').textContent = '▶ 开始陪伴';
+  document.getElementById('btnStart').onclick = startCam;
+}
+
+// ==================== ANALYSIS LOOP ====================
+function loop() {
+  if (!running) return;
+  const now = Date.now();
+
+  // Analyze every 2 seconds
+  if (now - lastAnalysis > 2000) {
+    lastAnalysis = now;
+    analyzeMood();
+  }
+
+  requestAnimationFrame(loop);
+}
+
+function analyzeMood() {
+  if (!vid.videoWidth) return;
+
+  // Capture frame
+  tmpCtx.save();
+  tmpCtx.translate(tmpCv.width, 0);
+  tmpCtx.scale(-1, 1);
+  tmpCtx.drawImage(vid, 0, 0, tmpCv.width, tmpCv.height);
+  tmpCtx.restore();
+
+  const img = tmpCtx.getImageData(0, 0, 160, 120);
+
+  // CamCore: normalize for light consistency
+  CamCore.normalize(img);
+
+  // 1. Brightness analysis — tired/low energy indicator
+  const bright = CamCore.analyzeBrightness(img, 160, 120, null);
+  const brightPct = bright.avg / 255 * 100;
+  smoothedBright = smoothedBright < 0 ? brightPct : smoothedBright * 0.7 + brightPct * 0.3;
+
+  // 2. Skin detection — presence & face coverage (engagement proxy)
+  const roi = { x: 30, y: 15, w: 100, h: 90 };
+  const skinPct = CamCore.detectSkin(img, 160, 120, roi);
+  smoothedSkin = smoothedSkin < 0 ? skinPct : smoothedSkin * 0.7 + skinPct * 0.3;
+
+  // 3. Motion analysis — fidgeting = stress/anger, stillness = calm/tired
+  const curGray = CamCore.grayArray(img, 160, 120);
+  let motionPct = 0;
+  if (prevGray) {
+    let diffCount = 0;
+    for (let i = 0; i < curGray.length; i++) {
+      if (Math.abs(curGray[i] - prevGray[i]) > 20) diffCount++;
+    }
+    motionPct = diffCount / curGray.length * 100;
+  }
+  prevGray = curGray;
+  smoothedMotion = smoothedMotion < 0 ? motionPct : smoothedMotion * 0.6 + motionPct * 0.4;
+
+  // 4. Color warmth — warm tones suggest smiling/blushing
+  const d = img.data;
+  let warmth = 0, warmCount = 0;
+  for (let i = 0; i < d.length; i += 16) { // sample
+    const r = d[i], g = d[i+1], b = d[i+2];
+    if (r > 80 && g > 40) { // skin-ish pixels
+      warmth += (r - b); // red-blue difference
+      warmCount++;
+    }
+  }
+  const avgWarmth = warmCount > 0 ? warmth / warmCount : 0;
+
+  // Classify mood from signals
+  classifyMood(smoothedBright, smoothedSkin, smoothedMotion, avgWarmth);
+}
+
+function classifyMood(brightness, skin, motion, warmth) {
+  // No face detected
+  if (skin < 3) {
+    setMood('neutral', 40);
+    return;
+  }
+
+  let score = 50; // base neutral
+  let mood = 'neutral';
+
+  // Brightness cues
+  if (brightness < 30) score -= 10; // dark environment = mood downer
+  if (brightness > 60) score += 5;  // bright = generally positive
+
+  // Motion cues
+  if (motion > 8) {
+    score -= 15; // lots of fidgeting
+    if (motion > 15) mood = 'stressed';
+  } else if (motion > 4) {
+    score += 5; // moderate movement = engaged
+  } else if (motion < 1.5) {
+    score -= 10; // very still = tired or sad
+  }
+
+  // Warmth cues (facial color temperature)
+  if (warmth > 40) {
+    score += 15; // warm face = smiling/blushing
+  } else if (warmth > 20) {
+    score += 5;
+  } else if (warmth < 0) {
+    score -= 10; // cool tones
+  }
+
+  // Skin coverage (face position/size changes)
+  if (skin > 20) {
+    score += 5; // close to camera = engaged
+  } else if (skin < 8) {
+    score -= 5; // far away or turning away
+  }
+
+  // Clamp and classify
+  score = Math.max(0, Math.min(100, score));
+
+  if (score >= 70) mood = 'happy';
+  else if (score >= 60) mood = 'calm';
+  else if (score >= 45) mood = 'neutral';
+  else if (score >= 35) {
+    mood = motion > 6 ? 'angry' : 'tired';
+  } else if (score >= 20) {
+    mood = motion > 8 ? 'stressed' : 'sad';
+  } else {
+    mood = 'sad';
+  }
+
+  // Smooth transition
+  moodScore = moodScore * 0.6 + score * 0.4;
+  setMood(mood, Math.round(moodScore));
+}
+
+// ==================== MOOD UPDATE ====================
+let lastMoodChange = 0, lastMood = '';
+function setMood(mood, score) {
+  currentMood = mood;
+  moodScore = score;
+  const m = MOODS[mood];
+
+  document.getElementById('moodEmoji').textContent = m.emoji;
+  document.getElementById('moodLabel').textContent = m.label;
+  document.getElementById('moodDetail').textContent =
+    '心情指数: ' + score + '/100 | 活力: ' + (smoothedMotion >= 0 ? smoothedMotion.toFixed(1) : '--') + '%';
+
+  // Buddy
+  const buddy = document.getElementById('buddy');
+  buddy.textContent = m.buddy;
+  buddy.className = 'buddy ' + m.anim;
+
+  // Mood bar
+  renderMoodBar(score);
+
+  // Show suggestions for negative moods
+  document.getElementById('suggestions').style.display =
+    ['sad', 'angry', 'tired', 'stressed'].includes(mood) ? 'flex' : 'none';
+
+  // Only change message if mood actually changed (debounce 8s)
+  const now = Date.now();
+  if (mood !== lastMood && now - lastMoodChange > 8000) {
+    lastMood = mood;
+    lastMoodChange = now;
+
+    const msgs = MESSAGES[mood];
+    const msg = msgs[Math.floor(Math.random() * msgs.length)];
+    typeMsg(msg);
+
+    // Sound feedback
+    if (mood === 'happy') { happySound(); spawnParticles('✨', 8); }
+    else if (mood === 'sad' || mood === 'stressed') { sadSound(); }
+    else if (mood === 'tired') { comfortSound(); }
+    else if (mood === 'angry') { comfortSound(); }
+
+    // Record
+    addHistory(mood, score);
+  }
+}
+
+function renderMoodBar(score) {
+  const bar = document.getElementById('moodBar');
+  const segs = 10;
+  let html = '';
+  for (let i = 0; i < segs; i++) {
+    const threshold = i * 10;
+    let cls = 'mood-seg';
+    if (score > threshold) {
+      if (score >= 60) cls += ' gold';
+      else if (score >= 40) cls += ' active';
+      else cls += ' warn';
+    }
+    html += '<div class="' + cls + '"></div>';
+  }
+  bar.innerHTML = html;
+}
+
+// ==================== UI HELPERS ====================
+function showMsg(text) {
+  document.getElementById('msgText').textContent = text;
+}
+
+let typeTimer = null;
+function typeMsg(text) {
+  const el = document.getElementById('msgText');
+  el.textContent = '';
+  let i = 0;
+  if (typeTimer) clearInterval(typeTimer);
+  typeTimer = setInterval(() => {
+    if (i < text.length) {
+      el.textContent += text[i]; i++;
+    } else {
+      clearInterval(typeTimer); typeTimer = null;
+    }
+  }, 30);
+}
+
+function addHistory(mood, score) {
+  const m = MOODS[mood];
+  const time = new Date().toLocaleTimeString();
+  history.unshift({ mood, score, time, emoji: m.emoji, label: m.label });
+  if (history.length > 50) history.pop();
+
+  stats.count++;
+  stats.totalScore += score;
+  if (mood === 'happy') stats.happy++;
+
+  // Update UI
+  document.getElementById('statCount').textContent = stats.count;
+  document.getElementById('statHappy').textContent = stats.happy;
+  document.getElementById('statAvg').textContent = Math.round(stats.totalScore / stats.count);
+
+  const list = document.getElementById('historyList');
+  list.innerHTML = history.map(h =>
+    '<div><span class="h-mood">' + h.emoji + ' ' + h.label + ' (' + h.score + ')</span><span class="h-time">' + h.time + '</span></div>'
+  ).join('');
+}
+
+// ==================== SUGGESTIONS ====================
+function doSuggestion(type) {
+  switch(type) {
+    case 'breathe':
+      typeMsg('来，跟我一起深呼吸~\n\n吸气... 1... 2... 3... 4...\n屏住... 1... 2... 3... 4... 5... 6... 7...\n呼气... 1... 2... 3... 4... 5... 6... 7... 8...\n\n再来一次，感觉好多了对吧？🌬️');
+      comfortSound();
+      break;
+    case 'stretch':
+      typeMsg('做个简单伸展吧！\n\n1️⃣ 慢慢转头 左→右 各3次\n2️⃣ 耸肩 往上→放松 5次\n3️⃣ 双手交叉向上拉伸 10秒\n4️⃣ 站起来扭扭腰 🧘\n\n身体舒展了，心情也会好起来的~');
+      break;
+    case 'music':
+      typeMsg('🎵 来点音乐放松一下~\n\n试试听这些类型的音乐：\n♪ 轻音乐 / Lo-fi\n♪ 自然白噪音（雨声、海浪）\n♪ 你最喜欢的歌\n\n闭上眼睛，享受旋律吧 🎶');
+      happySound();
+      break;
+    case 'joke':
+      const joke = JOKES[Math.floor(Math.random() * JOKES.length)];
+      typeMsg(joke);
+      happySound();
+      spawnParticles('😄', 5);
+      break;
+  }
+}
+
+function manualMood() {
+  const moods = ['happy', 'calm', 'neutral', 'tired', 'sad', 'angry', 'stressed'];
+  const labels = moods.map(m => MOODS[m].emoji + MOODS[m].label);
+  const choice = prompt('选择你现在的心情 (输入数字):\n' + labels.map((l,i) => (i+1) + '. ' + l).join('\n'));
+  const idx = parseInt(choice) - 1;
+  if (idx >= 0 && idx < moods.length) {
+    const mood = moods[idx];
+    const scoreMap = { happy: 80, calm: 65, neutral: 50, tired: 35, sad: 20, angry: 30, stressed: 25 };
+    setMood(mood, scoreMap[mood]);
+    addHistory(mood, scoreMap[mood]);
+    lastMood = mood;
+    lastMoodChange = Date.now();
+    const msgs = MESSAGES[mood];
+    typeMsg(msgs[Math.floor(Math.random() * msgs.length)]);
+    if (mood === 'happy') { happySound(); spawnParticles('✨', 8); }
+    else if (['sad','stressed','tired'].includes(mood)) sadSound();
+  }
+}
+
+// ==================== PARTICLES ====================
+function spawnParticles(emoji, count) {
+  const container = document.getElementById('particles');
+  for (let i = 0; i < count; i++) {
+    const el = document.createElement('div');
+    el.className = 'particle';
+    el.textContent = emoji;
+    el.style.left = (Math.random() * 100) + '%';
+    el.style.animationDelay = (Math.random() * 1) + 's';
+    el.style.fontSize = (12 + Math.random() * 12) + 'px';
+    container.appendChild(el);
+    setTimeout(() => el.remove(), 4000);
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,973 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>像素画板</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:#0f380f;font-family:'Courier New','Consolas',monospace;color:#0f380f;display:flex;justify-content:center;align-items:center;min-height:100vh;overflow:hidden;}
+#app{background:#9bbc0f;border:4px solid #0f380f;box-shadow:8px 8px 0px #306230;width:min(98vw,960px);height:min(96vh,700px);display:flex;flex-direction:column;position:relative;}
+
+/* 标题栏 */
+#titlebar{background:#306230;color:#9bbc0f;padding:6px 12px;font-size:14px;font-weight:bold;display:flex;align-items:center;gap:8px;border-bottom:3px solid #0f380f;user-select:none;}
+#titlebar span{letter-spacing:2px;}
+
+/* 主区域 */
+#main{display:flex;flex:1;overflow:hidden;}
+
+/* 工具栏 */
+#toolbar{background:#8bac0f;border-right:3px solid #0f380f;padding:6px;display:flex;flex-direction:column;gap:4px;width:52px;align-items:center;}
+.tool-btn{width:40px;height:40px;background:#9bbc0f;border:2px solid #0f380f;box-shadow:2px 2px 0px #306230;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:bold;color:#0f380f;font-family:monospace;}
+.tool-btn:hover{background:#8bac0f;transform:translate(1px,1px);box-shadow:1px 1px 0px #306230;}
+.tool-btn.active{background:#306230;color:#9bbc0f;box-shadow:inset 2px 2px 0px #0f380f;transform:translate(1px,1px);}
+.tool-sep{width:36px;height:2px;background:#306230;margin:2px 0;}
+
+/* 画布区域 */
+#canvas-area{flex:1;display:flex;justify-content:center;align-items:center;background:#306230;overflow:auto;position:relative;}
+#canvas-wrap{position:relative;line-height:0;}
+#draw-canvas{image-rendering:pixelated;cursor:crosshair;border:2px solid #0f380f;}
+#grid-canvas{position:absolute;top:0;left:0;pointer-events:none;image-rendering:pixelated;}
+#preview-canvas{position:absolute;top:0;left:0;pointer-events:none;image-rendering:pixelated;}
+
+/* 右侧面板 */
+#sidebar{background:#8bac0f;border-left:3px solid #0f380f;width:160px;padding:6px;display:flex;flex-direction:column;gap:6px;overflow-y:auto;}
+.panel-title{font-size:11px;font-weight:bold;color:#0f380f;text-align:center;padding:2px;background:#9bbc0f;border:2px solid #0f380f;}
+#color-palette{display:grid;grid-template-columns:repeat(4,1fr);gap:2px;padding:2px;}
+.color-swatch{width:28px;height:28px;border:2px solid #0f380f;cursor:pointer;box-shadow:1px 1px 0px #306230;}
+.color-swatch:hover{transform:scale(1.1);}
+.color-swatch.active{border-color:#e63946;box-shadow:0 0 0 2px #e63946;}
+#current-colors{display:flex;gap:6px;justify-content:center;align-items:center;padding:4px;}
+.cur-color-box{width:30px;height:30px;border:3px solid #0f380f;box-shadow:2px 2px 0px #306230;}
+#cur-fg{background:#0f380f;}
+#cur-bg{background:#9bbc0f;}
+#swap-colors{font-size:16px;cursor:pointer;color:#0f380f;font-weight:bold;user-select:none;}
+
+/* 画笔大小 */
+#brush-section{display:flex;flex-direction:column;align-items:center;gap:2px;}
+#brush-size-display{font-size:12px;font-weight:bold;}
+#brush-slider{width:110px;accent-color:#306230;}
+
+/* 画布大小 */
+#size-section{display:flex;flex-direction:column;gap:4px;align-items:center;}
+#size-section label{font-size:11px;font-weight:bold;}
+#size-inputs{display:flex;gap:4px;align-items:center;font-size:11px;}
+#size-inputs input{width:40px;height:22px;border:2px solid #0f380f;background:#9bbc0f;font-family:monospace;font-size:11px;text-align:center;color:#0f380f;}
+
+/* 底栏 */
+#bottombar{background:#306230;color:#9bbc0f;padding:4px 10px;font-size:11px;display:flex;justify-content:space-between;border-top:3px solid #0f380f;user-select:none;}
+
+/* 按钮样式 */
+.action-btn{background:#8bac0f;color:#0f380f;border:2px solid #0f380f;box-shadow:2px 2px 0px #306230;font-family:monospace;font-size:11px;font-weight:bold;padding:3px 8px;cursor:pointer;}
+.action-btn:hover{background:#9bbc0f;transform:translate(1px,1px);box-shadow:1px 1px 0px #306230;}
+.action-btn:active{transform:translate(2px,2px);box-shadow:none;}
+
+/* AI 画画面板 */
+#ai-cam-preview{width:100%;border:2px solid #0f380f;background:#000;display:none;}
+#ai-cam-preview video{width:100%;display:block;transform:scaleX(-1);}
+#ai-thought-box{background:#0f380f;color:#8bac0f;font-size:10px;padding:6px;border:2px solid #306230;min-height:40px;max-height:80px;overflow-y:auto;display:none;line-height:1.4;position:relative;}
+#ai-thought-box::before{content:'💭';position:absolute;top:-10px;right:4px;font-size:14px;}
+#ai-progress{width:100%;height:6px;background:#306230;border:1px solid #0f380f;display:none;}
+#ai-progress-fill{height:100%;background:#8bac0f;width:0;transition:width 0.3s steps(20);}
+.ai-btn{background:#f4d03f;color:#0f380f;border:2px solid #0f380f;box-shadow:2px 2px 0px #886830;font-family:monospace;font-size:11px;font-weight:bold;padding:4px 6px;cursor:pointer;width:100%;text-align:center;}
+.ai-btn:hover{background:#f8d878;transform:translate(1px,1px);box-shadow:1px 1px 0px #886830;}
+.ai-btn:active{transform:translate(2px,2px);box-shadow:none;}
+.ai-btn:disabled{opacity:0.5;cursor:not-allowed;transform:none;box-shadow:2px 2px 0px #886830;}
+
+/* 响应式 */
+@media(max-width:700px){
+  body{align-items:flex-start;}
+  #app{width:100vw;height:100vh;border:none;box-shadow:none;}
+  #main{flex-direction:column;}
+  #toolbar{flex-direction:row;width:100%;height:auto;border-right:none;border-bottom:3px solid #0f380f;flex-wrap:wrap;justify-content:center;padding:4px;}
+  .tool-btn{width:36px;height:36px;font-size:16px;}
+  .tool-sep{width:2px;height:28px;margin:0 2px;}
+  #sidebar{width:100%;flex-direction:row;flex-wrap:wrap;justify-content:center;border-left:none;border-top:3px solid #0f380f;gap:4px;padding:6px;max-height:40vh;overflow-y:auto;}
+  .panel-title{display:none;}
+  #color-palette{grid-template-columns:repeat(8,1fr);gap:3px;}
+  .color-swatch{width:32px;height:32px;}
+  #canvas-area{min-height:40vh;}
+  .action-btn{padding:6px 12px;font-size:12px;min-height:36px;}
+  .ai-btn{padding:8px 6px;font-size:12px;min-height:40px;}
+  #bottombar{font-size:10px;padding:3px 6px;}
+  #titlebar{padding:4px 8px;font-size:12px;}
+  #ai-thought-box{font-size:11px;}
+  #aiMode{font-size:12px;padding:4px;}
+}
+@media(max-width:400px){
+  .tool-btn{width:32px;height:32px;font-size:14px;}
+  .color-swatch{width:28px;height:28px;}
+  #sidebar{max-height:35vh;}
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="titlebar">
+    <span>★ 像素画板 ★</span>
+    <div style="flex:1"></div>
+    <span id="title-hint" style="font-size:11px;opacity:0.8;">░ 尽情创作 ░</span>
+  </div>
+  <div id="main">
+    <!-- 工具栏 -->
+    <div id="toolbar">
+      <div class="tool-btn active" data-tool="pencil" title="画笔 (B)">✎</div>
+      <div class="tool-btn" data-tool="eraser" title="橡皮 (E)">◻</div>
+      <div class="tool-btn" data-tool="fill" title="填充 (G)">▣</div>
+      <div class="tool-sep"></div>
+      <div class="tool-btn" data-tool="line" title="直线 (L)">╱</div>
+      <div class="tool-btn" data-tool="rect" title="矩形 (R)">□</div>
+      <div class="tool-btn" data-tool="circle" title="圆形 (C)">○</div>
+      <div class="tool-sep"></div>
+      <div class="tool-btn" data-tool="picker" title="取色 (I)">⊙</div>
+      <div class="tool-btn" data-tool="move" title="移动 (V)">✥</div>
+      <div class="tool-sep"></div>
+      <div class="tool-btn" data-tool="undo" title="撤销 (Ctrl+Z)">↶</div>
+      <div class="tool-btn" data-tool="redo" title="重做 (Ctrl+Y)">↷</div>
+    </div>
+
+    <!-- 画布 -->
+    <div id="canvas-area">
+      <div id="canvas-wrap">
+        <canvas id="draw-canvas"></canvas>
+        <canvas id="grid-canvas"></canvas>
+        <canvas id="preview-canvas"></canvas>
+      </div>
+    </div>
+
+    <!-- 右侧面板 -->
+    <div id="sidebar">
+      <div class="panel-title">▸ 颜色 ◂</div>
+      <div id="current-colors">
+        <div class="cur-color-box" id="cur-fg"></div>
+        <span id="swap-colors" title="交换前景/背景色">⇄</span>
+        <div class="cur-color-box" id="cur-bg"></div>
+      </div>
+      <div id="color-palette"></div>
+
+      <div class="panel-title">▸ 画笔 ◂</div>
+      <div id="brush-section">
+        <span id="brush-size-display">1px</span>
+        <input type="range" id="brush-slider" min="1" max="8" value="1">
+      </div>
+
+      <div class="panel-title">▸ 画布 ◂</div>
+      <div id="size-section">
+        <div id="size-inputs">
+          <input type="number" id="cw-input" value="64" min="4" max="128">
+          <span style="color:#0f380f;font-weight:bold;">×</span>
+          <input type="number" id="ch-input" value="64" min="4" max="128">
+        </div>
+        <button class="action-btn" onclick="resizeCanvas()">调整</button>
+      </div>
+
+      <div class="panel-title">▸ 操作 ◂</div>
+      <button class="action-btn" style="width:100%;" onclick="clearCanvas()">清空画布</button>
+      <button class="action-btn" style="width:100%;" onclick="toggleGrid()">网格 开/关</button>
+      <button class="action-btn" style="width:100%;" onclick="exportPNG()">导出 PNG</button>
+      <button class="action-btn" style="width:100%;" onclick="saveToLocal()">保存</button>
+      <button class="action-btn" style="width:100%;" onclick="loadFromLocal()">读取</button>
+
+      <div class="panel-title" style="background:#f4d03f;color:#0f380f;">▸ AI 画画 ◂</div>
+      <div id="ai-cam-preview"><video id="aiCamVideo" playsinline muted></video></div>
+      <button class="ai-btn" id="aiCamBtn" onclick="toggleAiCam()">📷 打开摄像头</button>
+      <button class="ai-btn" id="aiDrawBtn" onclick="aiDraw()" disabled>🎨 AI 画一幅</button>
+      <select id="aiMode" style="width:100%;font-family:monospace;font-size:11px;border:2px solid #0f380f;background:#9bbc0f;padding:2px;">
+        <option value="portrait">人物肖像</option>
+        <option value="scene">风景写生</option>
+        <option value="caricature">夸张漫画</option>
+        <option value="cute">可爱Q版</option>
+      </select>
+      <div id="ai-progress"><div id="ai-progress-fill"></div></div>
+      <div id="ai-thought-box"></div>
+    </div>
+  </div>
+  <div id="bottombar">
+    <span id="status-pos">坐标: 0, 0</span>
+    <span id="status-size">画布: 32×32</span>
+    <span id="status-tool">工具: 画笔</span>
+  </div>
+</div>
+
+<script>
+// ===== 音效 =====
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+function beep(freq, dur, vol=0.08){
+  const o=audioCtx.createOscillator(), g=audioCtx.createGain();
+  o.type='square'; o.frequency.value=freq;
+  g.gain.value=vol; g.gain.exponentialRampToValueAtTime(0.001,audioCtx.currentTime+dur);
+  o.connect(g); g.connect(audioCtx.destination);
+  o.start(); o.stop(audioCtx.currentTime+dur);
+}
+function sfxClick(){ beep(800,0.05); }
+function sfxPlace(){ beep(600,0.03,0.05); }
+function sfxUndo(){ beep(400,0.08); }
+function sfxExport(){ beep(1000,0.06); beep(1200,0.06); }
+
+// ===== NES 色板 =====
+const PALETTE = [
+  '#000000','#fcfcfc','#f8f8f8','#bcbcbc',
+  '#7c7c7c','#a4a4a4','#d8d8d8','#0000fc',
+  '#0038f8','#2038ec','#0058f8','#0078f8',
+  '#00b8f8','#3cbcfc','#68d8f8','#a8f0f8',
+  '#f80000','#e40058','#f83800','#f85800',
+  '#f87858','#f8a4c0','#f8b8f8','#f878f8',
+  '#d800cc','#9858f8','#6844fc','#4428bc',
+  '#00a800','#00a844','#00b800','#58d854',
+  '#a8f898','#b8f818','#a0d810','#58f898',
+  '#f8d800','#f8a100','#fca044','#f8d878',
+  '#f4d03f','#d8b878','#a89048','#886830',
+  '#503000','#0f380f','#306230','#8bac0f',
+  '#9bbc0f','#184818','#005800','#243c24',
+];
+
+// ===== 状态 =====
+let W = 64, H = 64;
+let SCALE = 14;
+let fgColor = '#0f380f';
+let bgColor = '#9bbc0f';
+let tool = 'pencil';
+let brushSize = 1;
+let showGrid = true;
+let drawing = false;
+let startX = -1, startY = -1;
+let lastX = -1, lastY = -1;
+
+// 画布数据 (二维数组，存颜色字符串，null=透明)
+let pixels = [];
+let undoStack = [];
+let redoStack = [];
+const MAX_UNDO = 50;
+
+const drawCanvas = document.getElementById('draw-canvas');
+const drawCtx = drawCanvas.getContext('2d');
+const gridCanvas = document.getElementById('grid-canvas');
+const gridCtx = gridCanvas.getContext('2d');
+const previewCanvas = document.getElementById('preview-canvas');
+const previewCtx = previewCanvas.getContext('2d');
+
+function initPixels(){
+  pixels = [];
+  for(let y=0;y<H;y++){
+    pixels[y]=[];
+    for(let x=0;x<W;x++) pixels[y][x]=null;
+  }
+}
+
+function calcScale(){
+  const area = document.getElementById('canvas-area');
+  const aw = area.clientWidth - 20;
+  const ah = area.clientHeight - 20;
+  SCALE = Math.max(2, Math.min(Math.floor(aw/W), Math.floor(ah/H)));
+}
+
+function setupCanvases(){
+  calcScale();
+  const cw = W*SCALE, ch = H*SCALE;
+  drawCanvas.width=cw; drawCanvas.height=ch;
+  drawCanvas.style.width=cw+'px'; drawCanvas.style.height=ch+'px';
+  gridCanvas.width=cw; gridCanvas.height=ch;
+  gridCanvas.style.width=cw+'px'; gridCanvas.style.height=ch+'px';
+  previewCanvas.width=cw; previewCanvas.height=ch;
+  previewCanvas.style.width=cw+'px'; previewCanvas.style.height=ch+'px';
+  renderAll();
+  drawGrid();
+  document.getElementById('status-size').textContent = '画布: '+W+'×'+H;
+}
+
+function renderAll(){
+  drawCtx.clearRect(0,0,drawCanvas.width,drawCanvas.height);
+  // 透明棋盘背景
+  for(let y=0;y<H;y++) for(let x=0;x<W;x++){
+    drawCtx.fillStyle = ((x+y)%2===0)?'#c8c8c8':'#a0a0a0';
+    drawCtx.fillRect(x*SCALE,y*SCALE,SCALE,SCALE);
+  }
+  // 像素
+  for(let y=0;y<H;y++) for(let x=0;x<W;x++){
+    if(pixels[y][x]!==null){
+      drawCtx.fillStyle = pixels[y][x];
+      drawCtx.fillRect(x*SCALE,y*SCALE,SCALE,SCALE);
+    }
+  }
+}
+
+function drawGrid(){
+  gridCtx.clearRect(0,0,gridCanvas.width,gridCanvas.height);
+  if(!showGrid || SCALE<4) return;
+  gridCtx.strokeStyle = 'rgba(0,0,0,0.15)';
+  gridCtx.lineWidth = 1;
+  for(let x=0;x<=W;x++){
+    gridCtx.beginPath();
+    gridCtx.moveTo(x*SCALE+0.5,0);
+    gridCtx.lineTo(x*SCALE+0.5,H*SCALE);
+    gridCtx.stroke();
+  }
+  for(let y=0;y<=H;y++){
+    gridCtx.beginPath();
+    gridCtx.moveTo(0,y*SCALE+0.5);
+    gridCtx.lineTo(W*SCALE,y*SCALE+0.5);
+    gridCtx.stroke();
+  }
+}
+
+function toggleGrid(){
+  showGrid=!showGrid;
+  drawGrid();
+  sfxClick();
+}
+
+// ===== 撤销/重做 =====
+function saveUndo(){
+  undoStack.push(pixels.map(r=>r.slice()));
+  if(undoStack.length>MAX_UNDO) undoStack.shift();
+  redoStack=[];
+}
+function undo(){
+  if(undoStack.length===0) return;
+  redoStack.push(pixels.map(r=>r.slice()));
+  pixels=undoStack.pop();
+  renderAll();
+  sfxUndo();
+}
+function redo(){
+  if(redoStack.length===0) return;
+  undoStack.push(pixels.map(r=>r.slice()));
+  pixels=redoStack.pop();
+  renderAll();
+  sfxUndo();
+}
+
+// ===== 工具函数 =====
+function getPixelPos(e){
+  const rect=drawCanvas.getBoundingClientRect();
+  const x=Math.floor((e.clientX-rect.left)/SCALE);
+  const y=Math.floor((e.clientY-rect.top)/SCALE);
+  return [Math.max(0,Math.min(W-1,x)), Math.max(0,Math.min(H-1,y))];
+}
+
+function setPixel(x,y,color){
+  if(x<0||x>=W||y<0||y>=H) return;
+  pixels[y][x]=color;
+}
+
+function drawBrush(x,y,color){
+  const r=Math.floor(brushSize/2);
+  for(let dy=-r;dy<=r;dy++) for(let dx=-r;dx<=r;dx++){
+    const px=x+dx, py=y+dy;
+    if(px>=0&&px<W&&py>=0&&py<H){
+      if(brushSize<=2 || (dx*dx+dy*dy)<=(r*r+r)){
+        setPixel(px,py,color);
+      }
+    }
+  }
+}
+
+function bresenhamLine(x0,y0,x1,y1,color){
+  const dx=Math.abs(x1-x0), dy=Math.abs(y1-y0);
+  const sx=x0<x1?1:-1, sy=y0<y1?1:-1;
+  let err=dx-dy;
+  while(true){
+    drawBrush(x0,y0,color);
+    if(x0===x1&&y0===y1) break;
+    const e2=2*err;
+    if(e2>-dy){err-=dy;x0+=sx;}
+    if(e2<dx){err+=dx;y0+=sy;}
+  }
+}
+
+function drawRectOutline(x0,y0,x1,y1,color){
+  const minX=Math.min(x0,x1),maxX=Math.max(x0,x1);
+  const minY=Math.min(y0,y1),maxY=Math.max(y0,y1);
+  for(let x=minX;x<=maxX;x++){setPixel(x,minY,color);setPixel(x,maxY,color);}
+  for(let y=minY;y<=maxY;y++){setPixel(minX,y,color);setPixel(maxX,y,color);}
+}
+
+function drawCircleOutline(cx,cy,rx,ry,color){
+  // Midpoint ellipse
+  const steps=Math.max(rx,ry)*8+20;
+  for(let i=0;i<steps;i++){
+    const a=2*Math.PI*i/steps;
+    const x=Math.round(cx+rx*Math.cos(a));
+    const y=Math.round(cy+ry*Math.sin(a));
+    setPixel(x,y,color);
+  }
+}
+
+function floodFill(sx,sy,newColor){
+  if(sx<0||sx>=W||sy<0||sy>=H) return;
+  const target=pixels[sy][sx];
+  if(target===newColor) return;
+  const stack=[[sx,sy]];
+  const visited=new Set();
+  while(stack.length>0){
+    const [x,y]=stack.pop();
+    const key=y*W+x;
+    if(visited.has(key)) continue;
+    if(x<0||x>=W||y<0||y>=H) continue;
+    if(pixels[y][x]!==target) continue;
+    visited.add(key);
+    pixels[y][x]=newColor;
+    stack.push([x-1,y],[x+1,y],[x,y-1],[x,y+1]);
+  }
+}
+
+// ===== 预览形状 =====
+function clearPreview(){
+  previewCtx.clearRect(0,0,previewCanvas.width,previewCanvas.height);
+}
+function previewLine(x0,y0,x1,y1){
+  clearPreview();
+  previewCtx.strokeStyle=fgColor;
+  previewCtx.lineWidth=Math.max(1,brushSize);
+  previewCtx.globalAlpha=0.5;
+  previewCtx.beginPath();
+  previewCtx.moveTo(x0*SCALE+SCALE/2, y0*SCALE+SCALE/2);
+  previewCtx.lineTo(x1*SCALE+SCALE/2, y1*SCALE+SCALE/2);
+  previewCtx.stroke();
+  previewCtx.globalAlpha=1;
+}
+function previewRect(x0,y0,x1,y1){
+  clearPreview();
+  const minX=Math.min(x0,x1),maxX=Math.max(x0,x1);
+  const minY=Math.min(y0,y1),maxY=Math.max(y0,y1);
+  previewCtx.strokeStyle=fgColor;
+  previewCtx.lineWidth=2;
+  previewCtx.globalAlpha=0.5;
+  previewCtx.strokeRect(minX*SCALE,minY*SCALE,(maxX-minX+1)*SCALE,(maxY-minY+1)*SCALE);
+  previewCtx.globalAlpha=1;
+}
+function previewCircle(x0,y0,x1,y1){
+  clearPreview();
+  const cx=(x0+x1)/2*SCALE+SCALE/2, cy=(y0+y1)/2*SCALE+SCALE/2;
+  const rx=Math.abs(x1-x0)/2*SCALE, ry=Math.abs(y1-y0)/2*SCALE;
+  previewCtx.strokeStyle=fgColor;
+  previewCtx.lineWidth=2;
+  previewCtx.globalAlpha=0.5;
+  previewCtx.beginPath();
+  previewCtx.ellipse(cx,cy,Math.max(1,rx),Math.max(1,ry),0,0,Math.PI*2);
+  previewCtx.stroke();
+  previewCtx.globalAlpha=1;
+}
+
+// ===== 鼠标事件 =====
+let shapeSnapshot=null;
+
+drawCanvas.addEventListener('mousedown',e=>{
+  const [x,y]=getPixelPos(e);
+  drawing=true;
+  startX=x;startY=y;lastX=x;lastY=y;
+
+  if(tool==='picker'){
+    if(pixels[y][x]!==null){ fgColor=pixels[y][x]; updateColorUI(); }
+    sfxClick();
+    drawing=false;
+    return;
+  }
+  if(tool==='fill'){
+    saveUndo();
+    floodFill(x,y,e.button===2?bgColor:fgColor);
+    renderAll();
+    sfxPlace();
+    drawing=false;
+    return;
+  }
+  if(tool==='pencil'||tool==='eraser'){
+    saveUndo();
+    const c=tool==='eraser'?null:fgColor;
+    drawBrush(x,y,c);
+    renderAll();
+  }
+  if(tool==='line'||tool==='rect'||tool==='circle'){
+    shapeSnapshot=pixels.map(r=>r.slice());
+    saveUndo();
+  }
+});
+
+drawCanvas.addEventListener('mousemove',e=>{
+  const [x,y]=getPixelPos(e);
+  document.getElementById('status-pos').textContent='坐标: '+x+', '+y;
+
+  if(!drawing) return;
+
+  if(tool==='pencil'||tool==='eraser'){
+    const c=tool==='eraser'?null:fgColor;
+    bresenhamLine(lastX,lastY,x,y,c);
+    renderAll();
+    lastX=x;lastY=y;
+  }
+  if(tool==='line'){
+    pixels=shapeSnapshot.map(r=>r.slice());
+    previewLine(startX,startY,x,y);
+  }
+  if(tool==='rect'){
+    pixels=shapeSnapshot.map(r=>r.slice());
+    previewRect(startX,startY,x,y);
+  }
+  if(tool==='circle'){
+    pixels=shapeSnapshot.map(r=>r.slice());
+    previewCircle(startX,startY,x,y);
+  }
+});
+
+drawCanvas.addEventListener('mouseup',e=>{
+  if(!drawing) return;
+  drawing=false;
+  const [x,y]=getPixelPos(e);
+
+  if(tool==='line'){
+    clearPreview();
+    pixels=shapeSnapshot.map(r=>r.slice());
+    undoStack[undoStack.length-1]=shapeSnapshot;
+    saveUndo();
+    bresenhamLine(startX,startY,x,y,fgColor);
+    renderAll();
+    sfxPlace();
+  }
+  if(tool==='rect'){
+    clearPreview();
+    pixels=shapeSnapshot.map(r=>r.slice());
+    undoStack[undoStack.length-1]=shapeSnapshot;
+    saveUndo();
+    drawRectOutline(startX,startY,x,y,fgColor);
+    renderAll();
+    sfxPlace();
+  }
+  if(tool==='circle'){
+    clearPreview();
+    pixels=shapeSnapshot.map(r=>r.slice());
+    undoStack[undoStack.length-1]=shapeSnapshot;
+    saveUndo();
+    const cx=Math.round((startX+x)/2), cy=Math.round((startY+y)/2);
+    const rx=Math.abs(x-startX)/2, ry=Math.abs(y-startY)/2;
+    drawCircleOutline(cx,cy,rx,ry,fgColor);
+    renderAll();
+    sfxPlace();
+  }
+  shapeSnapshot=null;
+});
+
+drawCanvas.addEventListener('mouseleave',()=>{
+  if(drawing && (tool==='pencil'||tool==='eraser')){
+    drawing=false;
+  }
+});
+
+// 阻止右键菜单
+drawCanvas.addEventListener('contextmenu',e=>e.preventDefault());
+
+// ===== 触摸支持 =====
+drawCanvas.addEventListener('touchstart',e=>{
+  e.preventDefault();
+  const t=e.touches[0];
+  drawCanvas.dispatchEvent(new MouseEvent('mousedown',{clientX:t.clientX,clientY:t.clientY}));
+},{passive:false});
+drawCanvas.addEventListener('touchmove',e=>{
+  e.preventDefault();
+  const t=e.touches[0];
+  drawCanvas.dispatchEvent(new MouseEvent('mousemove',{clientX:t.clientX,clientY:t.clientY}));
+},{passive:false});
+drawCanvas.addEventListener('touchend',e=>{
+  e.preventDefault();
+  drawCanvas.dispatchEvent(new MouseEvent('mouseup',{clientX:0,clientY:0}));
+},{passive:false});
+
+// ===== 工具栏 =====
+const toolNames={pencil:'画笔',eraser:'橡皮',fill:'填充',line:'直线',rect:'矩形',circle:'圆形',picker:'取色',move:'移动'};
+document.querySelectorAll('.tool-btn').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    const t=btn.dataset.tool;
+    if(t==='undo'){undo();return;}
+    if(t==='redo'){redo();return;}
+    tool=t;
+    document.querySelectorAll('.tool-btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('status-tool').textContent='工具: '+(toolNames[t]||t);
+    sfxClick();
+  });
+});
+
+// ===== 色板 =====
+const palDiv=document.getElementById('color-palette');
+PALETTE.forEach(c=>{
+  const s=document.createElement('div');
+  s.className='color-swatch';
+  s.style.background=c;
+  s.addEventListener('click',()=>{
+    fgColor=c;
+    updateColorUI();
+    sfxClick();
+  });
+  s.addEventListener('contextmenu',e=>{
+    e.preventDefault();
+    bgColor=c;
+    updateColorUI();
+    sfxClick();
+  });
+  palDiv.appendChild(s);
+});
+
+function updateColorUI(){
+  document.getElementById('cur-fg').style.background=fgColor;
+  document.getElementById('cur-bg').style.background=bgColor;
+  document.querySelectorAll('.color-swatch').forEach(s=>{
+    s.classList.toggle('active',s.style.background===fgColor||rgbMatch(s.style.backgroundColor,fgColor));
+  });
+}
+function rgbMatch(rgb,hex){
+  const d=document.createElement('div');
+  d.style.color=hex;
+  document.body.appendChild(d);
+  const comp=getComputedStyle(d).color;
+  document.body.removeChild(d);
+  return rgb===comp;
+}
+
+document.getElementById('swap-colors').addEventListener('click',()=>{
+  [fgColor,bgColor]=[bgColor,fgColor];
+  updateColorUI();
+  sfxClick();
+});
+
+// ===== 画笔大小 =====
+const brushSlider=document.getElementById('brush-slider');
+brushSlider.addEventListener('input',()=>{
+  brushSize=parseInt(brushSlider.value);
+  document.getElementById('brush-size-display').textContent=brushSize+'px';
+});
+
+// ===== 画布操作 =====
+function resizeCanvas(){
+  const nw=parseInt(document.getElementById('cw-input').value)||32;
+  const nh=parseInt(document.getElementById('ch-input').value)||32;
+  if(nw<4||nw>128||nh<4||nh>128) return;
+  saveUndo();
+  const oldP=pixels;
+  W=nw;H=nh;
+  initPixels();
+  for(let y=0;y<Math.min(oldP.length,H);y++)
+    for(let x=0;x<Math.min(oldP[y].length,W);x++)
+      pixels[y][x]=oldP[y][x];
+  setupCanvases();
+  sfxClick();
+}
+
+function clearCanvas(){
+  saveUndo();
+  initPixels();
+  renderAll();
+  sfxClick();
+}
+
+function exportPNG(){
+  const ec=document.createElement('canvas');
+  ec.width=W;ec.height=H;
+  const ectx=ec.getContext('2d');
+  for(let y=0;y<H;y++) for(let x=0;x<W;x++){
+    if(pixels[y][x]!==null){
+      ectx.fillStyle=pixels[y][x];
+      ectx.fillRect(x,y,1,1);
+    }
+  }
+  const link=document.createElement('a');
+  link.download='pixel-art-'+Date.now()+'.png';
+  link.href=ec.toDataURL('image/png');
+  link.click();
+  sfxExport();
+}
+
+function saveToLocal(){
+  const data={w:W,h:H,pixels:pixels};
+  localStorage.setItem('pixel-paint-save',JSON.stringify(data));
+  sfxExport();
+  document.getElementById('title-hint').textContent='░ 已保存！ ░';
+  setTimeout(()=>{document.getElementById('title-hint').textContent='░ 尽情创作 ░';},2000);
+}
+
+function loadFromLocal(){
+  const raw=localStorage.getItem('pixel-paint-save');
+  if(!raw){
+    document.getElementById('title-hint').textContent='░ 没有存档 ░';
+    setTimeout(()=>{document.getElementById('title-hint').textContent='░ 尽情创作 ░';},2000);
+    return;
+  }
+  const data=JSON.parse(raw);
+  W=data.w;H=data.h;
+  pixels=data.pixels;
+  document.getElementById('cw-input').value=W;
+  document.getElementById('ch-input').value=H;
+  setupCanvases();
+  sfxClick();
+  document.getElementById('title-hint').textContent='░ 已读取！ ░';
+  setTimeout(()=>{document.getElementById('title-hint').textContent='░ 尽情创作 ░';},2000);
+}
+
+// ===== 键盘快捷键 =====
+document.addEventListener('keydown',e=>{
+  if(e.ctrlKey&&e.key==='z'){e.preventDefault();undo();}
+  else if(e.ctrlKey&&e.key==='y'){e.preventDefault();redo();}
+  else if(e.ctrlKey&&e.key==='s'){e.preventDefault();saveToLocal();}
+  else if(e.ctrlKey&&e.key==='e'){e.preventDefault();exportPNG();}
+  else{
+    const keyMap={b:'pencil',e:'eraser',g:'fill',l:'line',r:'rect',c:'circle',i:'picker',v:'move'};
+    if(keyMap[e.key]){
+      tool=keyMap[e.key];
+      document.querySelectorAll('.tool-btn').forEach(b=>{
+        b.classList.toggle('active',b.dataset.tool===tool);
+      });
+      document.getElementById('status-tool').textContent='工具: '+(toolNames[tool]||tool);
+      sfxClick();
+    }
+  }
+});
+
+// ===== 窗口大小变化 =====
+window.addEventListener('resize',()=>setupCanvases());
+
+// ===== AI 画画系统 =====
+const AI_CFG = {
+  endpoint: 'https://ai.ssnai.com/gemini/v1beta/models/',
+  key: 'Nmqoo7UOx2z4PW6X7oNkUb8WRCZrDvwB',
+};
+let aiCamStream = null, aiCamActive = false, aiDrawing = false;
+
+async function toggleAiCam(){
+  const video = document.getElementById('aiCamVideo');
+  const preview = document.getElementById('ai-cam-preview');
+  const btn = document.getElementById('aiCamBtn');
+  if(aiCamActive){
+    if(aiCamStream) aiCamStream.getTracks().forEach(t=>t.stop());
+    aiCamStream=null; aiCamActive=false;
+    preview.style.display='none';
+    btn.textContent='📷 打开摄像头';
+    document.getElementById('aiDrawBtn').disabled=true;
+  } else {
+    try{
+      aiCamStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'user',width:{ideal:320},height:{ideal:240}},audio:false});
+      video.srcObject=aiCamStream;
+      await video.play();
+      aiCamActive=true;
+      preview.style.display='block';
+      btn.textContent='📷 关闭摄像头';
+      document.getElementById('aiDrawBtn').disabled=false;
+      sfxClick();
+    }catch(e){
+      alert('摄像头启动失败: '+e.message);
+    }
+  }
+}
+
+function aiCapture(){
+  if(!aiCamActive)return null;
+  const v=document.getElementById('aiCamVideo');
+  const c=document.createElement('canvas');
+  c.width=v.videoWidth;c.height=v.videoHeight;
+  c.getContext('2d').drawImage(v,0,0);
+  return c.toDataURL('image/jpeg',0.7);
+}
+
+async function callGeminiAI(model,parts,config={}){
+  const url=AI_CFG.endpoint+model+':generateContent';
+  const body={contents:[{parts}],generationConfig:{...config}};
+  const res=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json','X-goog-api-key':AI_CFG.key},body:JSON.stringify(body)});
+  if(!res.ok)throw new Error('API错误 '+res.status);
+  const json=await res.json();
+  if(json.error)throw new Error(json.error.message);
+  return json;
+}
+
+function showThought(text){
+  const box=document.getElementById('ai-thought-box');
+  box.style.display='block';
+  box.textContent='';
+  let i=0;
+  const iv=setInterval(()=>{
+    if(i<text.length){box.textContent+=text[i];i++;box.scrollTop=box.scrollHeight;}
+    else clearInterval(iv);
+  },30);
+}
+
+function setProgress(pct){
+  const bar=document.getElementById('ai-progress');
+  const fill=document.getElementById('ai-progress-fill');
+  bar.style.display=pct>0?'block':'none';
+  fill.style.width=pct+'%';
+}
+
+async function aiDraw(){
+  if(aiDrawing||!aiCamActive)return;
+  aiDrawing=true;
+  const btn=document.getElementById('aiDrawBtn');
+  btn.disabled=true;btn.textContent='🎨 画画中...';
+  setProgress(10);
+
+  try{
+    // Step 1: Capture photo
+    const photo=aiCapture();
+    if(!photo)throw new Error('拍照失败');
+    const b64=photo.split(',')[1];
+    const mode=document.getElementById('aiMode').value;
+
+    // Step 2: AI analyzes scene and generates inner thoughts + pixel art instructions
+    setProgress(25);
+    showThought('嗯...让我仔细看看...');
+
+    const modePrompts={
+      portrait:'Draw an anime-style pixel art portrait. Stylize features into big expressive anime eyes, simplified nose, colorful hair. NOT realistic.',
+      scene:'Draw a pixel art game scene like a 16-bit SNES RPG background. Stylize into retro game aesthetic.',
+      caricature:'Draw a hilarious exaggerated pixel art caricature. Giant head, tiny body, amplify funny features to the extreme.',
+      cute:'Draw an adorable chibi/kawaii Q-version with huge sparkly eyes, round face, tiny body. Maximum cuteness.'
+    };
+
+    const analyzeResult=await callGeminiAI('gemini-2.5-flash',[
+      {text:`You are a pixel art painter AI with a sassy, humorous personality. You're looking through a camera and about to paint what you see.
+
+1. First, share your INNER THOUGHTS about what you see - be funny, sarcastic, slightly mean but lovable. Comment on appearance, expression, surroundings. Think in Chinese. 2-3 sentences max.
+
+2. Then describe a ${W}x${H} pixel art painting plan. ${modePrompts[mode]}
+
+Return ONLY valid JSON (no markdown):
+{"thoughts":"你的内心吐槽（中文，搞笑毒舌但可爱）","description":"what to paint in English","palette":["#hex1","#hex2",..."up to 8 colors"],"features":{"hair_color":"#hex","skin":"#hex","bg":"#hex","eyes":"#hex","mouth":"#hex","clothes":"#hex"}}`},
+      {inlineData:{mimeType:'image/jpeg',data:b64}}
+    ],{temperature:0.9,maxOutputTokens:2048});
+
+    const txt=analyzeResult.candidates?.[0]?.content?.parts?.[0]?.text||'';
+    console.log('AI分析原文:',txt.slice(0,500));
+    const fi=txt.indexOf('{');
+    if(fi<0)throw new Error('AI未返回JSON: '+txt.slice(0,200));
+    let li=txt.lastIndexOf('}');
+    let raw=(li>fi)?txt.slice(fi,li+1):txt.slice(fi);
+    // Strip trailing incomplete key-value pairs
+    raw=raw.replace(/,\s*"[^"]*"?\s*:?\s*("[^"]*)?$/,'');
+    raw=raw.replace(/,\s*"[^"]*$/,'');
+    // Auto-close brackets
+    const ob=(raw.match(/\[/g)||[]).length-(raw.match(/\]/g)||[]).length;
+    const oc=(raw.match(/\{/g)||[]).length-(raw.match(/\}/g)||[]).length;
+    for(let i=0;i<ob;i++)raw+=']';
+    for(let i=0;i<oc;i++)raw+='}';
+    raw=raw.replace(/,\s*([}\]])/g,'$1');
+    let analysis;
+    try{analysis=JSON.parse(raw);}catch(e){
+      console.error('JSON解析失败:',raw.slice(0,300));
+      // Fallback: extract thoughts manually
+      const tm=raw.match(/"thoughts"\s*:\s*"([^"]+)"/);
+      analysis={thoughts:tm?tm[1]:'让我看看...',description:'pixel art portrait',palette:['#000','#fff','#f88','#ffe0d0','#8b4513','#ffd700']};
+    }
+    if(!analysis)throw new Error('AI分析失败');
+
+    // Show inner thoughts with typewriter effect
+    setProgress(40);
+    showThought(analysis.thoughts||'这个...我无话可说');
+    await new Promise(r=>setTimeout(r,2000));
+
+    // Step 3: Generate pixel art image using Gemini Image
+    setProgress(55);
+    showThought((analysis.thoughts||'')+'\\n\\n✏️ 开始画了...');
+
+    const styleMap={
+      portrait:'anime pixel art portrait, big expressive eyes, stylized anime hair, cel-shaded, like a 16-bit JRPG character portrait',
+      scene:'16-bit SNES RPG pixel art game background, like Chrono Trigger or Final Fantasy VI',
+      caricature:'exaggerated pixel art cartoon caricature, giant head, tiny body, hilarious proportions, game character select screen style',
+      cute:'chibi kawaii pixel art, huge sparkly eyes, round face, tiny body, adorable game sprite style'
+    };
+    const imgResult=await callGeminiAI('gemini-2.5-flash-image',[
+      {text:`Create a ${W}x${H} pixel art image based on this photo. DO NOT make it realistic. Transform it into: ${styleMap[mode]||styleMap.portrait}. ${analysis.description||'A character'}. Use limited color palette: ${(analysis.palette||['#000','#fff','#f88','#ffe0d0']).join(', ')}. Style: clean pixel art, no anti-aliasing, visible pixels, retro game aesthetic. No text. Solid color background.`},
+      {inlineData:{mimeType:'image/jpeg',data:b64}}
+    ],{responseModalities:['IMAGE','TEXT']});
+
+    setProgress(80);
+
+    const parts=imgResult.candidates?.[0]?.content?.parts||[];
+    let imgData=null;
+    for(const p of parts){
+      if(p.inlineData?.data){imgData=p.inlineData.data;break;}
+    }
+    if(!imgData)throw new Error('AI未返回图片');
+
+    // Step 4: Load generated image and animate drawing pixel by pixel
+    setProgress(90);
+    showThought((analysis.thoughts||'')+'\n\n✏️ 开始画了！看我一笔一笔来...');
+
+    const img=new Image();
+    img.onload=async()=>{
+      const tc=document.createElement('canvas');
+      tc.width=W;tc.height=H;
+      const tctx=tc.getContext('2d');
+      tctx.imageSmoothingEnabled=false;
+      tctx.drawImage(img,0,0,W,H);
+      const id=tctx.getImageData(0,0,W,H);
+
+      saveUndo();
+
+      // Collect all non-transparent pixels
+      const paintQueue=[];
+      for(let y=0;y<H;y++){
+        for(let x=0;x<W;x++){
+          const i=(y*W+x)*4;
+          const r=id.data[i],g=id.data[i+1],b=id.data[i+2],a=id.data[i+3];
+          if(a<30)continue;
+          const hex='#'+[r,g,b].map(v=>v.toString(16).padStart(2,'0')).join('');
+          paintQueue.push({x,y,hex});
+        }
+      }
+
+      // Paint in spiral order from center outward for cool effect
+      const cx=W/2,cy=H/2;
+      paintQueue.sort((a,b)=>{
+        const da=Math.sqrt((a.x-cx)**2+(a.y-cy)**2);
+        const db=Math.sqrt((b.x-cx)**2+(b.y-cy)**2);
+        return da-db;
+      });
+
+      // Animate: paint batch of pixels per frame
+      const total=paintQueue.length;
+      const batchSize=Math.max(1,Math.floor(total/120));// ~120 frames, ~2sec
+      let idx=0;
+
+      function paintFrame(){
+        if(idx>=total){
+          renderAll();
+          setProgress(100);
+          sfxExport();
+          showThought((analysis.thoughts||'')+'\n\n🎨 大功告成！');
+          setTimeout(()=>{
+            setProgress(0);
+            btn.disabled=false;btn.textContent='🎨 AI 画一幅';
+            aiDrawing=false;
+          },500);
+          return;
+        }
+        const end=Math.min(idx+batchSize,total);
+        for(let i=idx;i<end;i++){
+          const p=paintQueue[i];
+          pixels[p.y][p.x]=p.hex;
+        }
+        idx=end;
+        setProgress(90+Math.floor((idx/total)*10));
+        renderAll();
+        requestAnimationFrame(paintFrame);
+      }
+      paintFrame();
+    };
+    img.onerror=()=>{
+      showThought('😵 图片加载失败了...');
+      btn.disabled=false;btn.textContent='🎨 AI 画一幅';
+      aiDrawing=false;setProgress(0);
+    };
+    img.src='data:image/png;base64,'+imgData;
+
+  }catch(e){
+    console.error('AI画画失败:',e);
+    showThought('😵 出了点问题...'+e.message);
+    setProgress(0);
+    btn.disabled=false;btn.textContent='🎨 AI 画一幅';
+    aiDrawing=false;
+  }
+}
+
+// ===== 初始化 =====
+initPixels();
+setupCanvases();
+updateColorUI();
+</script>
+</body>
+</html>

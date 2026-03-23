@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>番茄钟</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:#0f380f;font-family:'Courier New','Consolas',monospace;color:#0f380f;display:flex;justify-content:center;align-items:center;min-height:100vh;}
+#app{background:#9bbc0f;border:4px solid #0f380f;box-shadow:8px 8px 0px #306230;width:min(96vw,420px);padding:0;text-align:center;}
+#titlebar{background:#306230;color:#9bbc0f;padding:8px 16px;font-size:16px;font-weight:bold;letter-spacing:3px;border-bottom:3px solid #0f380f;}
+#content{padding:20px;}
+#timer-display{font-size:72px;font-weight:bold;color:#0f380f;text-shadow:3px 3px 0px #306230;margin:16px 0;letter-spacing:4px;}
+#session-label{font-size:18px;font-weight:bold;margin-bottom:12px;color:#306230;}
+.progress-wrap{background:#306230;border:3px solid #0f380f;height:24px;margin:12px 0;position:relative;}
+.progress-fill{background:#8bac0f;height:100%;width:0%;transition:width 1s steps(20);}
+.progress-text{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:11px;font-weight:bold;color:#9bbc0f;}
+#controls{display:flex;gap:8px;justify-content:center;margin:16px 0;flex-wrap:wrap;}
+button{background:#8bac0f;color:#0f380f;border:3px solid #0f380f;box-shadow:3px 3px 0px #306230;font-family:monospace;font-size:14px;font-weight:bold;padding:8px 16px;cursor:pointer;}
+button:hover{background:#9bbc0f;transform:translate(1px,1px);box-shadow:2px 2px 0px #306230;}
+button:active{transform:translate(3px,3px);box-shadow:none;}
+button.danger{background:#e63946;color:#fcfcfc;}
+#mode-btns{display:flex;gap:6px;justify-content:center;margin:10px 0;flex-wrap:wrap;}
+.mode-btn{font-size:12px;padding:6px 12px;}
+.mode-btn.active{background:#306230;color:#9bbc0f;}
+#stats{background:#8bac0f;border:3px solid #0f380f;padding:10px;margin-top:14px;display:flex;justify-content:space-around;flex-wrap:wrap;gap:8px;}
+.stat{text-align:center;}
+.stat-val{font-size:28px;font-weight:bold;color:#0f380f;}
+.stat-lbl{font-size:11px;color:#306230;font-weight:bold;}
+#bottombar{background:#306230;color:#9bbc0f;padding:5px 12px;font-size:11px;border-top:3px solid #0f380f;}
+@keyframes blink{0%,100%{opacity:1;}50%{opacity:0.3;}}
+.blink{animation:blink 1s steps(2) infinite;}
+
+/* ===== MOBILE ===== */
+@media(max-width:600px){
+  body{overflow-y:auto!important;min-height:100vh;}
+  button,.btn,.action-btn,[class*="btn"]{min-height:44px;font-size:13px!important;touch-action:manipulation;}
+  input,textarea,select{font-size:16px!important;}
+  .controls,.toolbar,.actions,.panel,.buttons,[class*="controls"],[class*="toolbar"]{flex-wrap:wrap!important;}
+  [style*="width:"][style*="px"]{max-width:100%!important;}
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="titlebar">★ 番茄钟 ★</div>
+  <div id="content">
+    <div id="session-label">专注时间</div>
+    <div id="timer-display">25:00</div>
+    <div class="progress-wrap">
+      <div class="progress-fill" id="pbar"></div>
+      <div class="progress-text" id="ptext">0%</div>
+    </div>
+    <div id="mode-btns">
+      <button class="mode-btn active" onclick="setMode('work')">专注 25分</button>
+      <button class="mode-btn" onclick="setMode('short')">短休 5分</button>
+      <button class="mode-btn" onclick="setMode('long')">长休 15分</button>
+    </div>
+    <div id="controls">
+      <button id="startBtn" onclick="toggleTimer()">▶ 开始</button>
+      <button onclick="resetTimer()">↺ 重置</button>
+      <button class="danger" onclick="resetAll()">✕ 清零</button>
+    </div>
+    <div id="stats">
+      <div class="stat"><div class="stat-val" id="s-tomato">0</div><div class="stat-lbl">🍅 番茄</div></div>
+      <div class="stat"><div class="stat-val" id="s-focus">0</div><div class="stat-lbl">分钟 专注</div></div>
+      <div class="stat"><div class="stat-val" id="s-streak">0</div><div class="stat-lbl">连续 完成</div></div>
+    </div>
+  </div>
+  <div id="bottombar">░ 专注是超能力 ░</div>
+</div>
+<script>
+const audioCtx=new(window.AudioContext||window.webkitAudioContext)();
+function beep(f,d,v=0.1){const o=audioCtx.createOscillator(),g=audioCtx.createGain();o.type='square';o.frequency.value=f;g.gain.value=v;g.gain.exponentialRampToValueAtTime(0.001,audioCtx.currentTime+d);o.connect(g);g.connect(audioCtx.destination);o.start();o.stop(audioCtx.currentTime+d);}
+function sfxClick(){beep(800,0.05);}
+function sfxDone(){beep(523,0.15);setTimeout(()=>beep(659,0.15),150);setTimeout(()=>beep(784,0.15),300);setTimeout(()=>beep(1047,0.25),450);}
+function sfxTick(){beep(400,0.02,0.03);}
+
+const MODES={work:{label:'专注时间',mins:25},short:{label:'短暂休息',mins:5},long:{label:'长休息',mins:15}};
+let mode='work',totalSec=25*60,remainSec=25*60,running=false,interval=null;
+let tomatoes=0,focusMins=0,streak=0;
+
+// load stats
+try{const d=JSON.parse(localStorage.getItem('pomo-stats')||'{}');tomatoes=d.t||0;focusMins=d.f||0;streak=d.s||0;updateStats();}catch(e){}
+
+function saveStats(){localStorage.setItem('pomo-stats',JSON.stringify({t:tomatoes,f:focusMins,s:streak}));}
+function updateStats(){
+  document.getElementById('s-tomato').textContent=tomatoes;
+  document.getElementById('s-focus').textContent=focusMins;
+  document.getElementById('s-streak').textContent=streak;
+}
+
+function setMode(m){
+  sfxClick();
+  mode=m;totalSec=MODES[m].mins*60;remainSec=totalSec;running=false;
+  clearInterval(interval);interval=null;
+  document.getElementById('session-label').textContent=MODES[m].label;
+  document.getElementById('startBtn').textContent='▶ 开始';
+  document.querySelectorAll('.mode-btn').forEach((b,i)=>{
+    b.classList.toggle('active',['work','short','long'][i]===m);
+  });
+  render();
+}
+
+function render(){
+  const m=Math.floor(remainSec/60),s=remainSec%60;
+  document.getElementById('timer-display').textContent=String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');
+  const pct=Math.round((1-remainSec/totalSec)*100);
+  document.getElementById('pbar').style.width=pct+'%';
+  document.getElementById('ptext').textContent=pct+'%';
+  document.getElementById('timer-display').classList.toggle('blink',running&&remainSec<=10);
+  document.title=(running?'⏱ ':'')+(String(m).padStart(2,'0')+':'+String(s).padStart(2,'0'))+' 番茄钟';
+}
+
+function toggleTimer(){
+  sfxClick();
+  if(running){
+    running=false;clearInterval(interval);interval=null;
+    document.getElementById('startBtn').textContent='▶ 继续';
+  }else{
+    running=true;
+    document.getElementById('startBtn').textContent='⏸ 暂停';
+    interval=setInterval(tick,1000);
+  }
+}
+
+function tick(){
+  if(remainSec<=0){
+    clearInterval(interval);interval=null;running=false;
+    sfxDone();
+    if(mode==='work'){
+      tomatoes++;focusMins+=MODES.work.mins;streak++;
+      updateStats();saveStats();
+      document.getElementById('bottombar').textContent='░ 🍅 完成一个番茄！休息一下吧 ░';
+      if(tomatoes%4===0) setMode('long'); else setMode('short');
+    }else{
+      document.getElementById('bottombar').textContent='░ 休息结束，继续加油！ ░';
+      setMode('work');
+    }
+    return;
+  }
+  remainSec--;
+  if(remainSec<=5&&remainSec>0) sfxTick();
+  render();
+}
+
+function resetTimer(){
+  sfxClick();running=false;clearInterval(interval);interval=null;
+  remainSec=totalSec;
+  document.getElementById('startBtn').textContent='▶ 开始';
+  render();
+}
+
+function resetAll(){
+  sfxClick();resetTimer();
+  tomatoes=0;focusMins=0;streak=0;
+  updateStats();saveStats();
+}
+
+render();
+</script>
+</body>
+</html>
