@@ -855,9 +855,23 @@ window.addEventListener('DOMContentLoaded',init);
     }
     if (e.data.type === 'soul_vision_info') vBar.innerHTML = '👁 <b style="color:#f4d03f">小D看到</b> | ' + e.data.description;
     if (e.data.type === 'soul_command') {
-      if (e.data.action === 'get_status') window.parent.postMessage({type:'skill_status',app:_app,status:'running'}, '*');
+      const a = e.data.action;
+      if (a === 'get_status') window.parent.postMessage({type:'skill_status',app:_app,status:'running',data:{mood:typeof diva!=='undefined'?diva.mood:'unknown'}}, '*');
+      // Diva = 小D，接收小D的状态控制
+      if (a === 'say' && e.data.text && typeof spawnChat === 'function') spawnChat(e.data.text);
+      if (a === 'mood' && e.data.value && typeof diva !== 'undefined') diva.mood = e.data.value;
+      if (a === 'eat' && typeof diva !== 'undefined') diva.hunger = Math.max(0, diva.hunger - 25);
+      if (a === 'sleep' && typeof diva !== 'undefined') diva.energy = Math.min(100, diva.energy + 30);
+      if (a === 'dance' && typeof diva !== 'undefined') diva.fun = Math.min(100, diva.fun + 20);
+      if (a === 'work' && typeof setDivaState === 'function') setDivaState('work');
+      if (a === 'read' && typeof setDivaState === 'function') setDivaState('read');
+      if (a === 'rest' && typeof setDivaState === 'function') setDivaState('sit');
     }
   });
+
+  // === WS 直连：接收服务端指令 ===
+  let _ws=null;function _connectWS(){try{_ws=new WebSocket(localStorage.getItem('daoist_ws')||'ws://localhost:3000/ws');_ws.onmessage=(evt)=>{try{const d=JSON.parse(evt.data);if(d.type==='soul_interact'&&d.app===_app&&d.command){window.dispatchEvent(new MessageEvent('message',{data:d.command.action?{type:'soul_command',...d.command}:d.command}));}}catch(e){}};_ws.onclose=()=>{_ws=null;setTimeout(_connectWS,5000)};_ws.onerror=()=>{}}catch(e){setTimeout(_connectWS,10000)}}_connectWS();
+
   window.parent.postMessage({type:'skill_ready',app:_app}, '*');
 })();
 </script>
