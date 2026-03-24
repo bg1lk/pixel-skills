@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>喝酒检测器</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:#0f380f;font-family:'Courier New','Consolas',monospace;color:#0f380f;display:flex;justify-content:center;align-items:center;min-height:100vh;overflow:hidden;}
+#app{background:#9bbc0f;border:4px solid #0f380f;box-shadow:8px 8px 0px #306230;width:min(96vw,480px);text-align:center;display:flex;flex-direction:column;max-height:98vh;}
+#titlebar{background:#306230;color:#9bbc0f;padding:8px 16px;font-size:15px;font-weight:bold;letter-spacing:3px;border-bottom:3px solid #0f380f;flex-shrink:0;}
+#content{padding:10px;flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:8px;}
+#cam-wrap{position:relative;background:#0f380f;border:3px solid #0f380f;width:100%;aspect-ratio:4/3;overflow:hidden;}
+#cam-wrap video{width:100%;height:100%;object-fit:cover;opacity:0.85;}
+#cam-wrap canvas{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;}
+#overlay{position:absolute;top:0;left:0;width:100%;height:100%;display:flex;align-items:center;justify-content:center;pointer-events:none;}
+#alert-box{display:none;background:rgba(230,57,70,0.92);border:3px solid #0f380f;padding:10px 18px;font-size:18px;font-weight:bold;color:#fcfcfc;text-shadow:2px 2px 0px #0f380f;letter-spacing:2px;animation:pulse 0.6s infinite alternate;}
+@keyframes pulse{0%{transform:scale(1);}100%{transform:scale(1.08);}}
+#status-bar{display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap;}
+#status-text{font-size:12px;font-weight:bold;color:#306230;text-align:left;flex:1;}
+#drink-count{font-size:13px;font-weight:bold;color:#0f380f;background:#8bac0f;border:2px solid #0f380f;padding:4px 10px;}
+#msg-box{background:#306230;border:3px solid #0f380f;padding:12px;min-height:50px;display:flex;align-items:center;justify-content:center;}
+#msg-text{font-size:15px;font-weight:bold;color:#9bbc0f;text-shadow:1px 1px 0px #0f380f;letter-spacing:1px;}
+#history{text-align:left;max-height:80px;overflow-y:auto;}
+.history-title{font-size:11px;font-weight:bold;color:#306230;border-bottom:2px solid #306230;padding-bottom:2px;margin-bottom:4px;}
+.history-item{font-size:11px;padding:2px 0;color:#0f380f;border-bottom:1px dashed #306230;}
+.controls{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;}
+button{background:#8bac0f;color:#0f380f;border:3px solid #0f380f;box-shadow:3px 3px 0px #306230;font-family:monospace;font-size:13px;font-weight:bold;padding:8px 16px;cursor:pointer;}
+button:hover{background:#9bbc0f;transform:translate(1px,1px);box-shadow:2px 2px 0px #306230;}
+button:active{transform:translate(3px,3px);box-shadow:none;}
+#start-btn{background:#e63946;color:#fcfcfc;font-size:15px;padding:10px 24px;}
+#bottombar{background:#306230;color:#9bbc0f;padding:5px 12px;font-size:11px;border-top:3px solid #0f380f;flex-shrink:0;}
+
+@media(max-width:600px){
+  body{overflow-y:auto!important;min-height:100vh;}
+  #app{width:100%!important;max-width:100%!important;height:100vh!important;max-height:none!important;border:none!important;box-shadow:none!important;border-radius:0!important;}
+  button,.btn,.action-btn,[class*="btn"]{min-height:44px;font-size:13px!important;touch-action:manipulation;}
+  input,textarea,select{font-size:16px!important;}
+  .controls,.toolbar,.actions,.panel,.buttons,[class*="controls"],[class*="toolbar"]{flex-wrap:wrap!important;}
+  [style*="width:"][style*="px"]{max-width:100%!important;}
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="titlebar">&#9733; 喝酒检测器 &#9733;</div>
+  <div id="content">
+    <div id="cam-wrap">
+      <video id="video" autoplay playsinline muted></video>
+      <canvas id="detect-canvas"></canvas>
+      <div id="overlay">
+        <div id="alert-box">少喝点！对身体好！</div>
+      </div>
+    </div>
+
+    <div id="status-bar">
+      <div id="status-text">&#9654; 点击开始检测</div>
+      <div id="drink-count">检测次数: 0</div>
+    </div>
+
+    <div id="msg-box">
+      <div id="msg-text">准备好了吗？开启摄像头监测喝酒行为</div>
+    </div>
+
+    <div class="controls">
+      <button id="start-btn" onclick="toggleCam()">&#9654; 开始检测</button>
+      <button onclick="resetCount()">重置计数</button>
+    </div>
+
+    <div id="history">
+      <div class="history-title">&#9654; 检测记录</div>
+      <div id="history-list"></div>
+    </div>
+  </div>
+  <div id="bottombar">&#9617; 适度饮酒，健康生活 &#9617;</div>
+</div>
+
+<script>
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+function beep(f,d,v=0.08){const o=audioCtx.createOscillator(),g=audioCtx.createGain();o.type='square';o.frequency.value=f;g.gain.value=v;g.gain.exponentialRampToValueAtTime(0.001,audioCtx.currentTime+d);o.connect(g);g.connect(audioCtx.destination);o.start();o.stop(audioCtx.currentTime+d);}
+function sfxAlert(){beep(880,0.1);setTimeout(()=>beep(660,0.1),120);setTimeout(()=>beep(880,0.15),240);}
+function sfxStart(){beep(523,0.08);setTimeout(()=>beep(659,0.08),80);setTimeout(()=>beep(784,0.12),160);}
+
+const video = document.getElementById('video');
+const dCanvas = document.getElementById('detect-canvas');
+const dCtx = dCanvas.getContext('2d');
+const alertBox = document.getElementById('alert-box');
+const statusText = document.getElementById('status-text');
+const drinkCountEl = document.getElementById('drink-count');
+const msgText = document.getElementById('msg-text');
+const historyList = document.getElementById('history-list');
+const startBtn = document.getElementById('start-btn');
+
+let running = false;
+let drinkCount = 0;
+let history = [];
+let detectInterval = null;
+let alertTimeout = null;
+let lastAlertTime = 0;
+
+// Analysis canvas (offscreen)
+const aCanvas = document.createElement('canvas');
+const aCtx = aCanvas.getContext('2d');
+
+const TIPS = [
+  "少喝点吧，身体最重要！",
+  "喝杯水代替吧～",
+  "酒精伤肝，适可而止！",
+  "今天已经喝够了哦！",
+  "为了明天的自己，放下酒杯！",
+  "来杯茶怎么样？",
+  "你的肝在求饶了！",
+  "健康第一，少喝为妙！",
+  "喝酒不开车，开车不喝酒！",
+  "明天还要上班呢，悠着点！",
+  "朋友劝酒不是真朋友！",
+  "白开水，永远的神！"
+];
+
+try { history = JSON.parse(localStorage.getItem('drink-history') || '[]'); } catch(e) {}
+try { drinkCount = parseInt(localStorage.getItem('drink-count') || '0'); } catch(e) {}
+drinkCountEl.textContent = '检测次数: ' + drinkCount;
+renderHistory();
+
+async function toggleCam() {
+  if (running) {
+    stopCam();
+    return;
+  }
+  try {
+    statusText.textContent = '&#9654; 正在启动摄像头...';
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } }
+    });
+    video.srcObject = stream;
+    await video.play();
+    running = true;
+    startBtn.textContent = '&#9724; 停止检测';
+    startBtn.style.background = '#306230';
+    statusText.textContent = '&#9654; 检测中...';
+    msgText.textContent = '正在监测中，请正常活动～';
+    sfxStart();
+
+    dCanvas.width = video.videoWidth || 640;
+    dCanvas.height = video.videoHeight || 480;
+    aCanvas.width = 320;
+    aCanvas.height = 240;
+
+    startDetection();
+  } catch(e) {
+    statusText.textContent = '&#9654; 摄像头启动失败，点击重试';
+    msgText.textContent = '请允许摄像头权限后重试';
+  }
+}
+
+function stopCam() {
+  running = false;
+  if (detectInterval) { clearInterval(detectInterval); detectInterval = null; }
+  if (video.srcObject) {
+    video.srcObject.getTracks().forEach(t => t.stop());
+    video.srcObject = null;
+  }
+  startBtn.textContent = '&#9654; 开始检测';
+  startBtn.style.background = '#e63946';
+  statusText.textContent = '&#9654; 已停止';
+  msgText.textContent = '点击开始重新检测';
+  alertBox.style.display = 'none';
+}
+
+function startDetection() {
+  // Simple motion + pose heuristic detection every 2 seconds
+  let prevFrame = null;
+
+  detectInterval = setInterval(() => {
+    if (!running) return;
+
+    aCtx.drawImage(video, 0, 0, 320, 240);
+    const frame = aCtx.getImageData(0, 0, 320, 240);
+    const data = frame.data;
+
+    // Detect skin-colored regions in upper area (hand near face = drinking gesture)
+    let skinPixelsUpper = 0;
+    let skinPixelsMid = 0;
+    let totalUpper = 0;
+    let totalMid = 0;
+
+    for (let y = 0; y < 240; y++) {
+      for (let x = 0; x < 320; x++) {
+        const i = (y * 320 + x) * 4;
+        const r = data[i], g = data[i+1], b = data[i+2];
+
+        // Simple skin detection (RGB)
+        const isSkin = r > 95 && g > 40 && b > 20 &&
+                       r > g && r > b &&
+                       (r - g) > 15 &&
+                       Math.abs(r - g) < 100;
+
+        if (y < 100) {
+          totalUpper++;
+          if (isSkin) skinPixelsUpper++;
+        } else if (y < 180) {
+          totalMid++;
+          if (isSkin) skinPixelsMid++;
+        }
+      }
+    }
+
+    const upperRatio = skinPixelsUpper / totalUpper;
+    const midRatio = skinPixelsMid / totalMid;
+
+    // Draw detection overlay
+    dCtx.clearRect(0, 0, dCanvas.width, dCanvas.height);
+
+    // Heuristic: hand raised to face area = possible drinking
+    // Upper region has MORE skin than usual (hand + face together)
+    const isDrinking = upperRatio > 0.25 && upperRatio > midRatio * 1.3;
+
+    // Motion detection for raising gesture
+    let motionScore = 0;
+    if (prevFrame) {
+      for (let i = 0; i < data.length; i += 16) {
+        const diff = Math.abs(data[i] - prevFrame[i]) +
+                     Math.abs(data[i+1] - prevFrame[i+1]) +
+                     Math.abs(data[i+2] - prevFrame[i+2]);
+        if (diff > 60) motionScore++;
+      }
+    }
+    prevFrame = new Uint8Array(data);
+
+    const hasMotion = motionScore > 500;
+
+    if (isDrinking && hasMotion) {
+      triggerAlert();
+    } else if (isDrinking) {
+      // Sustained drinking pose
+      statusText.textContent = '&#9654; 疑似举杯动作...';
+      drawDetectBox('yellow');
+    } else {
+      statusText.textContent = '&#9654; 检测中... 一切正常';
+      alertBox.style.display = 'none';
+    }
+
+  }, 2000);
+}
+
+function drawDetectBox(color) {
+  dCtx.clearRect(0, 0, dCanvas.width, dCanvas.height);
+  dCtx.strokeStyle = color;
+  dCtx.lineWidth = 3;
+  dCtx.setLineDash([8, 4]);
+  const w = dCanvas.width, h = dCanvas.height;
+  dCtx.strokeRect(w * 0.2, h * 0.05, w * 0.6, h * 0.45);
+  dCtx.setLineDash([]);
+
+  dCtx.fillStyle = color;
+  dCtx.font = 'bold 16px monospace';
+  dCtx.textAlign = 'center';
+  dCtx.fillText('DETECTING...', w / 2, h * 0.08 + 16);
+}
+
+function triggerAlert() {
+  const now = Date.now();
+  if (now - lastAlertTime < 8000) return; // cooldown
+  lastAlertTime = now;
+
+  drinkCount++;
+  drinkCountEl.textContent = '检测次数: ' + drinkCount;
+  localStorage.setItem('drink-count', drinkCount);
+
+  const tip = TIPS[Math.floor(Math.random() * TIPS.length)];
+  alertBox.textContent = tip;
+  alertBox.style.display = 'block';
+  msgText.textContent = tip;
+  statusText.textContent = '&#9654; 检测到喝酒动作！';
+
+  // Draw red box
+  dCtx.clearRect(0, 0, dCanvas.width, dCanvas.height);
+  dCtx.strokeStyle = '#e63946';
+  dCtx.lineWidth = 4;
+  const w = dCanvas.width, h = dCanvas.height;
+  dCtx.strokeRect(w * 0.15, h * 0.02, w * 0.7, h * 0.5);
+  dCtx.fillStyle = '#e63946';
+  dCtx.font = 'bold 20px monospace';
+  dCtx.textAlign = 'center';
+  dCtx.fillText('DRINKING!', w / 2, h * 0.06 + 20);
+
+  sfxAlert();
+
+  // Add to history
+  const entry = { text: tip, time: new Date().toLocaleTimeString('zh'), count: drinkCount };
+  history.unshift(entry);
+  if (history.length > 20) history.pop();
+  localStorage.setItem('drink-history', JSON.stringify(history));
+  renderHistory();
+
+  if (alertTimeout) clearTimeout(alertTimeout);
+  alertTimeout = setTimeout(() => {
+    alertBox.style.display = 'none';
+  }, 5000);
+}
+
+function resetCount() {
+  drinkCount = 0;
+  history = [];
+  localStorage.setItem('drink-count', '0');
+  localStorage.setItem('drink-history', '[]');
+  drinkCountEl.textContent = '检测次数: 0';
+  renderHistory();
+  msgText.textContent = '计数已重置，重新开始！';
+  beep(440, 0.1);
+}
+
+function renderHistory() {
+  historyList.innerHTML = history.map(h =>
+    `<div class="history-item">${h.time} [#${h.count}] ${h.text}</div>`
+  ).join('');
+}
+
+// Keyboard
+document.addEventListener('keydown', e => {
+  if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); toggleCam(); }
+});
+
+// ==================== SOUL BRIDGE ====================
+(function() {
+  const _app = '喝酒检测器';
+  window.addEventListener('message', e => {
+    if (!e.data || e.data.type !== 'soul_command') return;
+    if (e.data.action === 'get_status') {
+      window.parent.postMessage({
+        type: 'skill_status', app: _app, status: running ? 'detecting' : 'idle',
+        data: { drinkCount, lastTip: history[0]?.text || '' }
+      }, '*');
+    }
+    if (e.data.action === 'start') {
+      if (!running) toggleCam();
+    }
+    if (e.data.action === 'stop') {
+      if (running) stopCam();
+    }
+    if (e.data.action === 'reset') {
+      resetCount();
+    }
+  });
+
+  // Auto-start camera
+  setTimeout(() => {
+    if (!running) toggleCam();
+  }, 1000);
+
+  // === WS direct connection ===
+  let _ws = null;
+  function _connectWS() {
+    try {
+      _ws = new WebSocket((()=>{const s=localStorage.getItem('daoist_ws');if(s)return s;if(location.hostname.includes('github.io'))return 'ws://localhost:3000/ws';const p=location.protocol==='https:'?'wss:':'ws:';return p+'//'+location.host+'/ws'})());
+      _ws.onmessage = (evt) => {
+        try {
+          const d = JSON.parse(evt.data);
+          if (d.type === 'soul_interact' && d.app === _app && d.command) {
+            window.dispatchEvent(new MessageEvent('message', {
+              data: d.command.action ? { type: 'soul_command', ...d.command } : d.command
+            }));
+          }
+        } catch(e) {}
+      };
+      _ws.onclose = () => { _ws = null; setTimeout(_connectWS, 5000); };
+      _ws.onerror = () => {};
+    } catch(e) { setTimeout(_connectWS, 10000); }
+  }
+  _connectWS();
+
+  window.parent.postMessage({ type: 'skill_ready', app: _app }, '*');
+})();
+</script>
+</body>
+</html>

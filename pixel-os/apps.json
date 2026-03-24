@@ -166,5 +166,14 @@
     "path": "../pixel-life/app.html",
     "description": "Diva的像素生活·摄像头还原空间",
     "camera": true
+  },
+  {
+    "id": "喝酒检测器",
+    "name": "喝酒检测器",
+    "icon": "🍺",
+    "color": "#e63946",
+    "path": "../喝酒检测器/app.html",
+    "description": "检测有没有在喝酒，提醒少喝点，对身体好",
+    "camera": true
   }
 ]
