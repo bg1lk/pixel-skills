@@ -2913,22 +2913,42 @@ setInterval(()=>{if(naruto.state!=='drag'&&Math.random()<0.15)narutoSpeak();},60
       if (data.thought) showThought(data.thought);
 
       if (data.action === 'open_app' && data.app) {
+        // 显示通知
+        const actName = activityNames[data.status?.activity] || data.app;
+        showSoulNotify(`小D决定去「${actName}」${data.thought ? ' — "' + data.thought + '"' : ''}`, 6000);
+
         // 小D决定打开一个应用 → 自动在桌面上打开
         const existing = wins.find(w => w.appId === data.app);
         if (existing) {
           existing.min = false;
           focusWin(existing.id);
+          // 自动最大化让用户看清内容
+          existing.max = true;
           renderWins();
         } else {
           openApp(data.app);
+          // 延迟最大化新窗口
+          setTimeout(() => {
+            const w = wins.find(w => w.appId === data.app);
+            if (w) { w.max = true; renderWins(); }
+          }, 500);
         }
+        // 显示活动覆盖层
+        showActivityOverlay(data.status?.activity, data.thought, data.app);
+
         // 打开后延迟发送交互指令（等 iframe 加载）
         if (data.interact) {
-          setTimeout(() => sendCommandToApp(data.app, data.interact), 3000);
+          setTimeout(() => {
+            sendCommandToApp(data.app, data.interact);
+            // interact 发出后，5秒后隐藏覆盖层（让skill内容显示）
+            setTimeout(() => hideActivityOverlay(), 5000);
+          }, 3000);
         }
       }
 
       if (data.action === 'close_app' && data.app) {
+        hideActivityOverlay();
+        showSoulNotify('小D关闭了应用', 3000);
         const w = wins.find(w => w.appId === data.app);
         if (w) closeWin(w.id);
       }
@@ -2936,6 +2956,7 @@ setInterval(()=>{if(naruto.state!=='drag'&&Math.random()<0.15)narutoSpeak();},60
 
     // 服务器让小D操作当前应用
     if (data.type === 'soul_interact' && data.app && data.command) {
+      showSoulNotify(`小D正在操作「${data.app}」...`, 4000);
       sendCommandToApp(data.app, data.command);
     }
   }
@@ -2958,9 +2979,13 @@ setInterval(()=>{if(naruto.state!=='drag'&&Math.random()<0.15)narutoSpeak();},60
   // 监听来自子应用的消息
   window.addEventListener('message', (e) => {
     if (!e.data || !e.data.type) return;
-    // 子应用画完画等事件 → 转发给服务器
-    if (e.data.type === 'soul_draw_done' && ws && ws.readyState === 1) {
-      ws.send(JSON.stringify({ type: 'app_event', event: 'draw_done', thoughts: e.data.thoughts }));
+    // 子应用画完画等事件 → 转发给服务器 + 通知用户
+    if (e.data.type === 'soul_draw_done') {
+      hideActivityOverlay();
+      showSoulNotify(`小D画完了！${e.data.thoughts ? '"' + e.data.thoughts + '"' : ''}`, 8000);
+      if (ws && ws.readyState === 1) {
+        ws.send(JSON.stringify({ type: 'app_event', event: 'draw_done', thoughts: e.data.thoughts }));
+      }
     }
   });
 
@@ -3007,24 +3032,118 @@ setInterval(()=>{if(naruto.state!=='drag'&&Math.random()<0.15)narutoSpeak();},60
   const camCtx = camCanvas.getContext('2d');
   let camStream = null, camReady = false;
 
-  // 摄像头小窗 UI（右下角半透明）
+  // 摄像头窗口 — 左下角，始终置顶，可拖动
   const camBox = document.createElement('div');
   camBox.id = 'soulCam';
   Object.assign(camBox.style, {
-    position:'absolute', bottom:'44px', right:'4px', width:'120px', height:'90px',
-    zIndex:'8999', border:'2px solid #2038ec', borderRadius:'4px',
-    overflow:'hidden', opacity:'0.7', background:'#000',
+    position:'absolute', bottom:'44px', left:'4px', width:'200px', height:'150px',
+    zIndex:'99999', border:'3px solid #2038ec', borderRadius:'6px',
+    overflow:'hidden', background:'#000', boxShadow:'0 0 12px rgba(60,188,252,0.5)',
+    transition: 'width 0.3s, height 0.3s',
   });
   camVideo.style.cssText = 'width:100%;height:100%;object-fit:cover;transform:scaleX(-1)';
   camVideo.setAttribute('playsinline','');
   camVideo.setAttribute('muted','');
   camBox.appendChild(camVideo);
-  // "小D之眼"标签
+
+  // "小D之眼"标签 + 放大/缩小按钮
   const camLabel = document.createElement('div');
-  camLabel.textContent = '👁 小D之眼';
-  camLabel.style.cssText = 'position:absolute;top:2px;left:4px;font-size:8px;color:#3cbcfc;font-family:monospace;text-shadow:1px 1px 0 #000';
+  camLabel.innerHTML = '👁 小D之眼 <span id="camToggle" style="cursor:pointer;float:right;margin-right:4px">⊕</span>';
+  camLabel.style.cssText = 'position:absolute;top:0;left:0;right:0;font-size:9px;color:#3cbcfc;font-family:monospace;text-shadow:1px 1px 0 #000;background:rgba(0,0,0,0.6);padding:2px 6px';
   camBox.appendChild(camLabel);
   if (screen) screen.appendChild(camBox);
+
+  // 点击放大/缩小摄像头
+  let camExpanded = false;
+  camBox.addEventListener('click', (e) => {
+    if (e.target.id === 'camToggle' || e.target === camLabel) {
+      camExpanded = !camExpanded;
+      if (camExpanded) {
+        Object.assign(camBox.style, { width:'320px', height:'240px' });
+        camBox.querySelector('#camToggle').textContent = '⊖';
+      } else {
+        Object.assign(camBox.style, { width:'200px', height:'150px' });
+        camBox.querySelector('#camToggle').textContent = '⊕';
+      }
+    }
+  });
+
+  // --- 🎭 小D活动覆盖层 — 展示小D正在使用skill ---
+  const soulActivityOverlay = document.createElement('div');
+  soulActivityOverlay.id = 'soulActivityOverlay';
+  Object.assign(soulActivityOverlay.style, {
+    position:'absolute', top:'0', left:'0', right:'0', bottom:'0',
+    zIndex:'99990', display:'none', pointerEvents:'none',
+  });
+  if (screen) screen.appendChild(soulActivityOverlay);
+
+  const activityEmojis = {
+    'meditating':'🧘', 'fortune-telling':'🔮', 'shoe-shining':'👞',
+    'delivering':'📦', 'eating':'🍜', 'resting':'😴', 'wandering':'🚶',
+    'helping':'🤝', 'writing-diary':'📝', 'accounting':'💰',
+    'checking-light':'💡', 'drawing':'🎨', 'playing-cat':'🐱',
+    'exploring-map':'🗺️', 'watching-goose':'🦆', 'mood-check':'💭',
+    'eye-rest':'👁️', 'cooking-tea':'🍵', 'pixel-life':'🌍',
+  };
+
+  let activityOverlayTimer = null;
+  function showActivityOverlay(activity, thought, appId) {
+    const emoji = activityEmojis[activity] || '🧘';
+    const name = activityNames[activity] || activity;
+    const dots = '<span class="soul-dots">...</span>';
+    soulActivityOverlay.innerHTML = `
+      <div style="position:absolute;bottom:60px;left:50%;transform:translateX(-50%);
+        background:rgba(28,28,46,0.92);border:2px solid #f8b800;border-radius:12px;
+        padding:12px 20px;font-family:monospace;color:#f8b800;text-align:center;
+        max-width:300px;box-shadow:0 4px 20px rgba(0,0,0,0.6);pointer-events:none;">
+        <div style="font-size:32px;margin-bottom:6px;animation:soulBounce 1s infinite;">${emoji}</div>
+        <div style="font-size:14px;font-weight:bold;">小D正在${name}${dots}</div>
+        ${thought ? `<div style="font-size:11px;color:#aaa;margin-top:4px;">"${thought}"</div>` : ''}
+      </div>
+      <style>
+        @keyframes soulBounce { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-8px)} }
+        .soul-dots { animation: soulDots 1.5s infinite; }
+        @keyframes soulDots { 0%{opacity:0.2} 50%{opacity:1} 100%{opacity:0.2} }
+      </style>
+    `;
+    soulActivityOverlay.style.display = 'block';
+    // 30秒后自动消失
+    if (activityOverlayTimer) clearTimeout(activityOverlayTimer);
+    activityOverlayTimer = setTimeout(() => {
+      soulActivityOverlay.style.display = 'none';
+    }, 30000);
+  }
+
+  function hideActivityOverlay() {
+    soulActivityOverlay.style.display = 'none';
+    if (activityOverlayTimer) clearTimeout(activityOverlayTimer);
+  }
+
+  // --- 🔔 小D动态通知条 ---
+  const soulNotify = document.createElement('div');
+  soulNotify.id = 'soulNotify';
+  Object.assign(soulNotify.style, {
+    position:'absolute', top:'32px', left:'50%', transform:'translateX(-50%) translateY(-100%)',
+    zIndex:'99998', background:'#1c1c2e', border:'2px solid #f8b800', borderRadius:'8px',
+    padding:'8px 16px', fontFamily:'monospace', fontSize:'12px', color:'#f8b800',
+    fontWeight:'bold', textAlign:'center', maxWidth:'80%',
+    boxShadow:'0 4px 12px rgba(0,0,0,0.5)', opacity:'0',
+    transition:'transform 0.4s ease, opacity 0.4s ease', pointerEvents:'none',
+  });
+  if (screen) screen.appendChild(soulNotify);
+
+  // 显示动态通知（滑入 → 停留 → 滑出）
+  let notifyTimer = null;
+  function showSoulNotify(text, duration = 5000) {
+    soulNotify.textContent = '🧘 ' + text;
+    soulNotify.style.opacity = '1';
+    soulNotify.style.transform = 'translateX(-50%) translateY(0)';
+    if (notifyTimer) clearTimeout(notifyTimer);
+    notifyTimer = setTimeout(() => {
+      soulNotify.style.opacity = '0';
+      soulNotify.style.transform = 'translateX(-50%) translateY(-100%)';
+    }, duration);
+  }
 
   async function startCamera() {
     try {
