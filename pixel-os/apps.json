@@ -184,5 +184,13 @@
     "path": "../相册/app.html",
     "description": "记录小D自己的生活",
     "camera": true
+  },
+  {
+    "id": "日记",
+    "name": "日记",
+    "icon": "日",
+    "color": "#0074d1",
+    "path": "../日记/app.html",
+    "description": "记录我的每日所思所感"
   }
 ]

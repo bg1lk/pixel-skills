@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pixel Diary</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0f380f;font-family:'Courier New',monospace;color:#8bac0f;height:100vh;display:flex;flex-direction:column;overflow:hidden;user-select:none}
+.header{display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:#0f380f;border-bottom:3px solid #306230}
+.header h1{font-size:14px;color:#9bbc0f;letter-spacing:2px}
+.header .date{font-size:11px;color:#306230}
+.tabs{display:flex;gap:2px;padding:4px 8px;background:#0f380f;border-bottom:2px solid #306230}
+.tab{padding:4px 12px;font-size:11px;font-family:monospace;color:#306230;background:#0f380f;border:2px solid #306230;cursor:pointer;transition:none}
+.tab:hover,.tab.active{background:#306230;color:#9bbc0f;border-color:#8bac0f}
+.main{flex:1;display:flex;overflow:hidden}
+.sidebar{width:140px;min-width:140px;border-right:2px solid #306230;overflow-y:auto;background:#0f380f}
+.sidebar-item{padding:6px 8px;font-size:10px;border-bottom:1px solid #1a4a1a;cursor:pointer;color:#306230;display:flex;flex-direction:column;gap:2px}
+.sidebar-item:hover{background:#1a4a1a}
+.sidebar-item.active{background:#306230;color:#9bbc0f}
+.sidebar-item .si-date{font-size:9px;color:#8bac0f}
+.sidebar-item .si-mood{font-size:12px}
+.sidebar-item .si-preview{font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px}
+.editor{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.editor-toolbar{display:flex;gap:4px;padding:6px 8px;background:#0f380f;border-bottom:1px solid #306230;flex-wrap:wrap;align-items:center}
+.mood-btn{width:24px;height:24px;font-size:14px;background:#0f380f;border:2px solid #306230;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1}
+.mood-btn:hover,.mood-btn.active{background:#306230;border-color:#8bac0f}
+.tag-input{background:#0f380f;border:2px solid #306230;color:#8bac0f;font-family:monospace;font-size:10px;padding:2px 6px;width:100px;outline:none}
+.tag-input:focus{border-color:#8bac0f}
+.tag-list{display:flex;gap:3px;flex-wrap:wrap}
+.tag{font-size:9px;background:#306230;color:#9bbc0f;padding:1px 5px;border:1px solid #8bac0f;cursor:pointer}
+.tag:hover{background:#8bac0f;color:#0f380f}
+.editor-area{flex:1;padding:8px;overflow:hidden;display:flex;flex-direction:column}
+.editor-area textarea{flex:1;width:100%;background:#0a2a0a;border:2px solid #306230;color:#9bbc0f;font-family:monospace;font-size:12px;padding:8px;resize:none;outline:none;line-height:1.6}
+.editor-area textarea:focus{border-color:#8bac0f}
+.editor-area textarea::placeholder{color:#306230}
+.editor-meta{display:flex;justify-content:space-between;align-items:center;padding:4px 0;font-size:9px;color:#306230}
+.bottom-bar{display:flex;justify-content:space-between;align-items:center;padding:6px 10px;background:#0f380f;border-top:2px solid #306230}
+.bottom-bar .stats{font-size:9px;color:#306230}
+.btn{background:#306230;border:2px solid #0f380f;box-shadow:2px 2px 0 #0a2a0a;color:#8bac0f;font-family:monospace;font-size:11px;padding:4px 10px;cursor:pointer;font-weight:bold}
+.btn:hover{background:#8bac0f;color:#0f380f}
+.btn:active{box-shadow:none;transform:translate(1px,1px)}
+.btn-danger{color:#ff6666;border-color:#663333}
+.search-bar{display:none;padding:6px 8px;background:#0a2a0a;border-bottom:2px solid #306230}
+.search-bar.show{display:flex;gap:4px;align-items:center}
+.search-bar input{flex:1;background:#0f380f;border:2px solid #306230;color:#8bac0f;font-family:monospace;font-size:11px;padding:3px 6px;outline:none}
+.search-bar input:focus{border-color:#8bac0f}
+.empty-state{flex:1;display:flex;align-items:center;justify-content:center;color:#306230;font-size:12px;text-align:center;padding:20px;line-height:1.8}
+.soul-bar{font-size:10px;padding:3px 8px;background:#0a2a0a;border-bottom:1px solid #306230;color:#306230;display:flex;align-items:center;gap:6px}
+@media(max-width:600px){
+  .sidebar{width:100px;min-width:100px}
+  .sidebar-item .si-preview{max-width:80px}
+  .header h1{font-size:12px}
+}
+</style>
+</head>
+<body>
+<div class="soul-bar" id="vBar">Soul Bridge | waiting...</div>
+<div class="header">
+  <h1>PIXEL DIARY</h1>
+  <span class="date" id="todayDate"></span>
+</div>
+<div class="tabs">
+  <div class="tab active" data-tab="write" onclick="switchTab('write')">Write</div>
+  <div class="tab" data-tab="list" onclick="switchTab('list')">List</div>
+  <div class="tab" data-tab="search" onclick="switchTab('search')">Search</div>
+  <button class="btn" style="margin-left:auto;font-size:10px;padding:2px 8px" onclick="newEntry()">+ New</button>
+</div>
+<div class="search-bar" id="searchBar">
+  <input type="text" id="searchInput" placeholder="search diary..." oninput="doSearch()">
+  <span id="searchCount" style="font-size:9px;color:#306230"></span>
+</div>
+<div class="main">
+  <div class="sidebar" id="sidebar"></div>
+  <div class="editor" id="editorPanel">
+    <div class="editor-toolbar">
+      <span style="font-size:10px;margin-right:4px">Mood:</span>
+      <div class="mood-btn" data-mood="happy" onclick="setMood('happy')">:)</div>
+      <div class="mood-btn" data-mood="sad" onclick="setMood('sad')">:(</div>
+      <div class="mood-btn" data-mood="calm" onclick="setMood('calm')">-_-</div>
+      <div class="mood-btn" data-mood="excited" onclick="setMood('excited')">:D</div>
+      <div class="mood-btn" data-mood="angry" onclick="setMood('angry')">>:(</div>
+      <div class="mood-btn" data-mood="thinking" onclick="setMood('thinking')">?_?</div>
+      <span style="font-size:10px;margin-left:8px">Tags:</span>
+      <input class="tag-input" id="tagInput" placeholder="add tag..." onkeydown="if(event.key==='Enter')addTag()">
+      <div class="tag-list" id="tagList"></div>
+    </div>
+    <div class="editor-area">
+      <textarea id="diaryText" placeholder="write your thoughts here...&#10;&#10;today I..."></textarea>
+    </div>
+    <div class="editor-meta" style="padding:2px 8px">
+      <span id="charCount">0 chars</span>
+      <span id="entryDate"></span>
+    </div>
+  </div>
+</div>
+<div class="bottom-bar">
+  <div class="stats" id="stats">0 entries</div>
+  <div style="display:flex;gap:4px">
+    <button class="btn btn-danger" onclick="deleteEntry()" style="font-size:10px;padding:2px 8px">Del</button>
+    <button class="btn" onclick="saveEntry()">Save</button>
+  </div>
+</div>
+
+<script>
+// ===== 8-bit Sound =====
+const AC = new (window.AudioContext || window.webkitAudioContext)();
+function beep(freq=600,dur=0.06,vol=0.08){
+  try{const o=AC.createOscillator(),g=AC.createGain();o.type='square';o.frequency.value=freq;g.gain.value=vol;o.connect(g);g.connect(AC.destination);o.start();g.gain.exponentialRampToValueAtTime(0.001,AC.currentTime+dur);o.stop(AC.currentTime+dur)}catch(e){}
+}
+function sfxSave(){beep(800,0.05);setTimeout(()=>beep(1200,0.08),60)}
+function sfxDelete(){beep(200,0.1);setTimeout(()=>beep(150,0.15),100)}
+function sfxNew(){beep(600,0.04);setTimeout(()=>beep(900,0.04),50);setTimeout(()=>beep(1100,0.06),100)}
+function sfxClick(){beep(500,0.03)}
+
+// ===== Data =====
+const STORAGE_KEY = 'pixel_diary_v1';
+let entries = [];
+let currentId = null;
+let searchMode = false;
+
+function loadData(){
+  try{entries=JSON.parse(localStorage.getItem(STORAGE_KEY))||[]}catch(e){entries=[]}
+  entries.sort((a,b)=>b.time-a.time);
+}
+function saveData(){
+  localStorage.setItem(STORAGE_KEY,JSON.stringify(entries));
+}
+
+// ===== Date Helpers =====
+function fmtDate(ts){
+  const d=new Date(ts);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+function fmtTime(ts){
+  const d=new Date(ts);
+  return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+}
+function fmtFull(ts){return fmtDate(ts)+' '+fmtTime(ts)}
+
+// ===== Mood =====
+const MOODS={happy:':)',sad:':(', calm:'-_-',excited:':D',angry:'>:(',thinking:'?_?'};
+let currentMood='calm';
+
+function setMood(m){
+  currentMood=m;
+  document.querySelectorAll('.mood-btn').forEach(b=>b.classList.toggle('active',b.dataset.mood===m));
+  sfxClick();
+}
+
+// ===== Tags =====
+let currentTags=[];
+function renderTags(){
+  document.getElementById('tagList').innerHTML=currentTags.map(t=>`<span class="tag" onclick="removeTag('${t}')">#${t}</span>`).join('');
+}
+function addTag(){
+  const inp=document.getElementById('tagInput');
+  const t=inp.value.trim().replace(/[#,]/g,'');
+  if(t&&!currentTags.includes(t)){currentTags.push(t);renderTags();sfxClick()}
+  inp.value='';
+}
+function removeTag(t){
+  currentTags=currentTags.filter(x=>x!==t);renderTags();sfxClick();
+}
+
+// ===== Entries =====
+function newEntry(){
+  const entry={id:Date.now(),time:Date.now(),mood:'calm',tags:[],text:'',updated:Date.now()};
+  entries.unshift(entry);
+  currentId=entry.id;
+  saveData();
+  renderSidebar();
+  loadEntry(entry.id);
+  sfxNew();
+}
+
+function loadEntry(id){
+  const e=entries.find(x=>x.id===id);
+  if(!e)return;
+  currentId=id;
+  currentMood=e.mood||'calm';
+  currentTags=[...(e.tags||[])];
+  document.getElementById('diaryText').value=e.text||'';
+  document.getElementById('entryDate').textContent=fmtFull(e.time);
+  document.getElementById('charCount').textContent=(e.text||'').length+' chars';
+  setMood(currentMood);
+  renderTags();
+  renderSidebar();
+}
+
+function saveEntry(){
+  if(!currentId){newEntry();return}
+  const e=entries.find(x=>x.id===currentId);
+  if(!e)return;
+  e.text=document.getElementById('diaryText').value;
+  e.mood=currentMood;
+  e.tags=[...currentTags];
+  e.updated=Date.now();
+  saveData();
+  renderSidebar();
+  updateStats();
+  sfxSave();
+}
+
+function deleteEntry(){
+  if(!currentId)return;
+  entries=entries.filter(x=>x.id!==currentId);
+  saveData();
+  currentId=entries.length?entries[0].id:null;
+  if(currentId)loadEntry(currentId);
+  else clearEditor();
+  renderSidebar();
+  updateStats();
+  sfxDelete();
+}
+
+function clearEditor(){
+  currentId=null;currentMood='calm';currentTags=[];
+  document.getElementById('diaryText').value='';
+  document.getElementById('entryDate').textContent='';
+  document.getElementById('charCount').textContent='0 chars';
+  setMood('calm');renderTags();
+}
+
+// ===== Sidebar =====
+function renderSidebar(list){
+  const items=list||entries;
+  const sb=document.getElementById('sidebar');
+  if(!items.length){sb.innerHTML='<div style="padding:12px;font-size:10px;color:#306230;text-align:center">no entries yet<br><br>click [+ New]<br>to start</div>';return}
+  sb.innerHTML=items.map(e=>{
+    const preview=(e.text||'').slice(0,30)||'(empty)';
+    return `<div class="sidebar-item${e.id===currentId?' active':''}" onclick="loadEntry(${e.id});sfxClick()">
+      <div class="si-date">${fmtDate(e.time)} <span class="si-mood">${MOODS[e.mood]||'-'}</span></div>
+      <div class="si-preview">${preview}</div>
+    </div>`;
+  }).join('');
+}
+
+// ===== Tabs =====
+function switchTab(tab){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.tab===tab));
+  const searchBar=document.getElementById('searchBar');
+  searchBar.classList.toggle('show',tab==='search');
+  searchMode=tab==='search';
+  if(tab==='search'){document.getElementById('searchInput').focus();doSearch()}
+  else{renderSidebar()}
+  sfxClick();
+}
+
+// ===== Search =====
+function doSearch(){
+  const q=document.getElementById('searchInput').value.toLowerCase().trim();
+  if(!q){renderSidebar();document.getElementById('searchCount').textContent='';return}
+  const results=entries.filter(e=>(e.text||'').toLowerCase().includes(q)||(e.tags||[]).some(t=>t.toLowerCase().includes(q)));
+  document.getElementById('searchCount').textContent=results.length+' found';
+  renderSidebar(results);
+}
+
+// ===== Stats =====
+function updateStats(){
+  const total=entries.length;
+  const chars=entries.reduce((s,e)=>s+(e.text||'').length,0);
+  document.getElementById('stats').textContent=`${total} entries | ${chars} chars total`;
+}
+
+// ===== Text counter =====
+document.getElementById('diaryText').addEventListener('input',function(){
+  document.getElementById('charCount').textContent=this.value.length+' chars';
+});
+
+// ===== Auto-save on blur =====
+document.getElementById('diaryText').addEventListener('blur',function(){
+  if(currentId)saveEntry();
+});
+
+// ===== Init =====
+document.getElementById('todayDate').textContent=fmtDate(Date.now());
+loadData();
+updateStats();
+if(entries.length){loadEntry(entries[0].id)}
+renderSidebar();
+
+// ==================== SOUL BRIDGE ====================
+(function(){
+  const _app='日记';
+  const vBar=document.getElementById('vBar');
+
+  // Bridge frame (not camera app, but keep for status)
+  let _fc=0;
+
+  window.addEventListener('message',e=>{
+    if(!e.data)return;
+    if(e.data.type==='parent_camera_frame'){_fc++;vBar.innerHTML='Soul Bridge | connected F'+_fc}
+    if(e.data.type==='soul_vision_info'){vBar.innerHTML='Soul | '+e.data.description}
+    if(e.data.type==='soul_command'){
+      if(e.data.action==='get_status'){
+        window.parent.postMessage({type:'skill_status',app:_app,status:'running',data:{entries:entries.length,currentMood}}, '*');
+      }
+      if(e.data.action==='start'){
+        // Soul wants us to create a new entry or write something
+      }
+      if(e.data.action==='say'||e.data.action==='write'){
+        // Soul sends text to write in diary
+        const text=e.data.text||e.data.content||'';
+        if(text){
+          newEntry();
+          document.getElementById('diaryText').value=text;
+          currentMood=e.data.mood||'calm';
+          setMood(currentMood);
+          if(e.data.tags&&Array.isArray(e.data.tags)){currentTags=e.data.tags;renderTags()}
+          saveEntry();
+          vBar.innerHTML='Soul | wrote: '+text.slice(0,30);
+        }
+      }
+    }
+  });
+
+  // === WS Direct Connection ===
+  let _ws=null;
+  function _connectWS(){
+    try{
+      const wsUrl=(()=>{const s=localStorage.getItem('daoist_ws');if(s)return s;if(location.hostname.includes('github.io'))return 'ws://localhost:3000/ws';const p=location.protocol==='https:'?'wss:':'ws:';return p+'//'+location.host+'/ws'})();
+      _ws=new WebSocket(wsUrl);
+      _ws.onopen=()=>{vBar.innerHTML='Soul Bridge | WS connected'};
+      _ws.onmessage=(evt)=>{
+        try{
+          const d=JSON.parse(evt.data);
+          if(d.type==='soul_interact'&&d.app===_app&&d.command){
+            window.dispatchEvent(new MessageEvent('message',{data:d.command.action?{type:'soul_command',...d.command}:d.command}));
+          }
+        }catch(e){}
+      };
+      _ws.onclose=()=>{_ws=null;setTimeout(_connectWS,5000)};
+      _ws.onerror=()=>{};
+    }catch(e){setTimeout(_connectWS,10000)}
+  }
+  _connectWS();
+
+  window.parent.postMessage({type:'skill_ready',app:_app}, '*');
+})();
+</script>
+</body>
+</html>
