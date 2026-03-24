@@ -2822,6 +2822,160 @@ function narutoSpeak(){
 setInterval(()=>{narutoUpdate();narutoRender();},60);
 setInterval(()=>{if(naruto.state!=='drag'&&Math.random()<0.15)narutoSpeak();},6000);
 
+// ===== 🧘 DAOIST SOUL — WebSocket 控制模块 =====
+(function initSoulBridge() {
+  // --- 状态栏 UI ---
+  const soulBar = document.createElement('div');
+  soulBar.id = 'soulBar';
+  soulBar.innerHTML = `
+    <span id="soulMood">🧘</span>
+    <span id="soulName">小D</span>
+    <span id="soulThought" style="flex:1;text-align:center;color:#3cbcfc;font-size:10px;letter-spacing:1px;opacity:0;transition:opacity .5s"></span>
+    <span id="soulActivity" style="color:#58d854;font-size:9px;letter-spacing:1px">等待连接...</span>
+    <span id="soulConn" style="color:#e40058;font-size:8px">⬤</span>
+  `;
+  Object.assign(soulBar.style, {
+    position:'absolute', top:'0', left:'0', right:'0', height:'28px', zIndex:'9000',
+    background:'#1c1c2e', borderBottom:'3px solid #2038ec',
+    display:'flex', alignItems:'center', padding:'0 10px', gap:'8px',
+    fontFamily:'monospace', fontWeight:'bold',
+  });
+  // 小D名字样式
+  soulBar.querySelector('#soulMood').style.fontSize = '16px';
+  soulBar.querySelector('#soulName').style.cssText = 'font-size:11px;color:#f8b800;letter-spacing:2px';
+
+  // 插入到screen顶部
+  const screen = document.getElementById('screen');
+  if (screen) {
+    screen.insertBefore(soulBar, screen.firstChild);
+    // 调整desktop位置给状态栏腾空间
+    const desktop = document.querySelector('.desktop');
+    if (desktop) desktop.style.top = '28px';
+  }
+
+  // --- WebSocket 连接 ---
+  const WS_URL = (() => {
+    if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
+      const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      return `${proto}//${location.host}/ws`;
+    }
+    return localStorage.getItem('daoist_ws') || 'ws://localhost:3000/ws';
+  })();
+
+  let ws = null, reconTimer = null;
+  const soulConn = () => document.getElementById('soulConn');
+  const soulActivity = () => document.getElementById('soulActivity');
+  const soulThought = () => document.getElementById('soulThought');
+  const soulMood = () => document.getElementById('soulMood');
+
+  const moodEmojis = {
+    peaceful:'🧘', curious:'👀', happy:'😊', tired:'😴',
+    hungry:'🍜', worried:'😟', amused:'😄', contemplative:'🌙',
+  };
+
+  const activityNames = {
+    'meditating':'打坐调息', 'fortune-telling':'街边算命', 'shoe-shining':'擦皮鞋',
+    'delivering':'跑腿中', 'eating':'吃饭', 'resting':'歇息', 'wandering':'闲逛人间',
+    'helping':'帮人忙', 'writing-diary':'记录见闻', 'accounting':'算收支',
+    'checking-light':'看天色', 'drawing':'画画', 'playing-cat':'逗小猫',
+    'exploring-map':'看地图', 'watching-goose':'看大鹅', 'mood-check':'感受情绪',
+    'eye-rest':'闭目养神', 'cooking-tea':'泡茶', 'pixel-life':'像素世界',
+    'chatting':'和施主聊天',
+  };
+
+  let thoughtTimer = null;
+  function showThought(text) {
+    if (!text) return;
+    const el = soulThought();
+    if (!el) return;
+    el.textContent = '「' + text + '」';
+    el.style.opacity = '1';
+    if (thoughtTimer) clearTimeout(thoughtTimer);
+    thoughtTimer = setTimeout(() => { el.style.opacity = '0'; }, 10000);
+  }
+
+  function updateStatus(status) {
+    if (!status) return;
+    const m = soulMood();
+    const a = soulActivity();
+    if (m && status.mood) m.textContent = moodEmojis[status.mood] || '🧘';
+    if (a && status.activity) a.textContent = activityNames[status.activity] || status.activity;
+  }
+
+  function handleSoulMessage(data) {
+    if (data.type === 'soul_status') {
+      updateStatus(data.status);
+      if (data.thought) showThought(data.thought);
+    }
+
+    if (data.type === 'soul_action') {
+      updateStatus(data.status);
+      if (data.thought) showThought(data.thought);
+
+      if (data.action === 'open_app' && data.app) {
+        // 小D决定打开一个应用 → 自动在桌面上打开
+        const existing = wins.find(w => w.appId === data.app);
+        if (existing) {
+          existing.min = false;
+          focusWin(existing.id);
+          renderWins();
+        } else {
+          openApp(data.app);
+        }
+      }
+
+      if (data.action === 'close_app' && data.app) {
+        const w = wins.find(w => w.appId === data.app);
+        if (w) closeWin(w.id);
+      }
+    }
+  }
+
+  function connectWS() {
+    if (ws && ws.readyState <= 1) return;
+    try { ws = new WebSocket(WS_URL); } catch(e) { scheduleReconnect(); return; }
+
+    ws.onopen = () => {
+      const c = soulConn();
+      if (c) { c.style.color = '#58d854'; c.textContent = '⬤'; }
+      const a = soulActivity();
+      if (a) a.textContent = '已连接';
+    };
+
+    ws.onmessage = (e) => {
+      try { handleSoulMessage(JSON.parse(e.data)); } catch(err) {}
+    };
+
+    ws.onclose = () => {
+      const c = soulConn();
+      if (c) { c.style.color = '#e40058'; }
+      scheduleReconnect();
+    };
+
+    ws.onerror = () => {};
+  }
+
+  function scheduleReconnect() {
+    if (reconTimer) return;
+    reconTimer = setTimeout(() => { reconTimer = null; connectWS(); }, 5000);
+  }
+
+  // 启动连接
+  setTimeout(connectWS, 1000);
+
+  // 页面可见时重连
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && (!ws || ws.readyState > 1)) connectWS();
+  });
+
+  // 提供手动设置 WS 地址的方法
+  window.setWS = (url) => { localStorage.setItem('daoist_ws', url); location.reload(); };
+  window.soulStatus = () => {
+    const a = soulActivity();
+    return a ? a.textContent : 'unknown';
+  };
+})();
+
 // ===== GO =====
 doBoot();
 </script>

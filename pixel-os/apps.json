@@ -1,13 +1,5 @@
 [
   {
-    "id": "expense-tracker",
-    "name": "记账本",
-    "icon": "$",
-    "color": "#f8d800",
-    "path": "../expense-tracker/app.html",
-    "description": "个人收支记账工具"
-  },
-  {
     "id": "water-reminder",
     "name": "喝水",
     "icon": "~",
@@ -15,22 +7,6 @@
     "path": "../water-reminder/app.html",
     "description": "智能喝水追踪·摄像头AI检测",
     "camera": true
-  },
-  {
-    "id": "cat-pet",
-    "name": "猫咪",
-    "icon": "+",
-    "color": "#f878f8",
-    "path": "../cat-pet/app.html",
-    "description": "像素小猫养成游戏"
-  },
-  {
-    "id": "desktop-goose",
-    "name": "大鹅",
-    "icon": "@",
-    "color": "#fcfcfc",
-    "path": "../desktop-goose/app.html",
-    "description": "像素大鹅桌宠"
   },
   {
     "id": "pixel-paint",
@@ -42,52 +18,12 @@
     "camera": true
   },
   {
-    "id": "pomodoro",
-    "name": "番茄",
-    "icon": "!",
-    "color": "#e63946",
-    "path": "../pomodoro/app.html",
-    "description": "番茄钟专注计时器"
-  },
-  {
-    "id": "todo-list",
-    "name": "待办",
-    "icon": "=",
-    "color": "#00a800",
-    "path": "../todo-list/app.html",
-    "description": "日常待办清单"
-  },
-  {
-    "id": "pixel-clock",
-    "name": "时钟",
-    "icon": "0",
-    "color": "#0078f8",
-    "path": "../pixel-clock/app.html",
-    "description": "时钟·秒表·倒计时"
-  },
-  {
     "id": "dice-roller",
     "name": "骰子",
     "icon": "?",
     "color": "#f4d03f",
     "path": "../dice-roller/app.html",
     "description": "随机决定器"
-  },
-  {
-    "id": "note-pad",
-    "name": "笔记",
-    "icon": "N",
-    "color": "#fca044",
-    "path": "../note-pad/app.html",
-    "description": "快速笔记本"
-  },
-  {
-    "id": "shanghai-cat-tour",
-    "name": "旅行",
-    "icon": "M",
-    "color": "#58d854",
-    "path": "../shanghai-cat-tour/app.html",
-    "description": "上海猫咪旅行地图"
   },
   {
     "id": "claude-room",
@@ -159,7 +95,7 @@
     "description": "实时二次元滤镜·多风格",
     "camera": true
   },
-{
+  {
     "id": "manga-panel",
     "name": "漫画",
     "icon": "M",
@@ -186,7 +122,7 @@
     "description": "光线检测器·护眼提醒",
     "camera": true
   },
-{
+  {
     "id": "pet-monitor",
     "name": "宠物",
     "icon": "W",
@@ -196,15 +132,6 @@
     "camera": true
   },
   {
-    "id": "delivery-watch",
-    "name": "快递",
-    "icon": "D",
-    "color": "#e63946",
-    "path": "../delivery-watch/app.html",
-    "description": "快递监控·门口来人检测",
-    "camera": true
-  },
-{
     "id": "away-lock",
     "name": "锁屏",
     "icon": "K",
