@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no">
+<title>小D的红尘日常</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0f0f0f;--dark:#1c1c2e;--blue:#2038ec;--blue2:#3cbcfc;--sky:#6888fc;
+  --green:#00a800;--green2:#58d854;--tan:#f8b800;--red:#e40058;--white:#fcfcfc;
+  --gray:#7c7c7c;--gray2:#bcbcbc;--cream:#f8d8b0;--pink:#f878f8;
+}
+html,body{height:100%;overflow:hidden;background:#111;font-family:monospace}
+body{display:flex;align-items:center;justify-content:center;image-rendering:pixelated}
+
+/* CRT 外壳 */
+.crt{
+  position:relative;width:96vw;height:93vh;max-width:800px;max-height:700px;
+  background:radial-gradient(ellipse at 40% 30%,#3a3a3a,#222 60%,#1a1a1a);
+  border-radius:24px;padding:20px 24px 48px;
+  box-shadow:inset 0 2px 0 #444,inset 0 -2px 0 #1a1a1a,0 12px 48px rgba(0,0,0,.8);
+}
+.crt-label{position:absolute;bottom:14px;left:50%;transform:translateX(-50%);font-size:10px;color:#555;letter-spacing:6px;font-weight:bold}
+.crt-led{position:absolute;bottom:16px;right:32px;width:8px;height:8px;border-radius:50%;background:#f44;box-shadow:0 0 8px #f44;animation:led 1.5s infinite}
+@keyframes led{0%,80%,100%{opacity:1}90%{opacity:.3}}
+
+.screen{
+  width:100%;height:100%;position:relative;overflow:hidden;
+  background:var(--bg);border:4px solid #0a0a0a;
+  display:flex;flex-direction:column;
+}
+/* 扫描线 */
+.screen::before{content:'';position:absolute;inset:0;background:repeating-linear-gradient(0deg,rgba(0,0,0,.12) 0px,rgba(0,0,0,.12) 2px,transparent 2px,transparent 4px);pointer-events:none;z-index:9999}
+
+/* ===== 顶部状态栏 ===== */
+.status-bar{
+  height:36px;background:var(--dark);border-bottom:3px solid var(--blue);
+  display:flex;align-items:center;padding:0 12px;gap:12px;flex-shrink:0;z-index:10;
+}
+.soul-mood{font-size:18px}
+.soul-name{font-size:12px;color:var(--tan);font-weight:bold;letter-spacing:2px}
+.soul-activity{font-size:10px;color:var(--blue2);flex:1;text-align:right;letter-spacing:1px}
+.soul-energy{width:60px;height:8px;background:var(--bg);border:2px solid var(--gray);display:flex;overflow:hidden}
+.soul-energy-fill{height:100%;background:var(--green2);transition:width .5s steps(10)}
+
+/* ===== 主内容区 ===== */
+.main{flex:1;position:relative;overflow:hidden;display:flex}
+
+/* 像素场景背景 */
+.scene{
+  flex:1;position:relative;overflow:hidden;
+  background:linear-gradient(180deg,#1a1a3e 0%,#2a2a4e 40%,#1a3a1a 40%,#0f2f0f 100%);
+}
+
+/* 小D角色 */
+.daoist{
+  position:absolute;bottom:30%;left:50%;transform:translateX(-50%);
+  width:48px;height:48px;image-rendering:pixelated;
+  transition:left 2s steps(8),bottom 1s steps(4);
+  z-index:5;
+}
+.daoist-sprite{
+  width:48px;height:48px;
+  background:var(--white);border:2px solid var(--bg);
+  display:flex;align-items:center;justify-content:center;
+  font-size:28px;
+}
+.daoist-shadow{
+  width:32px;height:6px;background:rgba(0,0,0,.3);border-radius:50%;
+  margin:-2px auto 0;
+}
+
+/* 场景物件 */
+.scene-obj{
+  position:absolute;image-rendering:pixelated;font-size:20px;
+  animation:float 3s ease-in-out infinite;
+}
+@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
+
+/* 思绪气泡 */
+.thought-bubble{
+  position:absolute;top:8px;left:50%;transform:translateX(-50%);
+  background:var(--white);color:var(--bg);
+  padding:6px 12px;font-size:11px;font-weight:bold;
+  border:3px solid var(--bg);max-width:280px;text-align:center;
+  opacity:0;transition:opacity .5s;z-index:20;
+  box-shadow:4px 4px 0 rgba(0,0,0,.3);
+}
+.thought-bubble.show{opacity:1}
+.thought-bubble::after{
+  content:'';position:absolute;bottom:-10px;left:50%;margin-left:-6px;
+  border:6px solid transparent;border-top-color:var(--bg);
+}
+
+/* 当前应用面板 */
+.app-panel{
+  position:absolute;bottom:0;left:0;right:0;height:0;
+  background:var(--dark);border-top:3px solid var(--blue);
+  transition:height .5s steps(6);overflow:hidden;z-index:15;
+}
+.app-panel.open{height:55%}
+.app-panel iframe{width:100%;height:100%;border:none}
+.app-label{
+  position:absolute;top:4px;right:8px;
+  font-size:9px;color:var(--gray);letter-spacing:1px;z-index:16;
+}
+
+/* ===== 底部日记栏 ===== */
+.diary-bar{
+  height:80px;background:var(--bg);border-top:3px solid var(--gray);
+  padding:6px 12px;overflow-y:auto;flex-shrink:0;z-index:10;
+}
+.diary-bar::-webkit-scrollbar{width:4px}
+.diary-bar::-webkit-scrollbar-thumb{background:var(--gray)}
+.diary-title{font-size:9px;color:var(--tan);letter-spacing:2px;margin-bottom:4px}
+.diary-entry{font-size:10px;color:var(--green2);line-height:1.6;letter-spacing:.5px}
+.diary-entry span{color:var(--gray);margin-right:4px}
+
+/* ===== 连接状态 ===== */
+.conn{position:absolute;top:42px;right:8px;font-size:9px;color:var(--red);letter-spacing:1px;z-index:20}
+.conn.ok{color:var(--green2)}
+
+/* ===== 动画 ===== */
+.daoist.walk{animation:walk .6s steps(2) infinite}
+@keyframes walk{0%{transform:translateX(-50%) scaleX(1)}50%{transform:translateX(-50%) scaleX(-1)}}
+.daoist.sit .daoist-sprite{border-radius:0 0 8px 8px;height:36px}
+.daoist.meditate .daoist-sprite{animation:glow 2s ease-in-out infinite}
+@keyframes glow{0%,100%{box-shadow:0 0 4px var(--blue2)}50%{box-shadow:0 0 16px var(--blue2),0 0 32px rgba(60,188,252,.3)}}
+
+/* 星星/萤火虫 */
+.particle{position:absolute;width:2px;height:2px;background:var(--tan);border-radius:50%;animation:twinkle 2s infinite;z-index:1}
+@keyframes twinkle{0%,100%{opacity:.2}50%{opacity:1}}
+
+/* 场景装饰 */
+.ground{position:absolute;bottom:0;left:0;right:0;height:30%;background:linear-gradient(180deg,#1a3a1a,#0f2f0f)}
+.mountains{position:absolute;bottom:30%;left:0;right:0;height:80px;background:repeating-linear-gradient(135deg,transparent 0px,transparent 40px,#1a1a3e 40px,#1a1a3e 41px);opacity:.3}
+.moon{position:absolute;top:20px;right:40px;width:30px;height:30px;background:var(--cream);border-radius:50%;box-shadow:0 0 20px rgba(248,216,176,.4);z-index:1}
+.stars{position:absolute;inset:0;z-index:0}
+
+/* 手机适配 */
+@media(max-width:700px){
+  .crt{padding:0;border-radius:0;width:100vw;height:100vh;max-width:none;max-height:none;background:none;box-shadow:none}
+  .crt-label,.crt-led{display:none}
+  .screen::before{display:none}
+  .diary-bar{height:70px}
+  .thought-bubble{font-size:10px;max-width:220px}
+}
+</style>
+</head>
+<body>
+
+<div class="crt">
+  <div class="screen">
+    <!-- 顶部状态 -->
+    <div class="status-bar">
+      <span class="soul-mood" id="moodEmoji">🧘</span>
+      <span class="soul-name">小D · Daoist</span>
+      <div class="soul-energy"><div class="soul-energy-fill" id="energyBar" style="width:80%"></div></div>
+      <span class="soul-activity" id="activityText">打坐中...</span>
+    </div>
+
+    <!-- 主场景 -->
+    <div class="main">
+      <div class="scene" id="scene">
+        <!-- 天空装饰 -->
+        <div class="stars" id="stars"></div>
+        <div class="moon" id="moon"></div>
+        <div class="mountains"></div>
+        <div class="ground"></div>
+
+        <!-- 场景物件 -->
+        <div class="scene-obj" id="obj1" style="bottom:32%;left:15%">🌿</div>
+        <div class="scene-obj" id="obj2" style="bottom:35%;right:20%">🏮</div>
+        <div class="scene-obj" id="obj3" style="bottom:31%;left:70%">🪨</div>
+
+        <!-- 小D -->
+        <div class="daoist meditate" id="daoist">
+          <div class="daoist-sprite">🧒</div>
+          <div class="daoist-shadow"></div>
+        </div>
+
+        <!-- 思绪气泡 -->
+        <div class="thought-bubble" id="thought">心清净了，万物皆明</div>
+
+        <!-- 连接状态 -->
+        <div class="conn" id="connStatus">⬤ 未连接</div>
+      </div>
+
+      <!-- 应用面板（自动打开的app） -->
+      <div class="app-panel" id="appPanel">
+        <div class="app-label" id="appLabel"></div>
+        <iframe id="appFrame" sandbox="allow-scripts allow-same-origin allow-forms allow-popups" allow="camera;microphone"></iframe>
+      </div>
+    </div>
+
+    <!-- 底部日记 -->
+    <div class="diary-bar" id="diaryBar">
+      <div class="diary-title">📖 红尘日记</div>
+      <div class="diary-entry" id="diaryContent">
+        <div><span>--:--</span>小道士睁开眼，开始新的一天红尘历练</div>
+      </div>
+    </div>
+  </div>
+  <div class="crt-label">DAOIST · PIXEL · LIFE</div>
+  <div class="crt-led"></div>
+</div>
+
+<script>
+// ===== 配置 =====
+const WS_URL = (() => {
+  // 自动检测 WebSocket 地址
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
+    return `${proto}//${location.host}/ws`;
+  }
+  // GitHub Pages 等静态部署时，连接到 ngrok
+  return localStorage.getItem('daoist_ws') || 'ws://localhost:3000/ws';
+})();
+
+const BASE_URL = location.origin.includes('github.io')
+  ? location.origin + '/pixel-skills'
+  : location.origin;
+
+// ===== DOM =====
+const $ = id => document.getElementById(id);
+const moodEmoji = $('moodEmoji');
+const energyBar = $('energyBar');
+const activityText = $('activityText');
+const daoist = $('daoist');
+const thought = $('thought');
+const connStatus = $('connStatus');
+const appPanel = $('appPanel');
+const appFrame = $('appFrame');
+const appLabel = $('appLabel');
+const diaryContent = $('diaryContent');
+const scene = $('scene');
+
+// ===== 心情 → 表情映射 =====
+const moodMap = {
+  peaceful: '🧘', curious: '👀', happy: '😊', tired: '😴',
+  hungry: '🍜', worried: '😟', amused: '😄', contemplative: '🌙',
+};
+
+// ===== 活动 → 动作映射 =====
+const activityMap = {
+  'meditating': { text: '打坐调息中...', pose: 'meditate', pos: 50 },
+  'fortune-telling': { text: '街边算命...', pose: 'sit', pos: 30 },
+  'shoe-shining': { text: '擦皮鞋赚钱...', pose: 'sit', pos: 25 },
+  'delivering': { text: '跑腿中...', pose: 'walk', pos: -1 },
+  'eating': { text: '吃饭补充能量...', pose: 'sit', pos: 60 },
+  'resting': { text: '歇息...', pose: 'sit', pos: 70 },
+  'wandering': { text: '闲逛人间...', pose: 'walk', pos: -1 },
+  'helping': { text: '帮人忙...', pose: '', pos: 40 },
+  'writing-diary': { text: '记录红尘见闻...', pose: 'sit', pos: 65 },
+  'accounting': { text: '算今日收支...', pose: 'sit', pos: 65 },
+  'checking-light': { text: '看看天色...', pose: '', pos: 50 },
+  'drawing': { text: '画一幅像素画...', pose: 'sit', pos: 45 },
+  'playing-cat': { text: '逗路边小猫...', pose: '', pos: 35 },
+  'exploring-map': { text: '看地图找活干...', pose: 'sit', pos: 55 },
+  'watching-goose': { text: '看大鹅闲逛...', pose: '', pos: 40 },
+  'mood-check': { text: '感受周围情绪...', pose: 'meditate', pos: 50 },
+  'eye-rest': { text: '闭目养神...', pose: 'meditate', pos: 55 },
+  'cooking-tea': { text: '烧水泡茶...', pose: 'sit', pos: 60 },
+  'pixel-life': { text: '在像素世界游荡...', pose: 'walk', pos: -1 },
+  'chatting': { text: '和施主聊天...', pose: '', pos: 50 },
+};
+
+// ===== 场景变化 =====
+const locationScenes = {
+  '公园角落': { bg: 'linear-gradient(180deg,#1a2a4e 0%,#2a3a5e 40%,#1a4a1a 40%,#0f3f0f 100%)', objs: ['🌳', '🪷', '🦋'] },
+  '街角': { bg: 'linear-gradient(180deg,#2a2a3e 0%,#3a3a4e 40%,#3a3a3a 40%,#2a2a2a 100%)', objs: ['🏪', '📦', '🧹'] },
+  '菜市场': { bg: 'linear-gradient(180deg,#3a2a2e 0%,#4a3a3e 40%,#4a4040 40%,#3a3030 100%)', objs: ['🥬', '🍎', '🐔'] },
+  '桥洞下': { bg: 'linear-gradient(180deg,#1a1a2e 0%,#2a2a3e 40%,#2a3a2a 40%,#1a2a1a 100%)', objs: ['🌉', '🕯️', '📖'] },
+  '小旅馆': { bg: 'linear-gradient(180deg,#2a1a1a 0%,#3a2a2a 40%,#4a3a2a 40%,#3a2a1a 100%)', objs: ['🛏️', '💡', '🍵'] },
+  '快递站': { bg: 'linear-gradient(180deg,#2a2a3e 0%,#3a3a4e 40%,#4a4a4a 40%,#3a3a3a 100%)', objs: ['📦', '📦', '🚚'] },
+};
+
+function updateScene(location) {
+  const s = locationScenes[location];
+  if (s) {
+    scene.style.background = s.bg;
+    const objs = [$('obj1'), $('obj2'), $('obj3')];
+    s.objs.forEach((emoji, i) => { if (objs[i]) objs[i].textContent = emoji; });
+  }
+}
+
+// ===== 小D 动作 =====
+let walkTimer = null;
+
+function updateDaoist(activity, status) {
+  if (walkTimer) { clearInterval(walkTimer); walkTimer = null; }
+
+  const info = activityMap[activity] || { text: activity, pose: '', pos: 50 };
+  activityText.textContent = info.text;
+
+  // 移除旧pose
+  daoist.className = 'daoist';
+
+  if (info.pose === 'walk' || info.pos === -1) {
+    // 走路动画
+    daoist.classList.add('walk');
+    let pos = 20;
+    let dir = 1;
+    walkTimer = setInterval(() => {
+      pos += dir * 3;
+      if (pos > 80) dir = -1;
+      if (pos < 20) dir = 1;
+      daoist.style.left = pos + '%';
+    }, 300);
+  } else {
+    if (info.pose) daoist.classList.add(info.pose);
+    daoist.style.left = info.pos + '%';
+  }
+
+  // 更新心情和精力
+  if (status) {
+    moodEmoji.textContent = moodMap[status.mood] || '🧘';
+    if (status.energy !== undefined) energyBar.style.width = status.energy + '%';
+    if (status.location) updateScene(status.location);
+  }
+}
+
+// ===== 思绪气泡 =====
+let thoughtTimer = null;
+
+function showThought(text) {
+  if (!text) return;
+  thought.textContent = text;
+  thought.classList.add('show');
+  if (thoughtTimer) clearTimeout(thoughtTimer);
+  thoughtTimer = setTimeout(() => thought.classList.remove('show'), 8000);
+}
+
+// ===== 日记 =====
+function addDiary(entry) {
+  const div = document.createElement('div');
+  div.innerHTML = entry;
+  diaryContent.appendChild(div);
+  const bar = $('diaryBar');
+  bar.scrollTop = bar.scrollHeight;
+}
+
+// ===== 应用面板 =====
+function openApp(appId) {
+  if (!appId) { closeApp(); return; }
+  const url = `${BASE_URL}/${appId}/app.html`;
+  appFrame.src = url;
+  appLabel.textContent = '🎮 ' + appId;
+  appPanel.classList.add('open');
+}
+
+function closeApp() {
+  appPanel.classList.remove('open');
+  setTimeout(() => { appFrame.src = 'about:blank'; }, 500);
+  appLabel.textContent = '';
+}
+
+// ===== WebSocket 连接 =====
+let ws = null;
+let reconnectTimer = null;
+
+function connect() {
+  if (ws && ws.readyState <= 1) return;
+
+  console.log('[WS] 连接:', WS_URL);
+  connStatus.textContent = '⬤ 连接中...';
+  connStatus.className = 'conn';
+
+  try {
+    ws = new WebSocket(WS_URL);
+  } catch(e) {
+    connStatus.textContent = '⬤ 连接失败';
+    scheduleReconnect();
+    return;
+  }
+
+  ws.onopen = () => {
+    connStatus.textContent = '⬤ 已连接';
+    connStatus.className = 'conn ok';
+    console.log('[WS] 已连接');
+  };
+
+  ws.onmessage = (e) => {
+    try {
+      const data = JSON.parse(e.data);
+      console.log('[WS] 收到:', data);
+
+      if (data.type === 'soul_status') {
+        updateDaoist(data.status?.activity, data.status);
+        if (data.thought) showThought(data.thought);
+      }
+
+      if (data.type === 'soul_action') {
+        if (data.action === 'open_app' && data.app) {
+          openApp(data.app);
+          updateDaoist(data.status?.activity || 'chatting', data.status);
+        }
+        if (data.action === 'close_app') {
+          closeApp();
+        }
+        if (data.thought) showThought(data.thought);
+      }
+
+      if (data.type === 'diary_entry') {
+        addDiary(`<span>${data.time||''}</span>${data.text}`);
+      }
+
+    } catch(err) {
+      console.warn('[WS] 解析失败:', err);
+    }
+  };
+
+  ws.onclose = () => {
+    connStatus.textContent = '⬤ 已断开';
+    connStatus.className = 'conn';
+    scheduleReconnect();
+  };
+
+  ws.onerror = () => {
+    connStatus.textContent = '⬤ 连接错误';
+    connStatus.className = 'conn';
+  };
+}
+
+function scheduleReconnect() {
+  if (reconnectTimer) return;
+  reconnectTimer = setTimeout(() => {
+    reconnectTimer = null;
+    connect();
+  }, 5000);
+}
+
+// ===== 生成星星 =====
+function generateStars() {
+  const stars = $('stars');
+  for (let i = 0; i < 30; i++) {
+    const s = document.createElement('div');
+    s.className = 'particle';
+    s.style.left = Math.random() * 100 + '%';
+    s.style.top = Math.random() * 35 + '%';
+    s.style.animationDelay = Math.random() * 3 + 's';
+    s.style.animationDuration = (1.5 + Math.random() * 2) + 's';
+    stars.appendChild(s);
+  }
+}
+
+// ===== 时间感知 =====
+function updateTimeOfDay() {
+  const h = new Date().getHours();
+  const moon = $('moon');
+  if (h >= 6 && h < 18) {
+    // 白天
+    moon.style.background = '#f8d800';
+    moon.style.boxShadow = '0 0 30px rgba(248,216,0,.5)';
+    scene.style.background = 'linear-gradient(180deg,#4a6aae 0%,#6a8ace 40%,#2a6a2a 40%,#1a4a1a 100%)';
+  } else {
+    // 夜晚
+    moon.style.background = '#f8d8b0';
+    moon.style.boxShadow = '0 0 20px rgba(248,216,176,.4)';
+  }
+}
+
+// ===== 初始化 =====
+generateStars();
+updateTimeOfDay();
+setInterval(updateTimeOfDay, 60000);
+
+// 尝试连接
+connect();
+
+// 页面可见性：离开页面时不断连
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && (!ws || ws.readyState > 1)) connect();
+});
+
+// 提供设置 WS 地址的快捷方式
+window.setWS = (url) => {
+  localStorage.setItem('daoist_ws', url);
+  location.reload();
+};
+</script>
+</body>
+</html>
