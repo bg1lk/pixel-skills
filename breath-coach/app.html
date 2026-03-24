@@ -831,6 +831,7 @@ soundBtn.classList.add('active-toggle');
 
   function _autoStart() {
     if (_started) return; _started = true;
+    if (video.srcObject) return; // camera already working, don't override
     video = pcCv; cameraOn = true;
     drawCamera();
     if (!sessionActive) startSession();
