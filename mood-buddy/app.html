@@ -149,7 +149,7 @@ canvas{display:none}
 <script src="../cam-core/cam-core.js"></script>
 <script>
 // ==================== STATE ====================
-const vid = document.getElementById('vid');
+let vid = document.getElementById('vid');
 const tmpCv = document.getElementById('tmpCv');
 const tmpCtx = tmpCv.getContext('2d');
 let stream = null, running = false, soundOn = true;
@@ -559,6 +559,55 @@ function spawnParticles(emoji, count) {
     setTimeout(() => el.remove(), 4000);
   }
 }
+
+// ==================== PARENT CAMERA BRIDGE ====================
+// Receive camera frames from PixelOS parent window via postMessage
+// This replaces getUserMedia when running inside PixelOS iframe
+(function() {
+  const pcCv = document.createElement('canvas');
+  pcCv.width = 320; pcCv.height = 240;
+  const pcCtx = pcCv.getContext('2d');
+  // Make pcCv behave like a video element for drawImage compatibility
+  Object.defineProperty(pcCv, 'videoWidth', { get: () => 320 });
+  Object.defineProperty(pcCv, 'videoHeight', { get: () => 240 });
+  let bridgeStarted = false;
+
+  window.addEventListener('message', (e) => {
+    if (!e.data || e.data.type !== 'parent_camera_frame') return;
+    const img = new Image();
+    img.onload = () => {
+      pcCtx.drawImage(img, 0, 0, 320, 240);
+      // Show preview in the camera box
+      const vidEl = document.getElementById('vid');
+      if (vidEl && vidEl.parentElement) {
+        let preview = document.getElementById('parentCamPreview');
+        if (!preview) {
+          preview = document.createElement('canvas');
+          preview.id = 'parentCamPreview';
+          preview.width = 320; preview.height = 240;
+          Object.assign(preview.style, { width:'100%', height:'100%', objectFit:'cover', transform:'scaleX(-1)', display:'block' });
+          vidEl.parentElement.insertBefore(preview, vidEl);
+          vidEl.style.display = 'none';
+        }
+        preview.getContext('2d').drawImage(img, 0, 0, 320, 240);
+      }
+      if (!bridgeStarted) {
+        bridgeStarted = true;
+        // Replace vid with our canvas so analyzeMood uses parent frames
+        vid = pcCv;
+        if (!running) {
+          tmpCv.width = 160; tmpCv.height = 120;
+          running = true;
+          document.getElementById('camBox').classList.add('detecting');
+          document.getElementById('btnStart').textContent = '⏹ 停止';
+          showMsg('已接入小D之眼摄像头！正在感知情绪~ 🔍');
+          requestAnimationFrame(loop);
+        }
+      }
+    };
+    img.src = 'data:image/jpeg;base64,' + e.data.frame;
+  });
+})();
 </script>
 </body>
 </html>

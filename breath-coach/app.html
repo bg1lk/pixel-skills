@@ -422,7 +422,7 @@ let cameraOn = false;
 let audioCtx = null;
 
 // Camera
-const video = document.getElementById('video');
+let video = document.getElementById('video');
 const camCanvas = document.getElementById('camCanvas');
 const camCtx = camCanvas.getContext('2d');
 camCanvas.width = 320;
@@ -812,6 +812,31 @@ function toggleSound() {
 
 // Init sound button state
 soundBtn.classList.add('active-toggle');
+
+// ==================== PARENT CAMERA BRIDGE ====================
+(function() {
+  const pcCv = document.createElement('canvas');
+  pcCv.width = 320; pcCv.height = 240;
+  const pcCtx = pcCv.getContext('2d');
+  Object.defineProperty(pcCv, 'videoWidth', { get: () => 320 });
+  Object.defineProperty(pcCv, 'videoHeight', { get: () => 240 });
+  let started = false;
+  window.addEventListener('message', (e) => {
+    if (!e.data || e.data.type !== 'parent_camera_frame') return;
+    const img = new Image();
+    img.onload = () => {
+      pcCtx.drawImage(img, 0, 0, 320, 240);
+      if (!started) {
+        started = true;
+        video = pcCv;
+        cameraOn = true;
+        drawCamera();
+        if (!sessionActive) startSession();
+      }
+    };
+    img.src = 'data:image/jpeg;base64,' + e.data.frame;
+  });
+})();
 </script>
 </body>
 </html>

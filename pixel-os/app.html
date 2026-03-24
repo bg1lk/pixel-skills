@@ -3174,8 +3174,22 @@ setInterval(()=>{if(naruto.state!=='drag'&&Math.random()<0.15)narutoSpeak();},60
     ws.send(JSON.stringify({ type: 'camera_frame', image: base64 }));
   }
 
-  // 每30秒截帧发送
+  // 每30秒截帧发送给服务器（视觉引擎）
   setInterval(captureAndSend, 30000);
+
+  // 每2秒把摄像头帧广播给所有打开的 skill iframe（摄像头桥接）
+  setInterval(() => {
+    if (!camReady) return;
+    camCtx.drawImage(camVideo, 0, 0, 320, 240);
+    const b64 = camCanvas.toDataURL('image/jpeg', 0.6).split(',')[1];
+    for (const w of wins) {
+      if (w.min) continue; // 最小化的不发
+      const iframe = document.querySelector(`#win-${w.id} iframe`);
+      if (iframe && iframe.contentWindow) {
+        try { iframe.contentWindow.postMessage({ type: 'parent_camera_frame', frame: b64, width: 320, height: 240 }, '*'); } catch(e) {}
+      }
+    }
+  }, 2000);
 
   // 页面加载后启动摄像头
   setTimeout(startCamera, 2000);

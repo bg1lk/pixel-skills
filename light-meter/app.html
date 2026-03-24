@@ -361,7 +361,7 @@
   let TH = { darkLow: 20, dimLow: 40, idealHigh: 70, brightHigh: 85 };
 
   // Elements
-  const video = document.getElementById('cameraPreview');
+  let video = document.getElementById('cameraPreview');
   const canvas = document.getElementById('analysisCanvas');
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
   const btn = document.getElementById('startBtn');
@@ -686,6 +686,34 @@
 
   // Init
   updateSettings();
+
+  // ==================== PARENT CAMERA BRIDGE ====================
+  (function() {
+    const pcCv = document.createElement('canvas');
+    pcCv.width = 320; pcCv.height = 240;
+    const pcCtx = pcCv.getContext('2d');
+    Object.defineProperty(pcCv, 'videoWidth', { get: () => 320 });
+    Object.defineProperty(pcCv, 'videoHeight', { get: () => 240 });
+    let started = false;
+    window.addEventListener('message', (e) => {
+      if (!e.data || e.data.type !== 'parent_camera_frame') return;
+      const img = new Image();
+      img.onload = () => {
+        pcCtx.drawImage(img, 0, 0, 320, 240);
+        if (!started) {
+          started = true;
+          video = pcCv;
+          if (!running) {
+            running = true;
+            const btn = document.getElementById('startBtn');
+            if (btn) { btn.textContent = '⏹ 停止检测'; btn.classList.add('running'); }
+            requestAnimationFrame(loop);
+          }
+        }
+      };
+      img.src = 'data:image/jpeg;base64,' + e.data.frame;
+    });
+  })();
 </script>
 </body>
 </html>

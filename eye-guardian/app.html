@@ -129,7 +129,7 @@ button.stop{background:#e63946;color:#fff}
 
 <script src="../cam-core/cam-core.js"></script>
 <script>
-const vid=document.getElementById('vid'),camDot=document.getElementById('camDot');
+let vid=document.getElementById('vid');const camDot=document.getElementById('camDot');
 const eyeArt=document.getElementById('eyeArt'),statusText=document.getElementById('statusText');
 const timerBig=document.getElementById('timerBig'),progFill=document.getElementById('progFill'),progText=document.getElementById('progText');
 const fb=[document.getElementById('fb1'),document.getElementById('fb2'),document.getElementById('fb3'),document.getElementById('fb4')];
@@ -400,6 +400,34 @@ function playBeep(){
 
 loadSettings();
 loadStats();
+
+// ==================== PARENT CAMERA BRIDGE ====================
+(function() {
+  const pcCv = document.createElement('canvas');
+  pcCv.width = 320; pcCv.height = 240;
+  const pcCtx = pcCv.getContext('2d');
+  Object.defineProperty(pcCv, 'videoWidth', { get: () => 320 });
+  Object.defineProperty(pcCv, 'videoHeight', { get: () => 240 });
+  let started = false;
+  window.addEventListener('message', (e) => {
+    if (!e.data || e.data.type !== 'parent_camera_frame') return;
+    const img = new Image();
+    img.onload = () => {
+      pcCtx.drawImage(img, 0, 0, 320, 240);
+      if (!started) {
+        started = true;
+        vid = pcCv;
+        if (!monitoring) {
+          monitoring = true;
+          camDot.style.background = '#00ff41';
+          statusText.textContent = '已接入小D之眼 · 监测中';
+          detectLoop = setInterval(detectPresence, 2000);
+        }
+      }
+    };
+    img.src = 'data:image/jpeg;base64,' + e.data.frame;
+  });
+})();
 </script>
 </body>
 </html>
