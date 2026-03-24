@@ -379,7 +379,7 @@ let histIdx = 0;
 let stream = null;
 const alertState = new CamCore.StateFilter(6, 0.5, 0.2);
 
-const video = document.getElementById('camVideo');
+let video = document.getElementById('camVideo');
 const diffCanvas = document.getElementById('diffCanvas');
 const diffCtx = diffCanvas.getContext('2d', { willReadFrequently: true });
 const histCanvas = document.getElementById('historyCanvas');
@@ -861,6 +861,50 @@ document.addEventListener('keydown', e => {
 
 // Draw initial history
 drawHistory();
+// ==================== SOUL BRIDGE ====================
+(function() {
+  const _app = 'boss-radar';
+  const vBar = document.createElement('div');
+  vBar.style.cssText = 'background:#0a2a0a;border:2px solid #3cbcfc;padding:5px 10px;font-size:10px;color:#3cbcfc;text-align:center;letter-spacing:1px;font-family:monospace;width:100%;margin:4px 0';
+  vBar.innerHTML = '👁 <b style="color:#f4d03f">小D之眼</b> | 等待连接...';
+  const _ct = document.querySelector('.main,.container') || document.body;
+  _ct.insertBefore(vBar, _ct.firstChild);
+
+  const pcCv = document.createElement('canvas');
+  pcCv.width = 320; pcCv.height = 240;
+  const pcCtx = pcCv.getContext('2d');
+  Object.defineProperty(pcCv, 'videoWidth', { get: () => 320 });
+  Object.defineProperty(pcCv, 'videoHeight', { get: () => 240 });
+  let _started = false, _fc = 0;
+
+  function _autoStart() {
+    if (_started || monitoring) return; _started = true;
+    video = pcCv; stream = {};
+    captureCanvas.width = 320; captureCanvas.height = 240;
+    diffCanvas.width = 320; diffCanvas.height = 240;
+    monitoring = true;
+    document.getElementById('camLabel').textContent = '小D之眼';
+    document.getElementById('camRec').style.display = 'block';
+    document.getElementById('btnStart').innerHTML = '&#9632; 停止';
+    document.getElementById('btnStart').classList.add('active');
+    requestAnimationFrame(detectLoop);
+  }
+
+  window.addEventListener('message', e => {
+    if (!e.data) return;
+    if (e.data.type === 'parent_camera_frame') {
+      const img = new Image();
+      img.onload = () => { pcCtx.drawImage(img, 0, 0, 320, 240); _fc++; vBar.innerHTML = '👁 <b style="color:#f4d03f">小D之眼</b> | 已连接 · F' + _fc; _autoStart(); };
+      img.src = 'data:image/jpeg;base64,' + e.data.frame;
+    }
+    if (e.data.type === 'soul_vision_info') vBar.innerHTML = '👁 <b style="color:#f4d03f">小D看到</b> | ' + e.data.description;
+    if (e.data.type === 'soul_command') {
+      if (e.data.action === 'get_status') window.parent.postMessage({type:'skill_status',app:_app,status:monitoring?'monitoring':'idle',data:{alertActive}}, '*');
+      if (e.data.action === 'start') _autoStart();
+    }
+  });
+  window.parent.postMessage({type:'skill_ready',app:_app}, '*');
+})();
 </script>
 </body>
 </html>

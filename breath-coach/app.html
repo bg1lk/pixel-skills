@@ -813,29 +813,43 @@ function toggleSound() {
 // Init sound button state
 soundBtn.classList.add('active-toggle');
 
-// ==================== PARENT CAMERA BRIDGE ====================
+// ==================== SOUL BRIDGE ====================
 (function() {
+  const _app = 'breath-coach';
+  const vBar = document.createElement('div');
+  vBar.style.cssText = 'background:#0a2a0a;border:2px solid #3cbcfc;padding:5px 10px;font-size:10px;color:#3cbcfc;text-align:center;letter-spacing:1px;font-family:monospace;width:100%;max-width:480px;margin:4px auto 0';
+  vBar.innerHTML = '👁 <b style="color:#f4d03f">小D之眼</b> | 等待连接...';
+  const _main = document.querySelector('.main,.breathe-container') || document.body;
+  _main.insertBefore(vBar, _main.firstChild);
+
   const pcCv = document.createElement('canvas');
   pcCv.width = 320; pcCv.height = 240;
   const pcCtx = pcCv.getContext('2d');
   Object.defineProperty(pcCv, 'videoWidth', { get: () => 320 });
   Object.defineProperty(pcCv, 'videoHeight', { get: () => 240 });
-  let started = false;
-  window.addEventListener('message', (e) => {
-    if (!e.data || e.data.type !== 'parent_camera_frame') return;
-    const img = new Image();
-    img.onload = () => {
-      pcCtx.drawImage(img, 0, 0, 320, 240);
-      if (!started) {
-        started = true;
-        video = pcCv;
-        cameraOn = true;
-        drawCamera();
-        if (!sessionActive) startSession();
-      }
-    };
-    img.src = 'data:image/jpeg;base64,' + e.data.frame;
+  let _started = false, _fc = 0;
+
+  function _autoStart() {
+    if (_started) return; _started = true;
+    video = pcCv; cameraOn = true;
+    drawCamera();
+    if (!sessionActive) startSession();
+  }
+
+  window.addEventListener('message', e => {
+    if (!e.data) return;
+    if (e.data.type === 'parent_camera_frame') {
+      const img = new Image();
+      img.onload = () => { pcCtx.drawImage(img, 0, 0, 320, 240); _fc++; vBar.innerHTML = '👁 <b style="color:#f4d03f">小D之眼</b> | 已连接 · F' + _fc; _autoStart(); };
+      img.src = 'data:image/jpeg;base64,' + e.data.frame;
+    }
+    if (e.data.type === 'soul_vision_info') vBar.innerHTML = '👁 <b style="color:#f4d03f">小D看到</b> | ' + e.data.description;
+    if (e.data.type === 'soul_command') {
+      if (e.data.action === 'get_status') window.parent.postMessage({type:'skill_status',app:_app,status:sessionActive?'breathing':'idle'}, '*');
+      if (e.data.action === 'start') _autoStart();
+    }
   });
+  window.parent.postMessage({type:'skill_ready',app:_app}, '*');
 })();
 </script>
 </body>

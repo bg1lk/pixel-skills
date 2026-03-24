@@ -1,0 +1,822 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>像素大鹅</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0f380f;--bg2:#306230;--hi:#8bac0f;--lt:#9bbc0f;
+  --gold:#f4d03f;--red:#e63946;--white:#fcfcfc;--dark:#0a2a0a;
+}
+html,body{height:100%;overflow:hidden}
+body{
+  background:var(--bg);
+  font-family:'Courier New',Consolas,monospace;
+  image-rendering:pixelated;
+  cursor:crosshair;
+  user-select:none;
+}
+
+/* Ground with grass pattern */
+.ground{
+  position:absolute;bottom:0;left:0;right:0;
+  height:60px;
+  background:var(--bg2);
+  border-top:4px solid var(--hi);
+}
+.grass-row{
+  position:absolute;top:-8px;left:0;right:0;
+  font-size:10px;color:var(--hi);
+  letter-spacing:4px;
+  line-height:1;
+  overflow:hidden;white-space:nowrap;
+}
+
+/* Goose canvas */
+#gooseCanvas{
+  position:absolute;
+  image-rendering:pixelated;
+  image-rendering:crisp-edges;
+  cursor:grab;
+  z-index:10;
+}
+#gooseCanvas:active{cursor:grabbing}
+
+/* Speech bubble */
+.bubble{
+  position:absolute;
+  background:var(--white);
+  color:var(--bg);
+  font-family:monospace;font-size:12px;font-weight:bold;
+  padding:4px 10px;
+  border:3px solid var(--bg);
+  box-shadow:3px 3px 0 var(--dark);
+  pointer-events:none;
+  opacity:0;
+  z-index:20;
+  white-space:nowrap;
+  letter-spacing:1px;
+}
+.bubble.show{opacity:1}
+.bubble::after{
+  content:'';position:absolute;
+  bottom:-10px;left:12px;
+  border:6px solid transparent;
+  border-top-color:var(--bg);
+}
+
+/* Footprints */
+.footprint{
+  position:absolute;
+  width:8px;height:8px;
+  pointer-events:none;
+  z-index:1;
+}
+.footprint canvas{
+  width:8px;height:8px;
+  image-rendering:pixelated;
+}
+
+/* HUD */
+.hud{
+  position:absolute;top:8px;left:8px;
+  display:flex;flex-direction:column;gap:4px;
+  z-index:50;
+}
+.hud-panel{
+  background:var(--dark);
+  border:3px solid var(--hi);
+  box-shadow:3px 3px 0 var(--bg2);
+  padding:6px 10px;
+  font-size:10px;color:var(--lt);
+  letter-spacing:1px;
+  font-weight:bold;
+}
+.hud-title{color:var(--gold);font-size:12px;letter-spacing:2px;margin-bottom:4px}
+.hud-stat{display:flex;justify-content:space-between;gap:12px}
+.hud-val{color:var(--hi)}
+
+/* Items the goose "steals" */
+.stolen-item{
+  position:absolute;
+  font-size:16px;
+  pointer-events:none;
+  z-index:5;
+  transition:none;
+}
+
+/* Pond */
+.pond{
+  position:absolute;bottom:60px;right:30px;
+  width:80px;height:30px;
+  background:rgba(60,188,252,0.3);
+  border:2px solid rgba(60,188,252,0.5);
+  border-radius:50%;
+  z-index:0;
+}
+.pond-label{
+  position:absolute;bottom:92px;right:42px;
+  font-size:8px;color:var(--bg2);
+  letter-spacing:1px;z-index:0;
+}
+
+/* Button panel */
+.btn-panel{
+  position:absolute;bottom:68px;left:8px;
+  display:flex;gap:4px;z-index:50;
+}
+.g-btn{
+  background:var(--hi);color:var(--bg);
+  border:2px solid var(--dark);
+  box-shadow:2px 2px 0 var(--dark);
+  font-family:monospace;font-size:9px;font-weight:bold;
+  padding:4px 8px;cursor:pointer;letter-spacing:1px;
+}
+.g-btn:hover{background:var(--lt)}
+.g-btn:active{transform:translate(2px,2px);box-shadow:none}
+
+/* Notification */
+.notif{
+  position:absolute;top:50%;left:50%;
+  transform:translate(-50%,-50%);
+  background:var(--dark);border:4px solid var(--gold);
+  box-shadow:4px 4px 0 var(--bg2);
+  padding:12px 20px;
+  font-size:14px;font-weight:bold;color:var(--gold);
+  text-shadow:2px 2px 0 var(--bg);
+  letter-spacing:2px;z-index:100;
+  pointer-events:none;opacity:0;
+}
+.notif.show{opacity:1;animation:notif-pop 1.5s steps(6) forwards}
+@keyframes notif-pop{0%{opacity:1;transform:translate(-50%,-50%) scale(1)}80%{opacity:1}100%{opacity:0;transform:translate(-50%,-80%) scale(1.1)}}
+
+/* ===== MOBILE ===== */
+@media(max-width:600px){
+  body{overflow-y:auto!important;min-height:100vh;}
+  canvas{max-width:100%!important;}
+  button,.btn,.action-btn,[class*="btn"]{min-height:44px;font-size:13px!important;touch-action:manipulation;}
+  input,textarea,select{font-size:16px!important;}
+  .controls,.toolbar,.actions,.panel,.buttons,[class*="controls"],[class*="toolbar"]{flex-wrap:wrap!important;}
+  [style*="width:"][style*="px"]{max-width:100%!important;}
+}
+</style>
+</head>
+<body>
+
+<div class="hud">
+  <div class="hud-panel">
+    <div class="hud-title">* 像素大鹅 *</div>
+    <div class="hud-stat"><span>心情</span><span class="hud-val" id="hudMood">开心</span></div>
+    <div class="hud-stat"><span>捣乱</span><span class="hud-val" id="hudMischief">0</span></div>
+    <div class="hud-stat"><span>状态</span><span class="hud-val" id="hudState">闲逛</span></div>
+  </div>
+</div>
+
+<canvas id="gooseCanvas" width="24" height="24"></canvas>
+<div class="bubble" id="bubble"></div>
+<div class="notif" id="notif"></div>
+
+<div class="pond"></div>
+<div class="pond-label">小池塘</div>
+
+<div class="ground">
+  <div class="grass-row" id="grassRow"></div>
+</div>
+
+<div class="btn-panel">
+  <button class="g-btn" onclick="doHonk()">嘎!</button>
+  <button class="g-btn" onclick="doFeed()">喂食</button>
+  <button class="g-btn" onclick="doSteal()">捣乱</button>
+  <button class="g-btn" onclick="doReset()">回来</button>
+</div>
+
+<script>
+// ===== GOOSE PIXEL ART (16x16, drawn at 24x24 canvas = 1.5x) =====
+// Using 24x24 canvas but drawing 16x16 sprite scaled
+const SP = {
+  // Walk right frame 1
+  walkR1: [
+    '................',
+    '................',
+    '......WW........',
+    '.....WWWW.......',
+    '.....WBWW.......',
+    '.....WWWW.......',
+    '......WW........',
+    '......WW........',
+    '.....WWWW.......',
+    '....WWWWWW......',
+    '....WWWWWW......',
+    '.....WWWW.......',
+    '......WW........',
+    '.....W..W.......',
+    '....OO..OO......',
+    '................',
+  ],
+  walkR2: [
+    '................',
+    '................',
+    '......WW........',
+    '.....WWWW.......',
+    '.....WBWW.......',
+    '.....WWWW.......',
+    '......WW........',
+    '......WW........',
+    '.....WWWW.......',
+    '....WWWWWW......',
+    '....WWWWWW......',
+    '.....WWWW.......',
+    '......WW........',
+    '......W.W.......',
+    '.....OO.OO......',
+    '................',
+  ],
+  // Walk left frame 1
+  walkL1: [
+    '................',
+    '................',
+    '........WW......',
+    '.......WWWW.....',
+    '.......WWBW.....',
+    '.......WWWW.....',
+    '........WW......',
+    '........WW......',
+    '.......WWWW.....',
+    '......WWWWWW....',
+    '......WWWWWW....',
+    '.......WWWW.....',
+    '........WW......',
+    '.......W..W.....',
+    '......OO..OO....',
+    '................',
+  ],
+  walkL2: [
+    '................',
+    '................',
+    '........WW......',
+    '.......WWWW.....',
+    '.......WWBW.....',
+    '.......WWWW.....',
+    '........WW......',
+    '........WW......',
+    '.......WWWW.....',
+    '......WWWWWW....',
+    '......WWWWWW....',
+    '.......WWWW.....',
+    '........WW......',
+    '.......W.W......',
+    '......OO.OO.....',
+    '................',
+  ],
+  // Idle
+  idle: [
+    '................',
+    '................',
+    '......WW........',
+    '.....WWWW.......',
+    '.....WBWW.......',
+    '.....WWWW.......',
+    '......WW........',
+    '......WW........',
+    '.....WWWW.......',
+    '....WWWWWW......',
+    '....WWWWWW......',
+    '.....WWWW.......',
+    '......WW........',
+    '.....W..W.......',
+    '....OO..OO......',
+    '................',
+  ],
+  // Honk (mouth open, neck stretched)
+  honkR: [
+    '................',
+    '......WW........',
+    '.....WWWW.......',
+    '.....WBWW.......',
+    '.....WWWW.......',
+    '.....YYW........',
+    '......WW........',
+    '......WW........',
+    '.....WWWW.......',
+    '....WWWWWW......',
+    '....WWWWWW......',
+    '.....WWWW.......',
+    '......WW........',
+    '.....W..W.......',
+    '....OO..OO......',
+    '................',
+  ],
+  honkL: [
+    '................',
+    '........WW......',
+    '.......WWWW.....',
+    '.......WWBW.....',
+    '.......WWWW.....',
+    '........WYY.....',
+    '........WW......',
+    '........WW......',
+    '.......WWWW.....',
+    '......WWWWWW....',
+    '......WWWWWW....',
+    '.......WWWW.....',
+    '........WW......',
+    '.......W..W.....',
+    '......OO..OO....',
+    '................',
+  ],
+  // Sit
+  sit: [
+    '................',
+    '................',
+    '................',
+    '......WW........',
+    '.....WWWW.......',
+    '.....WBWW.......',
+    '.....WWWW.......',
+    '......WW........',
+    '.....WWWW.......',
+    '....WWWWWW......',
+    '...WWWWWWWW.....',
+    '...WWWWWWWW.....',
+    '....WWWWWW......',
+    '................',
+    '................',
+    '................',
+  ],
+  // Eat
+  eatR: [
+    '................',
+    '................',
+    '................',
+    '................',
+    '....WWWW........',
+    '....WBWWYY......',
+    '....WWWW........',
+    '.....WWWW.......',
+    '....WWWWWW......',
+    '....WWWWWW......',
+    '.....WWWW.......',
+    '......WW........',
+    '.....W..W.......',
+    '....OO..OO......',
+    '................',
+    '................',
+  ],
+};
+
+const PAL = { 'W':'#fcfcfc', 'B':'#0f0f0f', 'Y':'#f8b800', 'O':'#f8b800' };
+
+function drawGoose(canvas, spriteName, scale) {
+  const s = SP[spriteName] || SP.idle;
+  const sc = scale || 1.5;
+  canvas.width = Math.ceil(16 * sc);
+  canvas.height = Math.ceil(16 * sc);
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  for (let y = 0; y < 16; y++) {
+    for (let x = 0; x < 16; x++) {
+      const ch = s[y]?.[x];
+      if (ch && ch !== '.' && PAL[ch]) {
+        ctx.fillStyle = PAL[ch];
+        ctx.fillRect(Math.floor(x*sc), Math.floor(y*sc), Math.ceil(sc), Math.ceil(sc));
+      }
+    }
+  }
+}
+
+// ===== STATE =====
+let gx = 200, gy = 300; // goose position
+let vx = 0, vy = 0;
+let facing = 'R'; // R or L
+let state = 'idle'; // idle, walk, honk, sit, chase, eat, drag
+let stateTimer = 0;
+let animFrame = 0;
+let mischief = 0;
+let mood = '开心';
+let mouseX = 0, mouseY = 0;
+let dragging = false;
+let dragOff = {x:0,y:0};
+let footprints = [];
+let stolenItems = [];
+const canvas = document.getElementById('gooseCanvas');
+
+const FLOOR_Y = () => window.innerHeight - 60 - 24;
+const PHRASES = [
+  '嘎嘎嘎!', '嘎!', '嘎嘎~', '哼!', '嘎嘎嘎嘎!',
+  '给我吃的!', '无聊~', '嘿嘿嘿', '看我的!', '抓不到我~',
+  '这是我的!', '略略略~', '摸我!', '嘎?', '走开啦~',
+];
+const STOLEN_ICONS = ['📎','📝','🔑','💾','📌','✏️','🧩','🎲','🪙','🍞','🧀','🥚'];
+
+// ===== GRASS =====
+function initGrass() {
+  const el = document.getElementById('grassRow');
+  let s = '';
+  for (let i = 0; i < Math.ceil(window.innerWidth / 8); i++) {
+    s += Math.random() > 0.5 ? 'v' : 'w';
+  }
+  el.textContent = s;
+}
+
+// ===== GOOSE AI =====
+function think() {
+  stateTimer--;
+  if (stateTimer > 0) return;
+
+  // Random next action
+  const r = Math.random();
+  if (r < 0.35) {
+    // Walk randomly
+    state = 'walk';
+    const tx = gx + (Math.random() - 0.5) * 300;
+    vx = tx > gx ? 1.5 : -1.5;
+    facing = vx > 0 ? 'R' : 'L';
+    stateTimer = 60 + Math.floor(Math.random() * 80);
+  } else if (r < 0.50) {
+    // Chase mouse
+    state = 'chase';
+    stateTimer = 80 + Math.floor(Math.random() * 60);
+  } else if (r < 0.65) {
+    // Honk
+    state = 'honk';
+    stateTimer = 30;
+    honk();
+  } else if (r < 0.80) {
+    // Sit
+    state = 'sit';
+    stateTimer = 60 + Math.floor(Math.random() * 60);
+  } else if (r < 0.90) {
+    // Idle
+    state = 'idle';
+    stateTimer = 40 + Math.floor(Math.random() * 40);
+  } else {
+    // Steal something!
+    state = 'walk';
+    stateTimer = 50;
+    vx = (Math.random() > 0.5 ? 1 : -1) * 2;
+    facing = vx > 0 ? 'R' : 'L';
+    stealItem();
+  }
+
+  updateHUD();
+}
+
+function update() {
+  if (dragging) return;
+
+  think();
+  const floor = FLOOR_Y();
+
+  switch(state) {
+    case 'walk':
+      gx += vx;
+      // Keep on screen
+      if (gx < 10) { gx = 10; vx = -vx; facing = 'R'; }
+      if (gx > window.innerWidth - 40) { gx = window.innerWidth - 40; vx = -vx; facing = 'L'; }
+      gy = floor;
+      // Footprints
+      if (animFrame % 15 === 0) addFootprint(gx + 8, gy + 20);
+      break;
+
+    case 'chase':
+      const dx = mouseX - gx - 12;
+      const spd = 2.5;
+      if (Math.abs(dx) > 20) {
+        gx += dx > 0 ? spd : -spd;
+        facing = dx > 0 ? 'R' : 'L';
+      }
+      gy = floor;
+      if (animFrame % 12 === 0) addFootprint(gx + 8, gy + 20);
+      break;
+
+    case 'honk':
+      gy = floor;
+      break;
+
+    case 'sit':
+      gy = floor + 4; // slightly lower when sitting
+      break;
+
+    case 'eat':
+      gy = floor;
+      break;
+
+    default: // idle
+      gy = floor;
+      break;
+  }
+
+  // Update stolen items to follow goose
+  stolenItems.forEach((item, i) => {
+    const el = document.getElementById('stolen-' + item.id);
+    if (el && item.following) {
+      const offX = (i % 3 - 1) * 18;
+      const offY = -20 - Math.floor(i / 3) * 16;
+      el.style.left = (gx + 10 + offX) + 'px';
+      el.style.top = (gy + offY) + 'px';
+    }
+  });
+}
+
+function render() {
+  animFrame++;
+  let sprite = 'idle';
+
+  switch(state) {
+    case 'walk':
+    case 'chase':
+      sprite = facing === 'R'
+        ? (animFrame % 20 < 10 ? 'walkR1' : 'walkR2')
+        : (animFrame % 20 < 10 ? 'walkL1' : 'walkL2');
+      break;
+    case 'honk':
+      sprite = facing === 'R' ? 'honkR' : 'honkL';
+      break;
+    case 'sit':
+      sprite = 'sit';
+      break;
+    case 'eat':
+      sprite = 'eatR';
+      break;
+    default:
+      sprite = 'idle';
+  }
+
+  drawGoose(canvas, sprite, 3);
+  canvas.style.left = gx + 'px';
+  canvas.style.top = gy + 'px';
+
+  // Bubble position
+  const bub = document.getElementById('bubble');
+  bub.style.left = (gx - 10) + 'px';
+  bub.style.top = (gy - 36) + 'px';
+
+  // Fade footprints
+  footprints.forEach((fp, i) => {
+    fp.age++;
+    if (fp.age > 120) {
+      fp.el.remove();
+      footprints.splice(i, 1);
+    } else {
+      fp.el.style.opacity = Math.max(0, 1 - fp.age / 120);
+    }
+  });
+}
+
+// ===== FOOTPRINTS =====
+function addFootprint(x, y) {
+  const div = document.createElement('div');
+  div.className = 'footprint';
+  div.style.left = x + 'px';
+  div.style.top = y + 'px';
+  const c = document.createElement('canvas');
+  c.width = 4; c.height = 4;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#f8b800';
+  ctx.fillRect(0, 0, 1, 1);
+  ctx.fillRect(2, 0, 1, 1);
+  ctx.fillRect(0, 2, 1, 1);
+  ctx.fillRect(2, 2, 1, 1);
+  div.appendChild(c);
+  document.body.appendChild(div);
+  footprints.push({ el: div, age: 0 });
+}
+
+// ===== ACTIONS =====
+function honk() {
+  const phrase = PHRASES[Math.floor(Math.random() * PHRASES.length)];
+  const bub = document.getElementById('bubble');
+  bub.textContent = phrase;
+  bub.classList.add('show');
+  setTimeout(() => bub.classList.remove('show'), 1500);
+  playHonk();
+}
+
+function stealItem() {
+  if (stolenItems.length >= 6) return;
+  const icon = STOLEN_ICONS[Math.floor(Math.random() * STOLEN_ICONS.length)];
+  const id = Date.now();
+  const div = document.createElement('div');
+  div.className = 'stolen-item';
+  div.id = 'stolen-' + id;
+  div.textContent = icon;
+  document.body.appendChild(div);
+  stolenItems.push({ id, following: true });
+  mischief++;
+  mood = mischief > 10 ? '得意洋洋' : mischief > 5 ? '调皮' : '开心';
+  showNotif('偷走了 ' + icon + ' !');
+  updateHUD();
+}
+
+function dropItems() {
+  stolenItems.forEach(item => {
+    const el = document.getElementById('stolen-' + item.id);
+    if (el) {
+      item.following = false;
+      // drop at random position
+      el.style.left = (Math.random() * (window.innerWidth - 40)) + 'px';
+      el.style.top = (FLOOR_Y() - Math.random() * 40) + 'px';
+      setTimeout(() => el.remove(), 5000);
+    }
+  });
+  stolenItems = [];
+}
+
+function doHonk() {
+  state = 'honk';
+  stateTimer = 25;
+  honk();
+}
+
+function doFeed() {
+  state = 'eat';
+  stateTimer = 40;
+  const bub = document.getElementById('bubble');
+  bub.textContent = '好吃!';
+  bub.classList.add('show');
+  setTimeout(() => bub.classList.remove('show'), 1200);
+  mood = '满足';
+  updateHUD();
+  playSound([523, 659, 784]);
+}
+
+function doSteal() {
+  stealItem();
+  state = 'walk';
+  vx = (Math.random() > 0.5 ? 2 : -2);
+  facing = vx > 0 ? 'R' : 'L';
+  stateTimer = 60;
+}
+
+function doReset() {
+  gx = window.innerWidth / 2 - 20;
+  gy = FLOOR_Y();
+  state = 'idle';
+  stateTimer = 30;
+  dropItems();
+  mischief = 0;
+  mood = '开心';
+  updateHUD();
+  showNotif('乖了!');
+}
+
+function showNotif(text) {
+  const el = document.getElementById('notif');
+  el.textContent = text;
+  el.classList.remove('show');
+  void el.offsetWidth;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 1500);
+}
+
+function updateHUD() {
+  document.getElementById('hudMood').textContent = mood;
+  document.getElementById('hudMischief').textContent = mischief;
+  const stateNames = {
+    idle:'发呆',walk:'闲逛',chase:'追你',honk:'嘎嘎叫',sit:'坐着',eat:'吃东西',drag:'被抓住了'
+  };
+  document.getElementById('hudState').textContent = stateNames[state] || '闲逛';
+}
+
+// ===== DRAG =====
+canvas.addEventListener('mousedown', e => {
+  dragging = true;
+  state = 'drag';
+  dragOff.x = e.clientX - gx;
+  dragOff.y = e.clientY - gy;
+  updateHUD();
+  // Angry honk
+  const bub = document.getElementById('bubble');
+  bub.textContent = '放开我!';
+  bub.classList.add('show');
+  setTimeout(() => bub.classList.remove('show'), 800);
+  playHonk();
+});
+
+document.addEventListener('mousemove', e => {
+  mouseX = e.clientX;
+  mouseY = e.clientY;
+  if (dragging) {
+    gx = e.clientX - dragOff.x;
+    gy = e.clientY - dragOff.y;
+  }
+});
+
+document.addEventListener('mouseup', () => {
+  if (dragging) {
+    dragging = false;
+    state = 'idle';
+    stateTimer = 20;
+    // Fall to ground
+    const floor = FLOOR_Y();
+    if (gy < floor) {
+      gy = floor;
+    }
+    updateHUD();
+  }
+});
+
+// Touch support
+canvas.addEventListener('touchstart', e => {
+  e.preventDefault();
+  const t = e.touches[0];
+  dragging = true;
+  state = 'drag';
+  dragOff.x = t.clientX - gx;
+  dragOff.y = t.clientY - gy;
+  playHonk();
+});
+document.addEventListener('touchmove', e => {
+  const t = e.touches[0];
+  mouseX = t.clientX;
+  mouseY = t.clientY;
+  if (dragging) {
+    gx = t.clientX - dragOff.x;
+    gy = t.clientY - dragOff.y;
+  }
+});
+document.addEventListener('touchend', () => {
+  if (dragging) {
+    dragging = false;
+    state = 'idle';
+    stateTimer = 20;
+    gy = Math.min(gy, FLOOR_Y());
+  }
+});
+
+// ===== SOUND =====
+function playHonk() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    // Goose honk: harsh square wave descending
+    const notes = [
+      [380, 0.08], [320, 0.06], [280, 0.06], [350, 0.1],
+    ];
+    let t = ctx.currentTime;
+    notes.forEach(([f, d]) => {
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = 'square';
+      o.frequency.setValueAtTime(f, t);
+      o.frequency.linearRampToValueAtTime(f * 0.8, t + d);
+      g.gain.setValueAtTime(0.08, t);
+      g.gain.linearRampToValueAtTime(0, t + d);
+      o.connect(g).connect(ctx.destination);
+      o.start(t); o.stop(t + d);
+      t += d * 0.8;
+    });
+  } catch(e) {}
+}
+
+function playSound(freqs) {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    let t = ctx.currentTime;
+    freqs.forEach(f => {
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = 'square';
+      o.frequency.setValueAtTime(f, t);
+      g.gain.setValueAtTime(0.04, t);
+      g.gain.linearRampToValueAtTime(0, t + 0.08);
+      o.connect(g).connect(ctx.destination);
+      o.start(t); o.stop(t + 0.08);
+      t += 0.08;
+    });
+  } catch(e) {}
+}
+
+// ===== INIT =====
+initGrass();
+gx = window.innerWidth / 2 - 20;
+gy = FLOOR_Y();
+stateTimer = 30;
+updateHUD();
+
+// Game loop
+setInterval(() => { update(); render(); }, 50);
+
+// Random honk
+setInterval(() => {
+  if (state !== 'drag' && Math.random() < 0.15) {
+    honk();
+  }
+}, 8000);
+// ==================== SOUL BRIDGE ====================
+(function() {
+  const _app = 'desktop-goose';
+  window.addEventListener('message', e => {
+    if (!e.data || e.data.type !== 'soul_command') return;
+    const a = e.data.action;
+    if (a === 'get_status') window.parent.postMessage({type:'skill_status',app:_app,status:'running'}, '*');
+    if (a === 'honk') doHonk();
+    if (a === 'feed') doFeed();
+    if (a === 'steal') doSteal();
+  });
+  window.parent.postMessage({type:'skill_ready',app:_app}, '*');
+})();
+</script>
+</body>
+</html>

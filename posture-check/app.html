@@ -852,6 +852,49 @@ function showToast(msg) {
   t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), 3000);
 }
+// ==================== SOUL BRIDGE ====================
+(function() {
+  const _app = 'posture-check';
+  const vBar = document.createElement('div');
+  vBar.style.cssText = 'background:#0a2a0a;border:2px solid #3cbcfc;padding:5px 10px;font-size:10px;color:#3cbcfc;text-align:center;letter-spacing:1px;font-family:monospace;width:100%;max-width:520px;margin:4px auto';
+  vBar.innerHTML = '👁 <b style="color:#f4d03f">小D之眼</b> | 等待连接...';
+  const _ct = document.querySelector('.container');
+  if (_ct) _ct.insertBefore(vBar, _ct.firstChild);
+
+  const pcCv = document.createElement('canvas');
+  pcCv.width = 320; pcCv.height = 240;
+  const pcCtx = pcCv.getContext('2d');
+  Object.defineProperty(pcCv, 'videoWidth', { get: () => 320 });
+  Object.defineProperty(pcCv, 'videoHeight', { get: () => 240 });
+  let _started = false, _fc = 0;
+
+  function _autoStart() {
+    if (_started) return; _started = true;
+    video = pcCv;
+    state.cameraOn = true;
+    overlay.width = 320; overlay.height = 240;
+    document.getElementById('placeholder').style.display = 'none';
+    document.getElementById('btnStart').textContent = '■ 关闭';
+    document.getElementById('btnCalibrate').disabled = false;
+    startDetection();
+  }
+
+  window.addEventListener('message', e => {
+    if (!e.data) return;
+    if (e.data.type === 'parent_camera_frame') {
+      const img = new Image();
+      img.onload = () => { pcCtx.drawImage(img, 0, 0, 320, 240); _fc++; vBar.innerHTML = '👁 <b style="color:#f4d03f">小D之眼</b> | 已连接 · F' + _fc; _autoStart(); };
+      img.src = 'data:image/jpeg;base64,' + e.data.frame;
+    }
+    if (e.data.type === 'soul_vision_info') vBar.innerHTML = '👁 <b style="color:#f4d03f">小D看到</b> | ' + e.data.description;
+    if (e.data.type === 'soul_command') {
+      if (e.data.action === 'get_status') window.parent.postMessage({type:'skill_status',app:_app,status:state.monitoring?'monitoring':'idle',data:{calibrated:state.calibrated}}, '*');
+      if (e.data.action === 'start') _autoStart();
+      if (e.data.action === 'calibrate') calibrate();
+    }
+  });
+  window.parent.postMessage({type:'skill_ready',app:_app}, '*');
+})();
 </script>
 
 </body>

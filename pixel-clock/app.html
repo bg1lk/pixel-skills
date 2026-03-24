@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>像素时钟</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:#0f380f;font-family:'Courier New','Consolas',monospace;color:#0f380f;display:flex;justify-content:center;align-items:center;min-height:100vh;}
+#app{background:#9bbc0f;border:4px solid #0f380f;box-shadow:8px 8px 0px #306230;width:min(96vw,480px);text-align:center;}
+#titlebar{background:#306230;color:#9bbc0f;padding:8px 16px;font-size:16px;font-weight:bold;letter-spacing:3px;border-bottom:3px solid #0f380f;}
+#content{padding:16px;}
+#time-display{font-size:64px;font-weight:bold;color:#0f380f;text-shadow:3px 3px 0px #306230;letter-spacing:4px;margin:8px 0;}
+#date-display{font-size:16px;color:#306230;font-weight:bold;margin-bottom:6px;}
+#seconds-bar{background:#306230;border:2px solid #0f380f;height:8px;margin:8px 20px;}
+#seconds-fill{background:#8bac0f;height:100%;width:0%;transition:width 1s linear;}
+.sep{height:3px;background:#306230;margin:12px 0;}
+/* 标签页 */
+#tabs{display:flex;gap:4px;justify-content:center;margin:10px 0;}
+.tab-btn{background:#8bac0f;color:#0f380f;border:3px solid #0f380f;box-shadow:2px 2px 0px #306230;font-family:monospace;font-size:13px;font-weight:bold;padding:6px 16px;cursor:pointer;}
+.tab-btn:hover{background:#9bbc0f;transform:translate(1px,1px);box-shadow:1px 1px 0px #306230;}
+.tab-btn.active{background:#306230;color:#9bbc0f;}
+.tab-page{display:none;padding:12px 0;}
+.tab-page.active{display:block;}
+/* 秒表 */
+#sw-display{font-size:42px;font-weight:bold;color:#0f380f;text-shadow:2px 2px 0px #306230;margin:10px 0;}
+#sw-laps{max-height:120px;overflow-y:auto;text-align:left;padding:0 20px;}
+.lap-item{font-size:12px;padding:3px 0;border-bottom:1px solid #306230;display:flex;justify-content:space-between;}
+/* 倒计时 */
+#cd-display{font-size:42px;font-weight:bold;color:#0f380f;text-shadow:2px 2px 0px #306230;margin:10px 0;}
+#cd-inputs{display:flex;gap:6px;justify-content:center;align-items:center;margin:8px 0;}
+#cd-inputs input{width:50px;height:30px;border:3px solid #0f380f;background:#9bbc0f;font-family:monospace;font-size:16px;text-align:center;color:#0f380f;}
+#cd-inputs span{font-weight:bold;font-size:16px;}
+button{background:#8bac0f;color:#0f380f;border:3px solid #0f380f;box-shadow:3px 3px 0px #306230;font-family:monospace;font-size:13px;font-weight:bold;padding:6px 14px;cursor:pointer;}
+button:hover{background:#9bbc0f;transform:translate(1px,1px);box-shadow:2px 2px 0px #306230;}
+button:active{transform:translate(3px,3px);box-shadow:none;}
+.btn-row{display:flex;gap:8px;justify-content:center;margin:8px 0;}
+#bottombar{background:#306230;color:#9bbc0f;padding:5px 12px;font-size:11px;border-top:3px solid #0f380f;}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.4;}}
+.pulse{animation:pulse 1s steps(2) infinite;}
+
+/* ===== MOBILE ===== */
+@media(max-width:600px){
+  body{overflow-y:auto!important;min-height:100vh;}
+  button,.btn,.action-btn,[class*="btn"]{min-height:44px;font-size:13px!important;touch-action:manipulation;}
+  input,textarea,select{font-size:16px!important;}
+  .controls,.toolbar,.actions,.panel,.buttons,[class*="controls"],[class*="toolbar"]{flex-wrap:wrap!important;}
+  [style*="width:"][style*="px"]{max-width:100%!important;}
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="titlebar">★ 像素时钟 ★</div>
+  <div id="content">
+    <div id="date-display"></div>
+    <div id="time-display">00:00:00</div>
+    <div id="seconds-bar"><div id="seconds-fill"></div></div>
+
+    <div id="tabs">
+      <button class="tab-btn active" onclick="switchTab('clock',this)">时钟</button>
+      <button class="tab-btn" onclick="switchTab('stopwatch',this)">秒表</button>
+      <button class="tab-btn" onclick="switchTab('countdown',this)">倒计时</button>
+    </div>
+
+    <div id="page-clock" class="tab-page active">
+      <div style="font-size:13px;color:#306230;font-weight:bold;">
+        ░░░░░░░░░░░░░░░░░░░<br>
+        <span id="greeting"></span><br>
+        ░░░░░░░░░░░░░░░░░░░
+      </div>
+    </div>
+
+    <div id="page-stopwatch" class="tab-page">
+      <div id="sw-display">00:00.00</div>
+      <div class="btn-row">
+        <button onclick="swToggle()" id="sw-btn">▶ 开始</button>
+        <button onclick="swLap()">◆ 计次</button>
+        <button onclick="swReset()">↺ 重置</button>
+      </div>
+      <div id="sw-laps"></div>
+    </div>
+
+    <div id="page-countdown" class="tab-page">
+      <div id="cd-display">00:00:00</div>
+      <div id="cd-inputs">
+        <input type="number" id="cd-h" value="0" min="0" max="99" placeholder="时">
+        <span>:</span>
+        <input type="number" id="cd-m" value="5" min="0" max="59" placeholder="分">
+        <span>:</span>
+        <input type="number" id="cd-s" value="0" min="0" max="59" placeholder="秒">
+      </div>
+      <div class="btn-row">
+        <button onclick="cdToggle()" id="cd-btn">▶ 开始</button>
+        <button onclick="cdReset()">↺ 重置</button>
+      </div>
+    </div>
+  </div>
+  <div id="bottombar">░ 珍惜每一秒 ░</div>
+</div>
+<script>
+const audioCtx=new(window.AudioContext||window.webkitAudioContext)();
+function beep(f,d,v=0.08){const o=audioCtx.createOscillator(),g=audioCtx.createGain();o.type='square';o.frequency.value=f;g.gain.value=v;g.gain.exponentialRampToValueAtTime(0.001,audioCtx.currentTime+d);o.connect(g);g.connect(audioCtx.destination);o.start();o.stop(audioCtx.currentTime+d);}
+function sfxClick(){beep(800,0.04);}
+function sfxAlarm(){for(let i=0;i<6;i++)setTimeout(()=>beep(i%2?1047:784,0.15,0.12),i*200);}
+
+// ===== 时钟 =====
+function updateClock(){
+  const now=new Date();
+  const h=String(now.getHours()).padStart(2,'0');
+  const m=String(now.getMinutes()).padStart(2,'0');
+  const s=String(now.getSeconds()).padStart(2,'0');
+  document.getElementById('time-display').textContent=h+':'+m+':'+s;
+  document.getElementById('date-display').textContent=now.toLocaleDateString('zh',{year:'numeric',month:'long',day:'numeric',weekday:'long'});
+  document.getElementById('seconds-fill').style.width=(now.getSeconds()/59*100)+'%';
+  const hr=now.getHours();
+  let greet='';
+  if(hr<6) greet='夜深了，早点休息';
+  else if(hr<9) greet='早上好，新的一天';
+  else if(hr<12) greet='上午好，加油工作';
+  else if(hr<14) greet='中午好，记得吃饭';
+  else if(hr<18) greet='下午好，继续努力';
+  else if(hr<22) greet='晚上好，放松一下';
+  else greet='夜深了，早点休息';
+  document.getElementById('greeting').textContent='★ '+greet+' ★';
+}
+setInterval(updateClock,1000);
+updateClock();
+
+function switchTab(name,btn){
+  sfxClick();
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  document.querySelectorAll('.tab-page').forEach(p=>p.classList.remove('active'));
+  document.getElementById('page-'+name).classList.add('active');
+}
+
+// ===== 秒表 =====
+let swRunning=false,swStart=0,swElapsed=0,swInterval=null,swLaps=[];
+function swToggle(){
+  sfxClick();
+  if(swRunning){
+    swRunning=false;swElapsed+=Date.now()-swStart;clearInterval(swInterval);
+    document.getElementById('sw-btn').textContent='▶ 继续';
+  }else{
+    swRunning=true;swStart=Date.now();
+    document.getElementById('sw-btn').textContent='⏸ 暂停';
+    swInterval=setInterval(swRender,30);
+  }
+}
+function swRender(){
+  const total=swElapsed+(swRunning?Date.now()-swStart:0);
+  const m=Math.floor(total/60000),s=Math.floor((total%60000)/1000),ms=Math.floor((total%1000)/10);
+  document.getElementById('sw-display').textContent=String(m).padStart(2,'0')+':'+String(s).padStart(2,'0')+'.'+String(ms).padStart(2,'0');
+}
+function swLap(){
+  if(!swRunning) return;
+  const total=swElapsed+Date.now()-swStart;
+  swLaps.push(total);
+  const lapsDiv=document.getElementById('sw-laps');
+  const m=Math.floor(total/60000),s=Math.floor((total%60000)/1000),ms=Math.floor((total%1000)/10);
+  lapsDiv.innerHTML=swLaps.map((t,i)=>{
+    const lm=Math.floor(t/60000),ls=Math.floor((t%60000)/1000),lms=Math.floor((t%1000)/10);
+    return `<div class="lap-item"><span>#${i+1}</span><span>${String(lm).padStart(2,'0')}:${String(ls).padStart(2,'0')}.${String(lms).padStart(2,'0')}</span></div>`;
+  }).reverse().join('');
+  beep(600,0.03);
+}
+function swReset(){
+  sfxClick();swRunning=false;swElapsed=0;swLaps=[];clearInterval(swInterval);
+  document.getElementById('sw-display').textContent='00:00.00';
+  document.getElementById('sw-laps').innerHTML='';
+  document.getElementById('sw-btn').textContent='▶ 开始';
+}
+
+// ===== 倒计时 =====
+let cdRunning=false,cdRemain=0,cdTotal=0,cdInterval=null;
+function cdToggle(){
+  sfxClick();
+  if(cdRunning){
+    cdRunning=false;clearInterval(cdInterval);
+    document.getElementById('cd-btn').textContent='▶ 继续';
+  }else{
+    if(cdRemain<=0){
+      const h=parseInt(document.getElementById('cd-h').value)||0;
+      const m=parseInt(document.getElementById('cd-m').value)||0;
+      const s=parseInt(document.getElementById('cd-s').value)||0;
+      cdTotal=h*3600+m*60+s;cdRemain=cdTotal;
+      if(cdRemain<=0) return;
+    }
+    cdRunning=true;
+    document.getElementById('cd-btn').textContent='⏸ 暂停';
+    cdInterval=setInterval(cdTick,1000);
+  }
+}
+function cdTick(){
+  cdRemain--;
+  if(cdRemain<=0){
+    cdRemain=0;cdRunning=false;clearInterval(cdInterval);
+    document.getElementById('cd-btn').textContent='▶ 开始';
+    document.getElementById('cd-display').classList.add('pulse');
+    sfxAlarm();
+    setTimeout(()=>document.getElementById('cd-display').classList.remove('pulse'),3000);
+  }
+  cdRender();
+}
+function cdRender(){
+  const h=Math.floor(cdRemain/3600),m=Math.floor((cdRemain%3600)/60),s=cdRemain%60;
+  document.getElementById('cd-display').textContent=String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');
+}
+function cdReset(){
+  sfxClick();cdRunning=false;cdRemain=0;clearInterval(cdInterval);
+  document.getElementById('cd-btn').textContent='▶ 开始';
+  document.getElementById('cd-display').textContent='00:00:00';
+  document.getElementById('cd-display').classList.remove('pulse');
+}
+// ==================== SOUL BRIDGE ====================
+(function() {
+  const _app = 'pixel-clock';
+  window.addEventListener('message', e => {
+    if (!e.data || e.data.type !== 'soul_command') return;
+    if (e.data.action === 'get_status') window.parent.postMessage({type:'skill_status',app:_app,status:'running',data:{time:new Date().toLocaleTimeString()}}, '*');
+    if (e.data.action === 'stopwatch_start') swToggle();
+  });
+  window.parent.postMessage({type:'skill_ready',app:_app}, '*');
+})();
+</script>
+</body>
+</html>

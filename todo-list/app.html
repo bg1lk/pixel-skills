@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>待办清单</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:#0f380f;font-family:'Courier New','Consolas',monospace;color:#0f380f;display:flex;justify-content:center;align-items:center;min-height:100vh;}
+#app{background:#9bbc0f;border:4px solid #0f380f;box-shadow:8px 8px 0px #306230;width:min(96vw,460px);max-height:min(96vh,700px);display:flex;flex-direction:column;}
+#titlebar{background:#306230;color:#9bbc0f;padding:8px 16px;font-size:16px;font-weight:bold;letter-spacing:3px;border-bottom:3px solid #0f380f;display:flex;justify-content:space-between;align-items:center;}
+#add-area{display:flex;gap:6px;padding:12px;border-bottom:3px solid #0f380f;background:#8bac0f;}
+#add-input{flex:1;background:#9bbc0f;border:3px solid #0f380f;padding:8px 10px;font-family:monospace;font-size:14px;color:#0f380f;outline:none;}
+#add-input::placeholder{color:#306230;}
+button{background:#8bac0f;color:#0f380f;border:3px solid #0f380f;box-shadow:3px 3px 0px #306230;font-family:monospace;font-size:13px;font-weight:bold;padding:6px 14px;cursor:pointer;}
+button:hover{background:#9bbc0f;transform:translate(1px,1px);box-shadow:2px 2px 0px #306230;}
+button:active{transform:translate(3px,3px);box-shadow:none;}
+#filter-bar{display:flex;gap:4px;padding:8px 12px;background:#9bbc0f;border-bottom:2px solid #306230;}
+.filter-btn{font-size:11px;padding:4px 10px;box-shadow:2px 2px 0px #306230;}
+.filter-btn.active{background:#306230;color:#9bbc0f;}
+#list{flex:1;overflow-y:auto;padding:8px 12px;min-height:100px;max-height:400px;}
+.todo-item{display:flex;align-items:center;gap:8px;padding:8px;margin-bottom:4px;background:#8bac0f;border:2px solid #0f380f;box-shadow:2px 2px 0px #306230;}
+.todo-item.done{opacity:0.6;background:#9bbc0f;}
+.todo-item.done .todo-text{text-decoration:line-through;color:#306230;}
+.todo-check{width:22px;height:22px;border:3px solid #0f380f;background:#9bbc0f;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:bold;flex-shrink:0;}
+.todo-check.checked{background:#306230;color:#9bbc0f;}
+.todo-text{flex:1;font-size:13px;font-weight:bold;word-break:break-all;}
+.todo-pri{font-size:11px;padding:2px 6px;border:2px solid #0f380f;font-weight:bold;flex-shrink:0;cursor:pointer;}
+.pri-high{background:#e63946;color:#fcfcfc;}
+.pri-med{background:#f8d800;color:#0f380f;}
+.pri-low{background:#8bac0f;color:#0f380f;}
+.todo-del{cursor:pointer;font-size:16px;font-weight:bold;color:#e63946;flex-shrink:0;padding:0 4px;}
+.todo-del:hover{color:#0f380f;}
+#bottombar{background:#306230;color:#9bbc0f;padding:6px 12px;font-size:11px;border-top:3px solid #0f380f;display:flex;justify-content:space-between;}
+.empty-msg{text-align:center;padding:30px;color:#306230;font-size:14px;font-weight:bold;}
+
+/* ===== MOBILE ===== */
+@media(max-width:600px){
+  body{overflow-y:auto!important;min-height:100vh;}
+  button,.btn,.action-btn,[class*="btn"]{min-height:44px;font-size:13px!important;touch-action:manipulation;}
+  input,textarea,select{font-size:16px!important;}
+  .controls,.toolbar,.actions,.panel,.buttons,[class*="controls"],[class*="toolbar"]{flex-wrap:wrap!important;}
+  [style*="width:"][style*="px"]{max-width:100%!important;}
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="titlebar">
+    <span>★ 待办清单 ★</span>
+    <span id="date-display" style="font-size:11px;"></span>
+  </div>
+  <div id="add-area">
+    <input type="text" id="add-input" placeholder="输入新任务..." maxlength="100">
+    <button onclick="addTodo()">+ 添加</button>
+  </div>
+  <div id="filter-bar">
+    <button class="filter-btn active" onclick="setFilter('all',this)">全部</button>
+    <button class="filter-btn" onclick="setFilter('active',this)">未完成</button>
+    <button class="filter-btn" onclick="setFilter('done',this)">已完成</button>
+  </div>
+  <div id="list"></div>
+  <div id="bottombar">
+    <span id="stat-text">0 个任务</span>
+    <button style="font-size:10px;padding:2px 8px;box-shadow:1px 1px 0px #0f380f;" onclick="clearDone()">清除已完成</button>
+  </div>
+</div>
+<script>
+const audioCtx=new(window.AudioContext||window.webkitAudioContext)();
+function beep(f,d,v=0.08){const o=audioCtx.createOscillator(),g=audioCtx.createGain();o.type='square';o.frequency.value=f;g.gain.value=v;g.gain.exponentialRampToValueAtTime(0.001,audioCtx.currentTime+d);o.connect(g);g.connect(audioCtx.destination);o.start();o.stop(audioCtx.currentTime+d);}
+function sfxAdd(){beep(600,0.04);setTimeout(()=>beep(800,0.04),50);}
+function sfxDone(){beep(523,0.08);setTimeout(()=>beep(784,0.12),80);}
+function sfxDel(){beep(300,0.08);}
+
+let todos=[];
+let filter='all';
+const PRIS=['high','med','low'];
+const PRI_LABELS={'high':'高','med':'中','low':'低'};
+
+try{todos=JSON.parse(localStorage.getItem('pixel-todos')||'[]');}catch(e){todos=[];}
+
+function save(){localStorage.setItem('pixel-todos',JSON.stringify(todos));}
+
+function addTodo(){
+  const inp=document.getElementById('add-input');
+  const text=inp.value.trim();
+  if(!text) return;
+  todos.unshift({id:Date.now(),text,done:false,pri:'med',created:new Date().toLocaleDateString('zh')});
+  inp.value='';
+  save();render();sfxAdd();
+}
+
+document.getElementById('add-input').addEventListener('keydown',e=>{if(e.key==='Enter')addTodo();});
+
+function toggleDone(id){
+  const t=todos.find(x=>x.id===id);
+  if(t){t.done=!t.done;save();render();if(t.done)sfxDone();else beep(400,0.04);}
+}
+
+function cyclePri(id){
+  const t=todos.find(x=>x.id===id);
+  if(t){const i=PRIS.indexOf(t.pri);t.pri=PRIS[(i+1)%3];save();render();beep(600,0.03);}
+}
+
+function delTodo(id){
+  todos=todos.filter(x=>x.id!==id);
+  save();render();sfxDel();
+}
+
+function clearDone(){
+  todos=todos.filter(x=>!x.done);
+  save();render();sfxDel();
+}
+
+function setFilter(f,btn){
+  filter=f;
+  document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  render();beep(500,0.03);
+}
+
+function render(){
+  const list=document.getElementById('list');
+  let items=todos;
+  if(filter==='active') items=todos.filter(x=>!x.done);
+  if(filter==='done') items=todos.filter(x=>x.done);
+
+  if(items.length===0){
+    list.innerHTML='<div class="empty-msg">░ '+(filter==='done'?'还没有完成的任务':filter==='active'?'全部完成啦！':'还没有任务，添加一个吧')+' ░</div>';
+  } else {
+    list.innerHTML=items.map(t=>`
+      <div class="todo-item ${t.done?'done':''}">
+        <div class="todo-check ${t.done?'checked':''}" onclick="toggleDone(${t.id})">${t.done?'✓':''}</div>
+        <span class="todo-text">${escHtml(t.text)}</span>
+        <span class="todo-pri pri-${t.pri}" onclick="cyclePri(${t.id})" title="点击切换优先级">${PRI_LABELS[t.pri]}</span>
+        <span class="todo-del" onclick="delTodo(${t.id})">×</span>
+      </div>
+    `).join('');
+  }
+
+  const active=todos.filter(x=>!x.done).length;
+  const total=todos.length;
+  document.getElementById('stat-text').textContent=`${active}/${total} 未完成`;
+}
+
+function escHtml(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+// date
+document.getElementById('date-display').textContent=new Date().toLocaleDateString('zh',{month:'long',day:'numeric',weekday:'short'});
+
+render();
+// ==================== SOUL BRIDGE ====================
+(function() {
+  const _app = 'todo-list';
+  window.addEventListener('message', e => {
+    if (!e.data || e.data.type !== 'soul_command') return;
+    if (e.data.action === 'get_status') {
+      const active = todos.filter(x => !x.done).length;
+      window.parent.postMessage({type:'skill_status', app:_app, status:'idle', data:{total:todos.length, active, items:todos.slice(0,5).map(t=>({text:t.text,done:t.done}))}}, '*');
+    }
+    if (e.data.action === 'add' && e.data.text) {
+      todos.push({id:Date.now(), text:e.data.text, done:false, pri:'mid', ts:Date.now()});
+      save(); render();
+    }
+    if (e.data.action === 'toggle' && e.data.id) {
+      const t = todos.find(x => x.id === e.data.id);
+      if (t) { t.done = !t.done; save(); render(); }
+    }
+  });
+  window.parent.postMessage({type:'skill_ready', app:_app}, '*');
+})();
+</script>
+</body>
+</html>

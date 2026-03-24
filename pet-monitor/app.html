@@ -43,7 +43,7 @@
 <video id="vid" playsinline muted></video><canvas id="tmp" style="display:none"></canvas>
 <script src="../cam-core/cam-core.js"></script>
 <script>
-const cv=document.getElementById('cv'),ctx=cv.getContext('2d'),vid=document.getElementById('vid');
+const cv=document.getElementById('cv'),ctx=cv.getContext('2d');let vid=document.getElementById('vid');
 const tmp=document.getElementById('tmp'),tCtx=tmp.getContext('2d');
 let stream=null,running=false,soundOn=true,sensitivity=5;
 let detCount=0,events=[],hourlyData=new Array(24).fill(0);
@@ -103,4 +103,44 @@ document.getElementById('heatmap').innerHTML=hourlyData.map((v,i)=>'<div class="
 const el=document.getElementById('reportTimeline');
 el.innerHTML=events.length?events.map(ev=>'<img src="'+ev.img+'" title="'+ev.time+'">').join(''):'\u6682\u65E0'}
 function exportAll(){events.forEach((ev,i)=>{const a=document.createElement('a');a.download='pet_'+i+'_'+ev.time.replace(/:/g,'')+'.jpg';a.href=ev.img;a.click()})}
+// ==================== SOUL BRIDGE ====================
+(function() {
+  const _app = 'pet-monitor';
+  const vBar = document.createElement('div');
+  vBar.style.cssText = 'background:#0a2a0a;border:2px solid #3cbcfc;padding:5px 10px;font-size:10px;color:#3cbcfc;text-align:center;letter-spacing:1px;font-family:monospace;width:100%';
+  vBar.innerHTML = '👁 <b style="color:#f4d03f">小D之眼</b> | 等待连接...';
+  const _ct = document.querySelector('.main');
+  if (_ct) _ct.insertBefore(vBar, _ct.firstChild);
+
+  const pcCv = document.createElement('canvas');
+  pcCv.width = 320; pcCv.height = 240;
+  const pcCtx = pcCv.getContext('2d');
+  Object.defineProperty(pcCv, 'videoWidth', { get: () => 320 });
+  Object.defineProperty(pcCv, 'videoHeight', { get: () => 240 });
+  let _started = false, _fc = 0;
+
+  function _autoStart() {
+    if (_started || running) return; _started = true;
+    vid = pcCv;
+    cv.width = 320; cv.height = 240; tmp.width = 160; tmp.height = 120;
+    running = true; startTime = Date.now();
+    document.getElementById('monStatus').textContent = '小D之眼监控中...';
+    requestAnimationFrame(loop);
+  }
+
+  window.addEventListener('message', e => {
+    if (!e.data) return;
+    if (e.data.type === 'parent_camera_frame') {
+      const img = new Image();
+      img.onload = () => { pcCtx.drawImage(img, 0, 0, 320, 240); _fc++; vBar.innerHTML = '👁 <b style="color:#f4d03f">小D之眼</b> | 已连接 · F' + _fc; _autoStart(); };
+      img.src = 'data:image/jpeg;base64,' + e.data.frame;
+    }
+    if (e.data.type === 'soul_vision_info') vBar.innerHTML = '👁 <b style="color:#f4d03f">小D看到</b> | ' + e.data.description;
+    if (e.data.type === 'soul_command') {
+      if (e.data.action === 'get_status') window.parent.postMessage({type:'skill_status',app:_app,status:running?'monitoring':'idle',data:{detections:detCount}}, '*');
+      if (e.data.action === 'start') _autoStart();
+    }
+  });
+  window.parent.postMessage({type:'skill_ready',app:_app}, '*');
+})();
 </script></body></html>

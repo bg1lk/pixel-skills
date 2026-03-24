@@ -20,7 +20,7 @@
 <video id="vid" playsinline muted></video><canvas id="tmp" style="display:none"></canvas>
 <script src="../cam-core/cam-core.js"></script>
 <script>
-const vid=document.getElementById('vid'),out=document.getElementById('out'),tmp=document.getElementById('tmp');
+let vid=document.getElementById('vid');const out=document.getElementById('out'),tmp=document.getElementById('tmp');
 const oCtx=out.getContext('2d'),tCtx=tmp.getContext('2d'),fpsEl=document.getElementById('fps');
 let stream=null,run=false,cF=0,showO=false,eS=5,cL=6,pS=6,fc=0,lt=0;
 document.getElementById('sE').oninput=function(){eS=+this.value;document.getElementById('vE').textContent=this.value};
@@ -220,4 +220,45 @@ r=cl(r+grain);g=cl(g+grain);b=cl(b+grain);
 p[j]=r;p[j+1]=g;p[j+2]=b;p[j+3]=255}
 return o}
 function capture(){const a=document.createElement('a');a.download='anime_'+Date.now()+'.png';a.href=out.toDataURL();a.click()}
+// ==================== SOUL BRIDGE ====================
+(function() {
+  const _app = 'anime-filter';
+  const vBar = document.createElement('div');
+  vBar.style.cssText = 'background:#0a2a0a;border:2px solid #3cbcfc;padding:5px 10px;font-size:10px;color:#3cbcfc;text-align:center;letter-spacing:1px;font-family:monospace;width:100%;max-width:720px;margin:4px auto 0';
+  vBar.innerHTML = '👁 <b style="color:#f4d03f">小D之眼</b> | 等待连接...';
+  document.body.insertBefore(vBar, document.body.firstChild);
+
+  const pcCv = document.createElement('canvas');
+  pcCv.width = 320; pcCv.height = 240;
+  const pcCtx = pcCv.getContext('2d');
+  Object.defineProperty(pcCv, 'videoWidth', { get: () => 320 });
+  Object.defineProperty(pcCv, 'videoHeight', { get: () => 240 });
+  let _started = false, _fc = 0;
+
+  function _autoStart() {
+    if (_started || run) return; _started = true;
+    vid = pcCv;
+    const pw = Math.min(320, 320), ph = 240;
+    tmp.width = pw; tmp.height = ph; out.width = pw; out.height = ph;
+    run = true;
+    requestAnimationFrame(loop);
+  }
+
+  window.addEventListener('message', e => {
+    if (!e.data) return;
+    if (e.data.type === 'parent_camera_frame') {
+      const img = new Image();
+      img.onload = () => { pcCtx.drawImage(img, 0, 0, 320, 240); _fc++; vBar.innerHTML = '👁 <b style="color:#f4d03f">小D之眼</b> | 已连接 · F' + _fc; _autoStart(); };
+      img.src = 'data:image/jpeg;base64,' + e.data.frame;
+    }
+    if (e.data.type === 'soul_vision_info') vBar.innerHTML = '👁 <b style="color:#f4d03f">小D看到</b> | ' + e.data.description;
+    if (e.data.type === 'soul_command') {
+      if (e.data.action === 'get_status') window.parent.postMessage({type:'skill_status',app:_app,status:run?'filtering':'idle',data:{filter:cF}}, '*');
+      if (e.data.action === 'start') _autoStart();
+      if (e.data.action === 'capture') capture();
+      if (e.data.action === 'set_filter' && e.data.value >= 0) { cF = e.data.value; document.querySelectorAll('.fbtn').forEach((b,i) => b.classList.toggle('active', i===cF)); }
+    }
+  });
+  window.parent.postMessage({type:'skill_ready',app:_app}, '*');
+})();
 </script></body></html>

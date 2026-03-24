@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>像素笔记本</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:#0f380f;font-family:'Courier New','Consolas',monospace;color:#0f380f;display:flex;justify-content:center;align-items:center;min-height:100vh;}
+#app{background:#9bbc0f;border:4px solid #0f380f;box-shadow:8px 8px 0px #306230;width:min(96vw,520px);height:min(96vh,640px);display:flex;flex-direction:column;}
+#titlebar{background:#306230;color:#9bbc0f;padding:8px 16px;font-size:16px;font-weight:bold;letter-spacing:3px;border-bottom:3px solid #0f380f;display:flex;justify-content:space-between;align-items:center;}
+#main{display:flex;flex:1;overflow:hidden;}
+/* 侧栏 */
+#sidebar{width:160px;background:#8bac0f;border-right:3px solid #0f380f;display:flex;flex-direction:column;}
+#search-box{padding:6px;}
+#search-input{width:100%;background:#9bbc0f;border:2px solid #0f380f;padding:5px 8px;font-family:monospace;font-size:12px;color:#0f380f;outline:none;}
+#search-input::placeholder{color:#306230;}
+#note-list{flex:1;overflow-y:auto;padding:4px;}
+.note-item{padding:6px 8px;margin-bottom:3px;background:#9bbc0f;border:2px solid #0f380f;cursor:pointer;font-size:11px;font-weight:bold;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.note-item:hover{background:#8bac0f;}
+.note-item.active{background:#306230;color:#9bbc0f;}
+.note-item .note-date{font-size:9px;color:#306230;font-weight:normal;}
+.note-item.active .note-date{color:#8bac0f;}
+#sidebar-btns{padding:6px;display:flex;gap:4px;}
+/* 编辑区 */
+#editor-area{flex:1;display:flex;flex-direction:column;}
+#note-title-input{background:#8bac0f;border:none;border-bottom:3px solid #0f380f;padding:10px 12px;font-family:monospace;font-size:16px;font-weight:bold;color:#0f380f;outline:none;}
+#note-title-input::placeholder{color:#306230;}
+#note-body{flex:1;background:#9bbc0f;border:none;padding:12px;font-family:monospace;font-size:13px;color:#0f380f;resize:none;outline:none;line-height:1.6;}
+#note-body::placeholder{color:#306230;}
+#editor-status{background:#306230;color:#9bbc0f;padding:4px 10px;font-size:10px;display:flex;justify-content:space-between;}
+button{background:#8bac0f;color:#0f380f;border:2px solid #0f380f;box-shadow:2px 2px 0px #306230;font-family:monospace;font-size:11px;font-weight:bold;padding:4px 10px;cursor:pointer;}
+button:hover{background:#9bbc0f;transform:translate(1px,1px);box-shadow:1px 1px 0px #306230;}
+button:active{transform:translate(2px,2px);box-shadow:none;}
+button.danger{background:#e63946;color:#fcfcfc;}
+#bottombar{background:#306230;color:#9bbc0f;padding:5px 12px;font-size:11px;border-top:3px solid #0f380f;display:flex;justify-content:space-between;}
+.empty-editor{flex:1;display:flex;align-items:center;justify-content:center;color:#306230;font-size:14px;font-weight:bold;}
+@media(max-width:500px){
+  #sidebar{width:120px;}
+}
+
+/* ===== MOBILE ===== */
+@media(max-width:600px){
+  body{overflow-y:auto!important;min-height:100vh;}
+  #app,.app,.container,.main,.wrapper,[id*="app"],[class*="container"]{width:100%!important;max-width:100%!important;margin:0!important;border-radius:0!important;}
+  button,.btn,.action-btn,[class*="btn"]{min-height:44px;font-size:13px!important;touch-action:manipulation;}
+  input,textarea,select{font-size:16px!important;}
+  .controls,.toolbar,.actions,.panel,.buttons,[class*="controls"],[class*="toolbar"]{flex-wrap:wrap!important;}
+  [style*="width:"][style*="px"]{max-width:100%!important;}
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="titlebar">
+    <span>★ 像素笔记本 ★</span>
+    <span id="note-count" style="font-size:11px;"></span>
+  </div>
+  <div id="main">
+    <div id="sidebar">
+      <div id="search-box">
+        <input type="text" id="search-input" placeholder="搜索..." oninput="renderList()">
+      </div>
+      <div id="note-list"></div>
+      <div id="sidebar-btns">
+        <button onclick="newNote()" style="flex:1;">+ 新建</button>
+      </div>
+    </div>
+    <div id="editor-area">
+      <input type="text" id="note-title-input" placeholder="标题..." oninput="autoSave()">
+      <textarea id="note-body" placeholder="开始写点什么..." oninput="autoSave()"></textarea>
+      <div id="editor-status">
+        <span id="char-count">0 字</span>
+        <span id="save-status">已保存</span>
+      </div>
+    </div>
+  </div>
+  <div id="bottombar">
+    <span>Ctrl+N 新建 | Ctrl+S 保存</span>
+    <button class="danger" style="font-size:10px;padding:2px 8px;" onclick="delNote()">删除笔记</button>
+  </div>
+</div>
+<script>
+const audioCtx=new(window.AudioContext||window.webkitAudioContext)();
+function beep(f,d,v=0.06){const o=audioCtx.createOscillator(),g=audioCtx.createGain();o.type='square';o.frequency.value=f;g.gain.value=v;g.gain.exponentialRampToValueAtTime(0.001,audioCtx.currentTime+d);o.connect(g);g.connect(audioCtx.destination);o.start();o.stop(audioCtx.currentTime+d);}
+
+let notes=[];
+let currentId=null;
+let saveTimer=null;
+
+try{notes=JSON.parse(localStorage.getItem('pixel-notes')||'[]');}catch(e){notes=[];}
+if(notes.length===0) newNote(true);
+
+function save(){
+  localStorage.setItem('pixel-notes',JSON.stringify(notes));
+  document.getElementById('save-status').textContent='已保存';
+}
+
+function newNote(silent){
+  const note={id:Date.now(),title:'',body:'',created:new Date().toLocaleDateString('zh'),updated:new Date().toLocaleDateString('zh')};
+  notes.unshift(note);
+  currentId=note.id;
+  save();renderList();loadNote(note.id);
+  if(!silent) beep(700,0.04);
+}
+
+function delNote(){
+  if(!currentId) return;
+  notes=notes.filter(n=>n.id!==currentId);
+  currentId=notes.length>0?notes[0].id:null;
+  save();renderList();
+  if(currentId) loadNote(currentId);
+  else{
+    document.getElementById('note-title-input').value='';
+    document.getElementById('note-body').value='';
+    document.getElementById('char-count').textContent='0 字';
+  }
+  beep(300,0.06);
+}
+
+function loadNote(id){
+  currentId=id;
+  const note=notes.find(n=>n.id===id);
+  if(!note) return;
+  document.getElementById('note-title-input').value=note.title;
+  document.getElementById('note-body').value=note.body;
+  document.getElementById('char-count').textContent=note.body.length+' 字';
+  renderList();
+}
+
+function autoSave(){
+  const note=notes.find(n=>n.id===currentId);
+  if(!note) return;
+  note.title=document.getElementById('note-title-input').value;
+  note.body=document.getElementById('note-body').value;
+  note.updated=new Date().toLocaleDateString('zh');
+  document.getElementById('char-count').textContent=note.body.length+' 字';
+  document.getElementById('save-status').textContent='保存中...';
+  clearTimeout(saveTimer);
+  saveTimer=setTimeout(()=>{save();renderList();},500);
+}
+
+function renderList(){
+  const query=document.getElementById('search-input').value.toLowerCase();
+  const filtered=notes.filter(n=>{
+    if(!query) return true;
+    return (n.title+n.body).toLowerCase().includes(query);
+  });
+  const listEl=document.getElementById('note-list');
+  listEl.innerHTML=filtered.map(n=>`
+    <div class="note-item ${n.id===currentId?'active':''}" onclick="loadNote(${n.id})">
+      ${escHtml(n.title||'无标题')}
+      <div class="note-date">${n.updated}</div>
+    </div>
+  `).join('');
+  document.getElementById('note-count').textContent=notes.length+' 篇笔记';
+}
+
+function escHtml(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+document.addEventListener('keydown',e=>{
+  if(e.ctrlKey&&e.key==='n'){e.preventDefault();newNote();}
+  if(e.ctrlKey&&e.key==='s'){e.preventDefault();save();beep(600,0.04);}
+});
+
+// init
+if(currentId) loadNote(currentId);
+else if(notes.length>0){currentId=notes[0].id;loadNote(currentId);}
+renderList();
+// ==================== SOUL BRIDGE ====================
+(function() {
+  const _app = 'note-pad';
+  window.addEventListener('message', e => {
+    if (!e.data || e.data.type !== 'soul_command') return;
+    if (e.data.action === 'get_status') {
+      const cur = notes.find(n => n.id === currentId);
+      window.parent.postMessage({type:'skill_status', app:_app, status:'idle', data:{count:notes.length, current:cur ? cur.title : null}}, '*');
+    }
+    if (e.data.action === 'new_note') { newNote(); }
+    if (e.data.action === 'write' && e.data.text) {
+      newNote();
+      document.getElementById('note-body').value = e.data.text;
+      if (e.data.title) document.getElementById('note-title').value = e.data.title;
+      save(); renderList();
+    }
+  });
+  window.parent.postMessage({type:'skill_ready', app:_app}, '*');
+})();
+</script>
+</body>
+</html>

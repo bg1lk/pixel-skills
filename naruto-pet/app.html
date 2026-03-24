@@ -535,6 +535,16 @@ setInterval(spawnLeaf, 4000);
 x = Math.floor(window.innerWidth / 2 - 60);
 say('\u6211\u662F\u6F29\u4EBA\uFF0C\u672A\u6765\u7684\u706B\u5F71\uFF01 dattebayo!', 4000);
 loop();
+// ==================== SOUL BRIDGE ====================
+(function() {
+  const _app = 'naruto-pet';
+  window.addEventListener('message', e => {
+    if (!e.data || e.data.type !== 'soul_command') return;
+    if (e.data.action === 'get_status') window.parent.postMessage({type:'skill_status',app:_app,status:'running'}, '*');
+    if (e.data.action === 'say' && e.data.text) say(e.data.text, 3000);
+  });
+  window.parent.postMessage({type:'skill_ready',app:_app}, '*');
+})();
 </script>
 </body>
 </html>

@@ -1130,6 +1130,16 @@ async function soulRandomDraw() {
 initPixels();
 setupCanvases();
 updateColorUI();
+// ==================== SOUL BRIDGE ====================
+(function() {
+  const _app = 'pixel-paint';
+  window.addEventListener('message', e => {
+    if (!e.data || e.data.type !== 'soul_command') return;
+    if (e.data.action === 'get_status') window.parent.postMessage({type:'skill_status',app:_app,status:'ready',data:{tool:currentTool,color:fgColor}}, '*');
+    if (e.data.action === 'clear') { ctx.clearRect(0,0,canvasW,canvasH); ctx.fillStyle = bgColor; ctx.fillRect(0,0,canvasW,canvasH); }
+  });
+  window.parent.postMessage({type:'skill_ready',app:_app}, '*');
+})();
 </script>
 </body>
 </html>

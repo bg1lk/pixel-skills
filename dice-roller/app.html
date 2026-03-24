@@ -141,6 +141,18 @@ function renderHistory(){
 
 // keyboard
 document.addEventListener('keydown',e=>{if(e.key===' '||e.key==='Enter'){e.preventDefault();roll();}});
+// ==================== SOUL BRIDGE ====================
+(function() {
+  const _app = 'dice-roller';
+  window.addEventListener('message', e => {
+    if (!e.data || e.data.type !== 'soul_command') return;
+    if (e.data.action === 'get_status') window.parent.postMessage({type:'skill_status',app:_app,status:'ready',data:{lastResult:history[0]?.text||''}}, '*');
+    if (e.data.action === 'roll') roll();
+  });
+  // Auto-roll on load for fun
+  setTimeout(roll, 800);
+  window.parent.postMessage({type:'skill_ready',app:_app}, '*');
+})();
 </script>
 </body>
 </html>

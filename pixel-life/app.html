@@ -838,6 +838,28 @@ function init(){
 }
 
 window.addEventListener('DOMContentLoaded',init);
+// ==================== SOUL BRIDGE ====================
+(function() {
+  const _app = 'pixel-life';
+  const vBar = document.createElement('div');
+  vBar.style.cssText = 'background:#0a2a0a;border:2px solid #3cbcfc;padding:5px 10px;font-size:10px;color:#3cbcfc;text-align:center;letter-spacing:1px;font-family:monospace;width:100%;max-width:640px;margin:4px auto 0';
+  vBar.innerHTML = '👁 <b style="color:#f4d03f">小D之眼</b> | 等待连接...';
+  document.body.insertBefore(vBar, document.body.firstChild);
+
+  let _fc = 0;
+  window.addEventListener('message', e => {
+    if (!e.data) return;
+    if (e.data.type === 'parent_camera_frame') {
+      _fc++;
+      vBar.innerHTML = '👁 <b style="color:#f4d03f">小D之眼</b> | 已连接 · F' + _fc;
+    }
+    if (e.data.type === 'soul_vision_info') vBar.innerHTML = '👁 <b style="color:#f4d03f">小D看到</b> | ' + e.data.description;
+    if (e.data.type === 'soul_command') {
+      if (e.data.action === 'get_status') window.parent.postMessage({type:'skill_status',app:_app,status:'running'}, '*');
+    }
+  });
+  window.parent.postMessage({type:'skill_ready',app:_app}, '*');
+})();
 </script>
 </body>
 </html>

@@ -76,7 +76,7 @@ canvas.preview-overlay{position:absolute;top:0;left:0;width:100%;height:100%;poi
 
 <script src="../cam-core/cam-core.js"></script>
 <script>
-const video = document.getElementById('video');
+let video = document.getElementById('video');
 const previewCanvas = document.getElementById('previewCanvas');
 const previewCtx = previewCanvas.getContext('2d');
 const grid = document.getElementById('mangaGrid');
@@ -453,6 +453,45 @@ document.addEventListener('keydown', e => {
 // Init
 buildPanels();
 initCamera();
+// ==================== SOUL BRIDGE ====================
+(function() {
+  const _app = 'manga-panel';
+  const vBar = document.createElement('div');
+  vBar.style.cssText = 'background:#0a2a0a;border:2px solid #3cbcfc;padding:5px 10px;font-size:10px;color:#3cbcfc;text-align:center;letter-spacing:1px;font-family:monospace;width:100%;margin:4px 0';
+  vBar.innerHTML = '👁 <b style="color:#f4d03f">小D之眼</b> | 等待连接...';
+  document.body.insertBefore(vBar, document.body.firstChild);
+
+  const pcCv = document.createElement('canvas');
+  pcCv.width = 640; pcCv.height = 480;
+  const pcCtx = pcCv.getContext('2d');
+  Object.defineProperty(pcCv, 'videoWidth', { get: () => 640 });
+  Object.defineProperty(pcCv, 'videoHeight', { get: () => 480 });
+  let _started = false, _fc = 0;
+
+  function _autoStart() {
+    if (_started) return; _started = true;
+    video = pcCv;
+    previewCanvas.width = 640; previewCanvas.height = 480;
+    drawPreview();
+    statusEl.textContent = '小D之眼已连接 - 按空格拍摄';
+  }
+
+  window.addEventListener('message', e => {
+    if (!e.data) return;
+    if (e.data.type === 'parent_camera_frame') {
+      const img = new Image();
+      img.onload = () => { pcCtx.drawImage(img, 0, 0, 640, 480); _fc++; vBar.innerHTML = '👁 <b style="color:#f4d03f">小D之眼</b> | 已连接 · F' + _fc; _autoStart(); };
+      img.src = 'data:image/jpeg;base64,' + e.data.frame;
+    }
+    if (e.data.type === 'soul_vision_info') vBar.innerHTML = '👁 <b style="color:#f4d03f">小D看到</b> | ' + e.data.description;
+    if (e.data.type === 'soul_command') {
+      if (e.data.action === 'get_status') window.parent.postMessage({type:'skill_status',app:_app,status:'ready',data:{panels:panels.filter(p=>p.imageData).length}}, '*');
+      if (e.data.action === 'capture') capture();
+      if (e.data.action === 'start') _autoStart();
+    }
+  });
+  window.parent.postMessage({type:'skill_ready',app:_app}, '*');
+})();
 </script>
 </body>
 </html>

@@ -163,7 +163,7 @@ const SITTING=`  O\n /|\\\n / \\\n_____\n|   |`;
 const STANDING=`  O\n /|\\\n / \\\n |  \n/ \\`;
 const STRETCH=`\\O/\n |\n/ \\\n |  \n/ \\`;
 
-const vid=document.getElementById('vid'),camDot=document.getElementById('camDot'),presLbl=document.getElementById('presLbl');
+let vid=document.getElementById('vid');const camDot=document.getElementById('camDot'),presLbl=document.getElementById('presLbl');
 const asciiChar=document.getElementById('asciiChar'),statusBadge=document.getElementById('statusBadge');
 const timerBig=document.getElementById('timerBig'),progFill=document.getElementById('progFill'),progPct=document.getElementById('progPct');
 const stSit=document.getElementById('stSit'),stBreaks=document.getElementById('stBreaks'),stLong=document.getElementById('stLong');
@@ -404,6 +404,51 @@ function playBeep(){
 }
 
 loadCfg();loadStats();
+// ==================== SOUL BRIDGE ====================
+(function() {
+  const _app = 'seat-tracker';
+  const vBar = document.createElement('div');
+  vBar.style.cssText = 'background:#0a2a0a;border:2px solid #3cbcfc;padding:5px 10px;font-size:10px;color:#3cbcfc;text-align:center;letter-spacing:1px;font-family:monospace;width:100%;margin:4px 0';
+  vBar.innerHTML = '👁 <b style="color:#f4d03f">小D之眼</b> | 等待连接...';
+  const _ct = document.querySelector('.main,.container') || document.body;
+  _ct.insertBefore(vBar, _ct.firstChild);
+
+  const pcCv = document.createElement('canvas');
+  pcCv.width = 320; pcCv.height = 240;
+  const pcCtx = pcCv.getContext('2d');
+  Object.defineProperty(pcCv, 'videoWidth', { get: () => 320 });
+  Object.defineProperty(pcCv, 'videoHeight', { get: () => 240 });
+  let _started = false, _fc = 0;
+
+  function _autoStart() {
+    if (_started || monitoring) return; _started = true;
+    vid = pcCv; stream = {};
+    tmpCv.width = 160; tmpCv.height = 120;
+    monitoring = true;
+    btnStart.textContent = '■ 停止'; btnStart.classList.add('stop');
+    sitStartMs = Date.now(); continuousMs = 0; consP = 0; consA = 0; seated = false;
+    loop1 = setInterval(detectTick, 500);
+    loop2 = setInterval(timerTick, 1000);
+    statusBadge.textContent = '小D之眼监测中'; statusBadge.className = 'status-badge working';
+    camDot.className = 'cam-dot on';
+    presLbl.textContent = '已连接'; presLbl.style.color = '#3cbcfc';
+  }
+
+  window.addEventListener('message', e => {
+    if (!e.data) return;
+    if (e.data.type === 'parent_camera_frame') {
+      const img = new Image();
+      img.onload = () => { pcCtx.drawImage(img, 0, 0, 320, 240); _fc++; vBar.innerHTML = '👁 <b style="color:#f4d03f">小D之眼</b> | 已连接 · F' + _fc; _autoStart(); };
+      img.src = 'data:image/jpeg;base64,' + e.data.frame;
+    }
+    if (e.data.type === 'soul_vision_info') vBar.innerHTML = '👁 <b style="color:#f4d03f">小D看到</b> | ' + e.data.description;
+    if (e.data.type === 'soul_command') {
+      if (e.data.action === 'get_status') window.parent.postMessage({type:'skill_status',app:_app,status:monitoring?'monitoring':'idle',data:{seated,continuousMs}}, '*');
+      if (e.data.action === 'start') _autoStart();
+    }
+  });
+  window.parent.postMessage({type:'skill_ready',app:_app}, '*');
+})();
 </script>
 </body>
 </html>
