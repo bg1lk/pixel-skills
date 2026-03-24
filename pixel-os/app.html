@@ -1550,14 +1550,7 @@ function openApp(id) {
   else {
     const a = apps.find(a=>a.id===id);
     if (!a) return;
-    if (a.camera) {
-      // 摄像头应用始终在新标签页打开（iframe内摄像头权限不稳定）
-      const p = new URL(a.path, location.href).href;
-      window.open(p, '_blank');
-      playClick();
-      return;
-    }
-    Object.assign(win, { title: a.name, icon: a.icon, type:'iframe', src: a.path, color: a.color });
+    Object.assign(win, { title: a.name, icon: a.icon, type: a.camera ? 'camera_iframe' : 'iframe', src: a.path, color: a.color });
   }
 
   wins.push(win);
@@ -1642,6 +1635,7 @@ function mkWin(win) {
 }
 
 function winBody(win) {
+  if (win.type==='camera_iframe') return `<iframe src="${win.src}" allow="camera;microphone;autoplay"></iframe>`;
   if (win.type==='iframe') return `<iframe src="${win.src}" sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-popups-to-escape-sandbox" allow="camera;microphone"></iframe>`;
   if (win.type==='about') return `<div class="inner-content">
     <h2>像素系统</h2>
