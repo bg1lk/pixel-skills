@@ -1183,7 +1183,7 @@ updateColorUI();
   // === 直连 WebSocket — 接收服务端生成的图片（不依赖 PixelOS postMessage 转发） ===
   let _ws = null;
   function connectWS() {
-    const wsUrl = (localStorage.getItem('daoist_ws') || 'ws://localhost:3000/ws');
+    const wsUrl = (()=>{const s=localStorage.getItem('daoist_ws');if(s)return s;if(location.hostname.includes('github.io'))return 'ws://localhost:3000/ws';const p=location.protocol==='https:'?'wss:':'ws:';return p+'//'+location.host+'/ws'})();
     try {
       _ws = new WebSocket(wsUrl);
       _ws.onmessage = (e) => {
