@@ -964,6 +964,168 @@ Return ONLY valid JSON (no markdown):
   }
 }
 
+// ===== 接收父窗口 Soul 指令 =====
+window.addEventListener('message', async (e) => {
+  const msg = e.data;
+  if (!msg || !msg.type) return;
+
+  // 小D说"画一幅" — 用父窗口传来的摄像头帧自动 AI 画画
+  if (msg.type === 'soul_draw') {
+    if (aiDrawing) return;
+    aiDrawing = true;
+    const btn = document.getElementById('aiDrawBtn');
+    if (btn) { btn.disabled = true; btn.textContent = '🎨 小D在画...'; }
+    setProgress(10);
+
+    try {
+      const b64 = msg.frame; // 父窗口传来的 base64 jpeg
+      const mode = msg.mode || 'portrait';
+
+      if (!b64) {
+        // 没有摄像头帧，画一幅随机像素画
+        showThought('没有摄像头...那我凭感觉画一幅吧');
+        setProgress(30);
+        await soulRandomDraw();
+        return;
+      }
+
+      setProgress(25);
+      showThought('嗯...让我看看摄像头里的东西...');
+
+      const modePrompts = {
+        portrait: 'Draw an anime-style pixel art portrait.',
+        scene: 'Draw a pixel art game scene like a 16-bit RPG.',
+        cute: 'Draw an adorable chibi/kawaii Q-version.',
+        caricature: 'Draw an exaggerated pixel art caricature.'
+      };
+
+      const analyzeResult = await callGeminiAI('gemini-2.5-flash', [
+        { text: `You are a pixel art painter AI, a young Daoist priest who sees the world with wonder. Looking through your eyes at this scene.
+1. Share your INNER THOUGHTS in Chinese - be poetic, curious, slightly mystical. 2 sentences max.
+2. Describe a ${W}x${H} pixel art painting plan. ${modePrompts[mode] || modePrompts.portrait}
+Return ONLY valid JSON:
+{"thoughts":"你的内心独白（中文，小道士视角）","description":"what to paint in English","palette":["#hex1","#hex2"..."up to 8 colors"]}` },
+        { inlineData: { mimeType: 'image/jpeg', data: b64 } }
+      ], { temperature: 0.9, maxOutputTokens: 1500 });
+
+      const txt = analyzeResult.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      const fi = txt.indexOf('{');
+      let analysis;
+      if (fi >= 0) {
+        let raw = txt.slice(fi, txt.lastIndexOf('}') + 1);
+        raw = raw.replace(/,\s*([}\]])/g, '$1');
+        try { analysis = JSON.parse(raw); } catch (e) { analysis = null; }
+      }
+      if (!analysis) analysis = { thoughts: '这个世界真有趣...', description: 'pixel art of the scene', palette: ['#0f380f', '#306230', '#8bac0f', '#9bbc0f', '#e63946', '#f4d03f'] };
+
+      setProgress(50);
+      showThought(analysis.thoughts || '让我画下来...');
+      await new Promise(r => setTimeout(r, 1500));
+
+      // Generate pixel art image
+      setProgress(65);
+      const imgResult = await callGeminiAI('gemini-2.5-flash-image', [
+        { text: `Create a ${W}x${H} pixel art based on this photo. Transform into retro game pixel art style. ${analysis.description}. Palette: ${(analysis.palette || []).join(', ')}. Clean pixels, no anti-aliasing, game aesthetic. No text.` },
+        { inlineData: { mimeType: 'image/jpeg', data: b64 } }
+      ], { responseModalities: ['IMAGE', 'TEXT'] });
+
+      setProgress(85);
+      const parts = imgResult.candidates?.[0]?.content?.parts || [];
+      let imgData = null;
+      for (const p of parts) {
+        if (p.inlineData?.data) { imgData = p.inlineData.data; break; }
+      }
+      if (!imgData) throw new Error('AI未返回图片');
+
+      showThought(analysis.thoughts + '\n\n✏️ 开始落笔了...');
+      setProgress(90);
+
+      const img = new Image();
+      img.onload = () => {
+        const tc = document.createElement('canvas');
+        tc.width = W; tc.height = H;
+        const tctx = tc.getContext('2d');
+        tctx.imageSmoothingEnabled = false;
+        tctx.drawImage(img, 0, 0, W, H);
+        const id = tctx.getImageData(0, 0, W, H);
+        saveUndo();
+        const paintQueue = [];
+        for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+          const i = (y * W + x) * 4;
+          if (id.data[i + 3] < 30) continue;
+          paintQueue.push({ x, y, hex: '#' + [id.data[i], id.data[i + 1], id.data[i + 2]].map(v => v.toString(16).padStart(2, '0')).join('') });
+        }
+        const cx = W / 2, cy = H / 2;
+        paintQueue.sort((a, b) => Math.sqrt((a.x - cx) ** 2 + (a.y - cy) ** 2) - Math.sqrt((b.x - cx) ** 2 + (b.y - cy) ** 2));
+        const batchSize = Math.max(1, Math.floor(paintQueue.length / 120));
+        let idx = 0;
+        function paintFrame() {
+          if (idx >= paintQueue.length) {
+            renderAll(); setProgress(100); sfxExport();
+            showThought(analysis.thoughts + '\n\n🎨 画好了！');
+            // 通知父窗口画完了
+            window.parent.postMessage({ type: 'soul_draw_done', thoughts: analysis.thoughts }, '*');
+            setTimeout(() => { setProgress(0); if (btn) { btn.disabled = false; btn.textContent = '🎨 AI 画一幅'; } aiDrawing = false; }, 500);
+            return;
+          }
+          const end = Math.min(idx + batchSize, paintQueue.length);
+          for (let i = idx; i < end; i++) pixels[paintQueue[i].y][paintQueue[i].x] = paintQueue[i].hex;
+          idx = end; renderAll();
+          requestAnimationFrame(paintFrame);
+        }
+        paintFrame();
+      };
+      img.onerror = () => { showThought('图片加载失败...'); if (btn) { btn.disabled = false; btn.textContent = '🎨 AI 画一幅'; } aiDrawing = false; setProgress(0); };
+      img.src = 'data:image/png;base64,' + imgData;
+
+    } catch (e) {
+      console.error('Soul画画失败:', e);
+      showThought('唔...没画成: ' + e.message);
+      setProgress(0);
+      if (btn) { btn.disabled = false; btn.textContent = '🎨 AI 画一幅'; }
+      aiDrawing = false;
+    }
+  }
+});
+
+// 随机画一幅（无摄像头时）
+async function soulRandomDraw() {
+  const themes = ['一只打坐的小猫', '山间小道观', '一杯清茶', '月下梅花', '像素风小村庄', '一片星空'];
+  const theme = themes[Math.floor(Math.random() * themes.length)];
+  showThought(`没有摄像头...那我画个「${theme}」吧`);
+  setProgress(40);
+  try {
+    const imgResult = await callGeminiAI('gemini-2.5-flash-image', [
+      { text: `Create a ${W}x${H} pixel art of: ${theme}. Style: retro 16-bit game, clean pixels, limited palette using #0f380f #306230 #8bac0f #9bbc0f #e63946 #f4d03f. No text.` }
+    ], { responseModalities: ['IMAGE', 'TEXT'] });
+    const parts = imgResult.candidates?.[0]?.content?.parts || [];
+    let imgData = null;
+    for (const p of parts) { if (p.inlineData?.data) { imgData = p.inlineData.data; break; } }
+    if (!imgData) throw new Error('没生成图');
+    setProgress(80);
+    const img = new Image();
+    img.onload = () => {
+      const tc = document.createElement('canvas'); tc.width = W; tc.height = H;
+      const tctx = tc.getContext('2d'); tctx.imageSmoothingEnabled = false; tctx.drawImage(img, 0, 0, W, H);
+      const id = tctx.getImageData(0, 0, W, H);
+      saveUndo();
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+        const i = (y * W + x) * 4;
+        if (id.data[i + 3] < 30) continue;
+        pixels[y][x] = '#' + [id.data[i], id.data[i + 1], id.data[i + 2]].map(v => v.toString(16).padStart(2, '0')).join('');
+      }
+      renderAll(); setProgress(100); sfxExport();
+      showThought(`「${theme}」画好了！`);
+      window.parent.postMessage({ type: 'soul_draw_done', thoughts: `画了一幅${theme}` }, '*');
+      setTimeout(() => { setProgress(0); aiDrawing = false; const btn = document.getElementById('aiDrawBtn'); if (btn) { btn.disabled = false; btn.textContent = '🎨 AI 画一幅'; } }, 500);
+    };
+    img.src = 'data:image/png;base64,' + imgData;
+  } catch (e) {
+    showThought('画不出来...' + e.message);
+    setProgress(0); aiDrawing = false;
+  }
+}
+
 // ===== 初始化 =====
 initPixels();
 setupCanvases();

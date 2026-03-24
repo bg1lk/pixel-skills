@@ -2922,6 +2922,10 @@ setInterval(()=>{if(naruto.state!=='drag'&&Math.random()<0.15)narutoSpeak();},60
         } else {
           openApp(data.app);
         }
+        // 打开后延迟发送交互指令（等 iframe 加载）
+        if (data.interact) {
+          setTimeout(() => sendCommandToApp(data.app, data.interact), 3000);
+        }
       }
 
       if (data.action === 'close_app' && data.app) {
@@ -2929,7 +2933,36 @@ setInterval(()=>{if(naruto.state!=='drag'&&Math.random()<0.15)narutoSpeak();},60
         if (w) closeWin(w.id);
       }
     }
+
+    // 服务器让小D操作当前应用
+    if (data.type === 'soul_interact' && data.app && data.command) {
+      sendCommandToApp(data.app, data.command);
+    }
   }
+
+  // 向 iframe 内的应用发送指令
+  function sendCommandToApp(appId, command) {
+    const w = wins.find(w => w.appId === appId);
+    if (!w) return;
+    const iframe = document.querySelector(`#win-${w.id} iframe`);
+    if (!iframe || !iframe.contentWindow) return;
+    // 如果命令需要摄像头帧，附上最新一帧
+    if (command.needsFrame && camReady) {
+      camCtx.drawImage(camVideo, 0, 0, 320, 240);
+      command.frame = camCanvas.toDataURL('image/jpeg', 0.6).split(',')[1];
+    }
+    iframe.contentWindow.postMessage(command, '*');
+    console.log('[Soul] 发送指令到', appId, command.type);
+  }
+
+  // 监听来自子应用的消息
+  window.addEventListener('message', (e) => {
+    if (!e.data || !e.data.type) return;
+    // 子应用画完画等事件 → 转发给服务器
+    if (e.data.type === 'soul_draw_done' && ws && ws.readyState === 1) {
+      ws.send(JSON.stringify({ type: 'app_event', event: 'draw_done', thoughts: e.data.thoughts }));
+    }
+  });
 
   function connectWS() {
     if (ws && ws.readyState <= 1) return;
