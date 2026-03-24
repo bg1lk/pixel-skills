@@ -78,15 +78,15 @@ body{background:#0f380f;font-family:'Courier New','Consolas',monospace;color:#0f
 @media(max-width:700px){
   body{align-items:flex-start;}
   #app{width:100vw;height:100vh;border:none;box-shadow:none;}
-  #main{flex-direction:column;overflow-y:auto;overflow-x:hidden;}
-  #toolbar{flex-direction:row;width:100%;height:auto;border-right:none;border-bottom:3px solid #0f380f;flex-wrap:wrap;justify-content:center;padding:4px;flex-shrink:0;}
+  #main{flex-direction:column;}
+  #toolbar{flex-direction:row;width:100%;height:auto;border-right:none;border-bottom:3px solid #0f380f;flex-wrap:wrap;justify-content:center;padding:4px;}
   .tool-btn{width:36px;height:36px;font-size:16px;}
   .tool-sep{width:2px;height:28px;margin:0 2px;}
-  #sidebar{width:100%;flex-direction:row;flex-wrap:wrap;justify-content:center;border-left:none;border-top:3px solid #0f380f;gap:4px;padding:6px;max-height:30vh;overflow-y:auto;flex-shrink:0;}
+  #sidebar{width:100%;flex-direction:row;flex-wrap:wrap;justify-content:center;border-left:none;border-top:3px solid #0f380f;gap:4px;padding:6px;max-height:40vh;overflow-y:auto;}
   .panel-title{display:none;}
   #color-palette{grid-template-columns:repeat(8,1fr);gap:3px;}
   .color-swatch{width:32px;height:32px;}
-  #canvas-area{min-height:50vh;flex-shrink:0;}
+  #canvas-area{min-height:40vh;}
   .action-btn{padding:6px 12px;font-size:12px;min-height:36px;}
   .ai-btn{padding:8px 6px;font-size:12px;min-height:40px;}
   #bottombar{font-size:10px;padding:3px 6px;}
@@ -97,7 +97,7 @@ body{background:#0f380f;font-family:'Courier New','Consolas',monospace;color:#0f
 @media(max-width:400px){
   .tool-btn{width:32px;height:32px;font-size:14px;}
   .color-swatch{width:28px;height:28px;}
-  #sidebar{max-height:25vh;}
+  #sidebar{max-height:35vh;}
 }
 </style>
 </head>
@@ -256,16 +256,9 @@ function initPixels(){
 
 function calcScale(){
   const area = document.getElementById('canvas-area');
-  let aw = area.clientWidth - 20;
-  let ah = area.clientHeight - 20;
-  // iframe/mobile 初始化时可能尺寸为0，多种兜底
-  if (aw < 100) aw = area.offsetWidth - 20;
-  if (ah < 100) ah = area.offsetHeight - 20;
-  if (aw < 100) aw = Math.max(window.innerWidth - 220, window.innerWidth * 0.5);
-  if (ah < 100) ah = Math.max(window.innerHeight - 200, window.innerHeight * 0.4);
-  if (aw < 100) aw = 300;
-  if (ah < 100) ah = 300;
-  SCALE = Math.max(4, Math.min(Math.floor(aw/W), Math.floor(ah/H)));
+  const aw = area.clientWidth - 20;
+  const ah = area.clientHeight - 20;
+  SCALE = Math.max(2, Math.min(Math.floor(aw/W), Math.floor(ah/H)));
 }
 
 function setupCanvases(){
@@ -1137,15 +1130,6 @@ async function soulRandomDraw() {
 initPixels();
 setupCanvases();
 updateColorUI();
-// iframe里可能首次布局不完整，延迟重算
-setTimeout(setupCanvases, 300);
-setTimeout(setupCanvases, 1000);
-setTimeout(setupCanvases, 3000);
-// ResizeObserver: iframe尺寸变化时自动重算
-try {
-  new ResizeObserver(() => setupCanvases()).observe(document.getElementById('canvas-area'));
-} catch(e) {}
-window.addEventListener('resize', () => setupCanvases());
 // ==================== SOUL BRIDGE ====================
 (function() {
   const _app = 'pixel-paint';
@@ -1246,9 +1230,6 @@ window.addEventListener('resize', () => setupCanvases());
       }
     }
   });
-
-  // === WS 直连：接收服务端指令 ===
-  let _ws=null;function _connectWS(){try{_ws=new WebSocket((()=>{const s=localStorage.getItem('daoist_ws');if(s)return s;if(location.hostname.includes('github.io'))return 'ws://localhost:3000/ws';const p=location.protocol==='https:'?'wss:':'ws:';return p+'//'+location.host+'/ws'})());_ws.onmessage=(evt)=>{try{const d=JSON.parse(evt.data);if(d.type==='soul_interact'&&d.app===_app&&d.command){window.dispatchEvent(new MessageEvent('message',{data:d.command.action?{type:'soul_command',...d.command}:d.command}));}}catch(e){}};_ws.onclose=()=>{_ws=null;setTimeout(_connectWS,5000)};_ws.onerror=()=>{}}catch(e){setTimeout(_connectWS,10000)}}_connectWS();
 
   window.parent.postMessage({type:'skill_ready', app:_app}, '*');
 })();
