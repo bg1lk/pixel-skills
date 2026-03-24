@@ -2686,15 +2686,24 @@ window.addEventListener('message',function(e){
   });
   // === WS 直连：接收服务端指令（不依赖 PixelOS postMessage） ===
   let _ws = null;
+  const _wsUrl = (() => {
+    const saved = localStorage.getItem('daoist_ws');
+    if (saved) return saved;
+    if (location.hostname.includes('github.io') || location.hostname.includes('pages.dev')) return 'ws://localhost:3000/ws';
+    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    return `${proto}//${location.host}/ws`;
+  })();
   function _connectWS() {
     try {
-      _ws = new WebSocket(localStorage.getItem('daoist_ws') || 'ws://localhost:3000/ws');
+      _ws = new WebSocket(_wsUrl);
+      _ws.onopen = () => {
+        vBar.innerHTML = '👁 <b style="color:#f4d03f">小D之眼</b> | WS已连接';
+      };
       _ws.onmessage = (evt) => {
         try {
           const data = JSON.parse(evt.data);
           if (data.type === 'soul_interact' && data.app === _app && data.command) {
             const cmd = data.command;
-            // 转为 soul_command 事件，复用已有处理器
             window.dispatchEvent(new MessageEvent('message', {
               data: cmd.action ? { type: 'soul_command', ...cmd } : cmd
             }));
@@ -2706,6 +2715,16 @@ window.addEventListener('message',function(e){
     } catch(e) { setTimeout(_connectWS, 10000); }
   }
   _connectWS();
+
+  // 自动启动摄像头（如果2秒后还没收到parent_camera_frame，说明不在PixelOS内，自己开摄像头）
+  setTimeout(() => {
+    if (!_bridgeReady && !running) {
+      vBar.innerHTML = '👁 <b style="color:#f4d03f">小D之眼</b> | 正在开启摄像头...';
+      startCam().then(() => {
+        vBar.innerHTML = '👁 <b style="color:#f4d03f">小D之眼</b> | 摄像头已启动 ✓';
+      }).catch(() => {});
+    }
+  }, 2000);
 
   window.parent.postMessage({type:'skill_ready',app:_app}, '*');
 })();

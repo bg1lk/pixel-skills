@@ -223,7 +223,7 @@ function cdReset(){
     if (e.data.action === 'stopwatch_start') swToggle();
   });
   // === WS 直连：接收服务端指令 ===
-  let _ws=null;function _connectWS(){try{_ws=new WebSocket(localStorage.getItem('daoist_ws')||'ws://localhost:3000/ws');_ws.onmessage=(evt)=>{try{const d=JSON.parse(evt.data);if(d.type==='soul_interact'&&d.app===_app&&d.command){window.dispatchEvent(new MessageEvent('message',{data:d.command.action?{type:'soul_command',...d.command}:d.command}));}}catch(e){}};_ws.onclose=()=>{_ws=null;setTimeout(_connectWS,5000)};_ws.onerror=()=>{}}catch(e){setTimeout(_connectWS,10000)}}_connectWS();
+  let _ws=null;function _connectWS(){try{_ws=new WebSocket((()=>{const s=localStorage.getItem('daoist_ws');if(s)return s;if(location.hostname.includes('github.io'))return 'ws://localhost:3000/ws';const p=location.protocol==='https:'?'wss:':'ws:';return p+'//'+location.host+'/ws'})());_ws.onmessage=(evt)=>{try{const d=JSON.parse(evt.data);if(d.type==='soul_interact'&&d.app===_app&&d.command){window.dispatchEvent(new MessageEvent('message',{data:d.command.action?{type:'soul_command',...d.command}:d.command}));}}catch(e){}};_ws.onclose=()=>{_ws=null;setTimeout(_connectWS,5000)};_ws.onerror=()=>{}}catch(e){setTimeout(_connectWS,10000)}}_connectWS();
   window.parent.postMessage({type:'skill_ready',app:_app}, '*');
 })();
 </script>
