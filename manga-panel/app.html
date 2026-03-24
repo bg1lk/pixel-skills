@@ -132,7 +132,10 @@ function buildPanels() {
 
 async function initCamera() {
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:'user',width:{ideal:640},height:{ideal:480}}});
+    const stream = await Promise.race([
+      navigator.mediaDevices.getUserMedia({video:{facingMode:'user',width:{ideal:640},height:{ideal:480}}}),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 4000))
+    ]);
     video.srcObject = stream;
     video.addEventListener('loadedmetadata', () => {
       previewCanvas.width = video.videoWidth;
@@ -141,7 +144,7 @@ async function initCamera() {
     });
     statusEl.textContent = '摄像头已启动 - 按空格或点拍摄按钮捕捉画面';
   } catch(e) {
-    statusEl.textContent = '摄像头启动失败: ' + e.message;
+    statusEl.textContent = '等待小D之眼连接...';
   }
 }
 
