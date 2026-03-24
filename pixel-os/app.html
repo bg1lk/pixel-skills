@@ -2908,6 +2908,12 @@ setInterval(()=>{if(naruto.state!=='drag'&&Math.random()<0.15)narutoSpeak();},60
       if (data.thought) showThought(data.thought);
     }
 
+    // 服务器请求最新摄像头帧（画画前用）
+    if (data.type === 'request_camera_frame') {
+      captureAndSend();
+      return;
+    }
+
     if (data.type === 'soul_action') {
       updateStatus(data.status);
       if (data.thought) showThought(data.thought);
@@ -3196,8 +3202,13 @@ setInterval(()=>{if(naruto.state!=='drag'&&Math.random()<0.15)narutoSpeak();},60
     ws.send(JSON.stringify({ type: 'camera_frame', image: base64 }));
   }
 
-  // 每30秒截帧发送给服务器（视觉引擎）
-  setInterval(captureAndSend, 30000);
+  // 每10秒截帧发送给服务器（视觉引擎）
+  setInterval(captureAndSend, 10000);
+
+  // 服务器可以主动请求最新帧（画画前用）
+  window.addEventListener('message', e => {
+    if (e.data && e.data.type === 'request_camera_frame') captureAndSend();
+  });
 
   // 每2秒把摄像头帧广播给所有打开的 skill iframe（摄像头桥接）
   setInterval(() => {
