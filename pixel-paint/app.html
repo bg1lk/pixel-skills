@@ -658,6 +658,13 @@ function clearCanvas(){
   sfxClick();
 }
 
+function getCanvasBase64(){
+  const ec=document.createElement('canvas');ec.width=W;ec.height=H;
+  const ectx=ec.getContext('2d');
+  for(let y=0;y<H;y++) for(let x=0;x<W;x++){if(pixels[y][x]!==null){ectx.fillStyle=pixels[y][x];ectx.fillRect(x,y,1,1);}}
+  return ec.toDataURL('image/png').split(',')[1];
+}
+
 function exportPNG(){
   const ec=document.createElement('canvas');
   ec.width=W;ec.height=H;
@@ -1064,7 +1071,7 @@ Return ONLY valid JSON:
             renderAll(); setProgress(100); sfxExport();
             showThought(analysis.thoughts + '\n\n🎨 画好了！');
             // 通知父窗口画完了
-            window.parent.postMessage({ type: 'soul_draw_done', thoughts: analysis.thoughts }, '*');
+            window.parent.postMessage({ type: 'soul_draw_done', thoughts: analysis.thoughts, image: getCanvasBase64() }, '*');
             setTimeout(() => { setProgress(0); if (btn) { btn.disabled = false; btn.textContent = '🎨 AI 画一幅'; } aiDrawing = false; }, 500);
             return;
           }
@@ -1116,7 +1123,7 @@ async function soulRandomDraw() {
       }
       renderAll(); setProgress(100); sfxExport();
       showThought(`「${theme}」画好了！`);
-      window.parent.postMessage({ type: 'soul_draw_done', thoughts: `画了一幅${theme}` }, '*');
+      window.parent.postMessage({ type: 'soul_draw_done', thoughts: `画了一幅${theme}`, image: getCanvasBase64() }, '*');
       setTimeout(() => { setProgress(0); aiDrawing = false; const btn = document.getElementById('aiDrawBtn'); if (btn) { btn.disabled = false; btn.textContent = '🎨 AI 画一幅'; } }, 500);
     };
     img.src = 'data:image/png;base64,' + imgData;
@@ -1172,7 +1179,7 @@ updateColorUI();
           setProgress(100);
           aiDrawing = false;
           setTimeout(() => setProgress(0), 2000);
-          window.parent.postMessage({ type: 'soul_draw_done', thoughts: cmd.prompt || 'done' }, '*');
+          window.parent.postMessage({ type: 'soul_draw_done', thoughts: cmd.prompt || 'done', image: getCanvasBase64() }, '*');
         }
       }, 50);
     };

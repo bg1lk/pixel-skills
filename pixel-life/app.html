@@ -372,6 +372,12 @@ Return 4-8 objects. x,y are 0-1 normalized.`},
   game.lastScan=Date.now();
   game.generating=false;
   hideGenOverlay();
+
+  // 通知父窗口：像素世界生成完成，附带图片
+  const bgB64 = roomImage.split(',')[1];
+  if (bgB64) {
+    window.parent.postMessage({ type: 'soul_draw_done', thoughts: `在像素世界里发现了「${room.name}」！${room.description?.slice(0,30)||''}`, image: bgB64 }, '*');
+  }
 }
 
 function showGenOverlay(text){

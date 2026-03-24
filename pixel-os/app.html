@@ -3050,7 +3050,7 @@ setInterval(()=>{if(naruto.state!=='drag'&&Math.random()<0.15)narutoSpeak();},60
       hideActivityOverlay();
       showSoulNotify(`小D画完了！${e.data.thoughts ? '"' + e.data.thoughts + '"' : ''}`, 8000);
       if (ws && ws.readyState === 1) {
-        ws.send(JSON.stringify({ type: 'app_event', event: 'draw_done', thoughts: e.data.thoughts }));
+        ws.send(JSON.stringify({ type: 'app_event', event: 'draw_done', thoughts: e.data.thoughts, image: e.data.image }));
       }
     }
     // Skill 加载就绪
