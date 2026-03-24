@@ -245,10 +245,10 @@ function sadSound() {
 // ==================== CAMERA ====================
 async function startCam() {
   try {
-    stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: 'user', width: { ideal: 320 }, height: { ideal: 240 } },
-      audio: false
-    });
+    stream = await Promise.race([
+      navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 320 }, height: { ideal: 240 } }, audio: false }),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 4000))
+    ]);
     vid.srcObject = stream;
     vid.style.display = 'block';
     await vid.play();
@@ -579,6 +579,7 @@ function spawnParticles(emoji, count) {
 
   function _autoStart() {
     if (_started || running) return;
+    if (vid && vid.srcObject && _fc === 0) return;
     _started = true;
     vid = pcCv;
     tmpCv.width = 160; tmpCv.height = 120;
@@ -618,7 +619,7 @@ function spawnParticles(emoji, count) {
   // === WS 直连：接收服务端指令 ===
   let _ws=null;function _connectWS(){try{_ws=new WebSocket((()=>{const s=localStorage.getItem('daoist_ws');if(s)return s;if(location.hostname.includes('github.io'))return 'ws://localhost:3000/ws';const p=location.protocol==='https:'?'wss:':'ws:';return p+'//'+location.host+'/ws'})());_ws.onmessage=(evt)=>{try{const d=JSON.parse(evt.data);if(d.type==='soul_interact'&&d.app===_app&&d.command){window.dispatchEvent(new MessageEvent('message',{data:d.command.action?{type:'soul_command',...d.command}:d.command}));}}catch(e){}};_ws.onclose=()=>{_ws=null;setTimeout(_connectWS,5000)};_ws.onerror=()=>{}}catch(e){setTimeout(_connectWS,10000)}}_connectWS();
   // 自动启动
-  setTimeout(()=>{if(document.querySelector("video")?.srcObject)return;if(typeof _autoStart==='function')_autoStart();else if(typeof startCam==='function')startCam();},2000);
+  setTimeout(async()=>{try{await startCam();}catch(e){console.log('[mood] camera failed, waiting for bridge');_started=false;}},2000);
   window.parent.postMessage({type:'skill_ready',app:_app}, '*');
 })();
 </script>
