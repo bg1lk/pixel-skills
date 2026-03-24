@@ -1133,24 +1133,86 @@ updateColorUI();
 // ==================== SOUL BRIDGE ====================
 (function() {
   const _app = 'pixel-paint';
-  let _autoDrawDone = false;
   let _lastFrame = null;
 
+  // === 服务端生成图片的渲染函数 ===
+  function handleRenderImage(cmd) {
+    if (!cmd || !cmd.image || aiDrawing) return;
+    aiDrawing = true;
+    setProgress(5);
+    const img = new Image();
+    img.onload = () => {
+      const tmpC = document.createElement('canvas');
+      tmpC.width = W; tmpC.height = H;
+      const tmpCtx = tmpC.getContext('2d');
+      tmpCtx.drawImage(img, 0, 0, W, H);
+      const imgData = tmpCtx.getImageData(0, 0, W, H).data;
+      const pixelList = [];
+      for (let y = 0; y < H; y++) {
+        for (let x = 0; x < W; x++) {
+          const i = (y * W + x) * 4;
+          if (imgData[i + 3] > 30) {
+            pixelList.push({ x, y, color: `rgb(${imgData[i]},${imgData[i+1]},${imgData[i+2]})` });
+          }
+        }
+      }
+      initPixels();
+      let idx = 0;
+      const batchSize = Math.max(1, Math.floor(pixelList.length / 60));
+      const drawInterval = setInterval(() => {
+        const end = Math.min(idx + batchSize, pixelList.length);
+        for (; idx < end; idx++) {
+          const p = pixelList[idx];
+          pixels[p.y][p.x] = p.color;
+        }
+        renderAll();
+        setProgress(5 + Math.floor(idx / pixelList.length * 90));
+        if (idx >= pixelList.length) {
+          clearInterval(drawInterval);
+          setProgress(100);
+          aiDrawing = false;
+          setTimeout(() => setProgress(0), 2000);
+          window.parent.postMessage({ type: 'soul_draw_done', thoughts: cmd.prompt || 'done' }, '*');
+        }
+      }, 50);
+    };
+    img.onerror = () => { aiDrawing = false; setProgress(0); };
+    img.src = `data:${cmd.mimeType || 'image/png'};base64,${cmd.image}`;
+  }
+
+  // === 直连 WebSocket — 接收服务端生成的图片（不依赖 PixelOS postMessage 转发） ===
+  let _ws = null;
+  function connectWS() {
+    const wsUrl = (localStorage.getItem('daoist_ws') || 'ws://localhost:3000/ws');
+    try {
+      _ws = new WebSocket(wsUrl);
+      _ws.onmessage = (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          if (data.type === 'soul_interact' && data.app === _app && data.command?.type === 'soul_render_image') {
+            handleRenderImage(data.command);
+          }
+        } catch(err) {}
+      };
+      _ws.onclose = () => { _ws = null; setTimeout(connectWS, 5000); };
+      _ws.onerror = () => { _ws = null; };
+    } catch(e) { setTimeout(connectWS, 10000); }
+  }
+  connectWS();
+
+  // === postMessage 监听（PixelOS 转发的命令 + 摄像头帧） ===
   window.addEventListener('message', e => {
     if (!e.data) return;
 
-    // 接收摄像头帧 — 保存最新帧，首帧时自动开始画画
+    // 接收摄像头帧
     if (e.data.type === 'parent_camera_frame' && e.data.frame) {
       _lastFrame = e.data.frame;
-      if (!_autoDrawDone && !aiDrawing) {
-        _autoDrawDone = true;
-        // 延迟2秒让界面稳定后自动触发soul_draw
-        setTimeout(() => {
-          window.dispatchEvent(new MessageEvent('message', {
-            data: { type: 'soul_draw', frame: _lastFrame, mode: 'portrait' }
-          }));
-        }, 2000);
-      }
+    }
+
+    // 服务端生成的图片（通过 PixelOS postMessage 转发）
+    if (e.data.type === 'soul_render_image' && e.data.image) {
+      handleRenderImage(e.data);
+      return;
     }
 
     // soul_command 标准协议
@@ -1159,7 +1221,6 @@ updateColorUI();
         window.parent.postMessage({type:'skill_status', app:_app, status: aiDrawing ? 'drawing' : 'ready', data:{tool:currentTool, color:fgColor, drawing:aiDrawing}}, '*');
       }
       if (e.data.action === 'draw' && !aiDrawing) {
-        // 小D主动要求画画
         window.dispatchEvent(new MessageEvent('message', {
           data: { type: 'soul_draw', frame: _lastFrame || null, mode: e.data.mode || 'portrait' }
         }));
@@ -1169,16 +1230,6 @@ updateColorUI();
       }
     }
   });
-
-  // 没有摄像头帧时，5秒后也自动画一幅随机画
-  setTimeout(() => {
-    if (!_autoDrawDone && !aiDrawing) {
-      _autoDrawDone = true;
-      window.dispatchEvent(new MessageEvent('message', {
-        data: { type: 'soul_draw', frame: null, mode: 'portrait' }
-      }));
-    }
-  }, 6000);
 
   window.parent.postMessage({type:'skill_ready', app:_app}, '*');
 })();
