@@ -2972,8 +2972,16 @@ setInterval(()=>{if(naruto.state!=='drag'&&Math.random()<0.15)narutoSpeak();},60
       camCtx.drawImage(camVideo, 0, 0, 320, 240);
       command.frame = camCanvas.toDataURL('image/jpeg', 0.6).split(',')[1];
     }
-    iframe.contentWindow.postMessage(command, '*');
-    console.log('[Soul] 发送指令到', appId, command.type);
+    // 自动包装成 soul_command 格式（skill的标准协议）
+    // 但保留 soul_draw 等特殊格式不转换
+    if (command.type === 'soul_command' || command.type === 'soul_draw') {
+      iframe.contentWindow.postMessage(command, '*');
+    } else if (command.action) {
+      iframe.contentWindow.postMessage({type:'soul_command', ...command}, '*');
+    } else {
+      iframe.contentWindow.postMessage(command, '*');
+    }
+    console.log('[Soul] 发送指令到', appId, command);
   }
 
   // 监听来自子应用的消息
@@ -2985,6 +2993,20 @@ setInterval(()=>{if(naruto.state!=='drag'&&Math.random()<0.15)narutoSpeak();},60
       showSoulNotify(`小D画完了！${e.data.thoughts ? '"' + e.data.thoughts + '"' : ''}`, 8000);
       if (ws && ws.readyState === 1) {
         ws.send(JSON.stringify({ type: 'app_event', event: 'draw_done', thoughts: e.data.thoughts }));
+      }
+    }
+    // Skill 加载就绪
+    if (e.data.type === 'skill_ready') {
+      console.log('[Soul] Skill就绪:', e.data.app);
+      if (ws && ws.readyState === 1) {
+        ws.send(JSON.stringify({ type: 'app_event', event: 'skill_ready', app: e.data.app }));
+      }
+    }
+    // Skill 状态回报
+    if (e.data.type === 'skill_status') {
+      console.log('[Soul] Skill状态:', e.data.app, e.data.data);
+      if (ws && ws.readyState === 1) {
+        ws.send(JSON.stringify({ type: 'app_event', event: 'skill_status', app: e.data.app, status: e.data.status, data: e.data.data }));
       }
     }
   });

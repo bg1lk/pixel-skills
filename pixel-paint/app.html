@@ -1133,12 +1133,54 @@ updateColorUI();
 // ==================== SOUL BRIDGE ====================
 (function() {
   const _app = 'pixel-paint';
+  let _autoDrawDone = false;
+  let _lastFrame = null;
+
   window.addEventListener('message', e => {
-    if (!e.data || e.data.type !== 'soul_command') return;
-    if (e.data.action === 'get_status') window.parent.postMessage({type:'skill_status',app:_app,status:'ready',data:{tool:currentTool,color:fgColor}}, '*');
-    if (e.data.action === 'clear') { ctx.clearRect(0,0,canvasW,canvasH); ctx.fillStyle = bgColor; ctx.fillRect(0,0,canvasW,canvasH); }
+    if (!e.data) return;
+
+    // 接收摄像头帧 — 保存最新帧，首帧时自动开始画画
+    if (e.data.type === 'parent_camera_frame' && e.data.frame) {
+      _lastFrame = e.data.frame;
+      if (!_autoDrawDone && !aiDrawing) {
+        _autoDrawDone = true;
+        // 延迟2秒让界面稳定后自动触发soul_draw
+        setTimeout(() => {
+          window.dispatchEvent(new MessageEvent('message', {
+            data: { type: 'soul_draw', frame: _lastFrame, mode: 'portrait' }
+          }));
+        }, 2000);
+      }
+    }
+
+    // soul_command 标准协议
+    if (e.data.type === 'soul_command') {
+      if (e.data.action === 'get_status') {
+        window.parent.postMessage({type:'skill_status', app:_app, status: aiDrawing ? 'drawing' : 'ready', data:{tool:currentTool, color:fgColor, drawing:aiDrawing}}, '*');
+      }
+      if (e.data.action === 'draw' && !aiDrawing) {
+        // 小D主动要求画画
+        window.dispatchEvent(new MessageEvent('message', {
+          data: { type: 'soul_draw', frame: _lastFrame || null, mode: e.data.mode || 'portrait' }
+        }));
+      }
+      if (e.data.action === 'clear') {
+        initPixels(); renderAll();
+      }
+    }
   });
-  window.parent.postMessage({type:'skill_ready',app:_app}, '*');
+
+  // 没有摄像头帧时，5秒后也自动画一幅随机画
+  setTimeout(() => {
+    if (!_autoDrawDone && !aiDrawing) {
+      _autoDrawDone = true;
+      window.dispatchEvent(new MessageEvent('message', {
+        data: { type: 'soul_draw', frame: null, mode: 'portrait' }
+      }));
+    }
+  }, 6000);
+
+  window.parent.postMessage({type:'skill_ready', app:_app}, '*');
 })();
 </script>
 </body>

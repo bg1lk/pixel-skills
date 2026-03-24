@@ -787,11 +787,21 @@ if (saved) {
     if (!e.data || e.data.type !== 'soul_command') return;
     const a = e.data.action;
     if (a === 'get_status') window.parent.postMessage({type:'skill_status',app:_app,status:cat?'playing':'init',data:cat?{name:cat.name,hunger:cat.hunger,happy:cat.happy,level:cat.level}:{}}, '*');
-    if (a === 'feed') doAction('feed');
-    if (a === 'play') doAction('play');
-    if (a === 'pet') doAction('pet');
-    if (a === 'sleep') doAction('sleep');
+    if (a === 'feed' && cat) doAction('feed');
+    if (a === 'play' && cat) doAction('play');
+    if (a === 'pet' && cat) doAction('pet');
+    if (a === 'sleep' && cat) doAction('sleep');
+    if (a === 'treat' && cat) doAction('treat');
+    if (a === 'train' && cat) doAction('train');
   });
+  // 小D打开后，自动做一连串互动（等猫初始化完）
+  setTimeout(() => {
+    if (cat) {
+      doAction('pet');  // 先摸摸
+      setTimeout(() => { if (cat && cat.hunger > 30) doAction('feed'); }, 3000);  // 饿了喂食
+      setTimeout(() => { if (cat) doAction('play'); }, 6000);  // 玩耍
+    }
+  }, 3000);
   window.parent.postMessage({type:'skill_ready',app:_app}, '*');
 })();
 </script>

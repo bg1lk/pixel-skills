@@ -205,7 +205,7 @@ video#srcVid{display:none}
 <script>
 // ==================== CORE SETUP ====================
 const cv=document.getElementById('cv'),ctx=cv.getContext('2d');
-const vid=document.getElementById('srcVid');
+let vid=document.getElementById('srcVid');
 const tmpCv=document.getElementById('tmpCv'),tmpCtx=tmpCv.getContext('2d');
 const arView=document.getElementById('arView');
 let stream=null,running=false,soundOn=true,debugMode=false;
@@ -2623,25 +2623,65 @@ window.addEventListener('message',function(e){
 // ==================== SOUL BRIDGE ====================
 (function() {
   const _app = 'ar-pet';
-  // Vision info bar at top
+  // Vision info bar
   const vBar = document.createElement('div');
   vBar.style.cssText = 'background:#0a2a0a;border:2px solid #3cbcfc;padding:5px 10px;font-size:10px;color:#3cbcfc;text-align:center;letter-spacing:1px;font-family:monospace;width:100%;max-width:640px;margin:4px auto 0;z-index:20;position:relative';
   vBar.innerHTML = '👁 <b style="color:#f4d03f">小D之眼</b> | 等待连接...';
   const _tb = document.querySelector('.title-bar');
   if (_tb) _tb.after(vBar); else document.body.prepend(vBar);
 
-  let _fc = 0;
+  // Camera bridge: receive frames from PixelOS parent and feed into AR canvas
+  const pcCv = document.createElement('canvas');
+  const pcCtx = pcCv.getContext('2d');
+  let _fc = 0, _bridgeReady = false;
+
   window.addEventListener('message', e => {
     if (!e.data) return;
+
+    // Camera frame from PixelOS
     if (e.data.type === 'parent_camera_frame') {
       _fc++;
+      const img = new Image();
+      img.onload = () => {
+        pcCv.width = img.width; pcCv.height = img.height;
+        pcCtx.drawImage(img, 0, 0);
+        // Replace vid with bridge canvas on first frame
+        if (!_bridgeReady) {
+          _bridgeReady = true;
+          Object.defineProperty(pcCv, 'videoWidth', {get:()=>pcCv.width});
+          Object.defineProperty(pcCv, 'videoHeight', {get:()=>pcCv.height});
+          vid = pcCv;
+          // Auto-start AR
+          W = Math.min(320, pcCv.width);
+          H = Math.round(W * pcCv.height / pcCv.width);
+          cv.width = W; cv.height = H;
+          SW = Math.floor(W/2); SH = Math.floor(H/2);
+          tmpCv.width = SW; tmpCv.height = SH;
+          pet.groundY = H * 0.85; pet.y = pet.groundY; pet.x = W / 2; pet._canvasH = H;
+          running = true; prevGray = null;
+          document.getElementById('btnStart').textContent = '⏹ 停止';
+          document.getElementById('btnStart').onclick = stopCam;
+          requestAnimationFrame(loop);
+          setTimeout(() => spawnSpeechTypewriter('小D把我叫出来啦～'), 1500);
+        }
+      };
+      img.src = e.data.frame;
       vBar.innerHTML = '👁 <b style="color:#f4d03f">小D之眼</b> | 已连接 · F' + _fc;
     }
+
     if (e.data.type === 'soul_vision_info') vBar.innerHTML = '👁 <b style="color:#f4d03f">小D看到</b> | ' + e.data.description;
+
+    // Soul commands from 小D
     if (e.data.type === 'soul_command') {
-      if (e.data.action === 'get_status') window.parent.postMessage({type:'skill_status',app:_app,status:'running',data:{pet:typeof pet!=='undefined'?pet.name:'unknown'}}, '*');
-      if (e.data.action === 'pet' && typeof petAPI !== 'undefined') petAPI.pat();
-      if (e.data.action === 'feed' && typeof petAPI !== 'undefined') petAPI.feed();
+      const a = e.data.action;
+      if (a === 'get_status') window.parent.postMessage({type:'skill_status',app:_app,status:running?'running':'idle',data:{pet:pet.name,mood:pet.mood,state:pet.state,brain:brain.enabled}}, '*');
+      if (a === 'pat' && typeof petAPI !== 'undefined') petAPI.pat();
+      if (a === 'feed' && typeof petAPI !== 'undefined') petAPI.feed();
+      if (a === 'play' && typeof petAPI !== 'undefined') petAPI.play();
+      if (a === 'say' && e.data.text && typeof petAPI !== 'undefined') petAPI.say(e.data.text);
+      if (a === 'brain_on' && !brain.enabled) brain.start();
+      if (a === 'brain_off' && brain.enabled) brain.stop();
+      if (a === 'think' && brain.enabled) brain.think('小D要求思考');
     }
   });
   window.parent.postMessage({type:'skill_ready',app:_app}, '*');
