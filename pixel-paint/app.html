@@ -256,9 +256,12 @@ function initPixels(){
 
 function calcScale(){
   const area = document.getElementById('canvas-area');
-  const aw = area.clientWidth - 20;
-  const ah = area.clientHeight - 20;
-  SCALE = Math.max(2, Math.min(Math.floor(aw/W), Math.floor(ah/H)));
+  let aw = area.clientWidth - 20;
+  let ah = area.clientHeight - 20;
+  // iframe 初始化时可能尺寸为0，用窗口尺寸兜底
+  if (aw < 100) aw = window.innerWidth * 0.6;
+  if (ah < 100) ah = window.innerHeight * 0.6;
+  SCALE = Math.max(4, Math.min(Math.floor(aw/W), Math.floor(ah/H)));
 }
 
 function setupCanvases(){
@@ -1130,6 +1133,9 @@ async function soulRandomDraw() {
 initPixels();
 setupCanvases();
 updateColorUI();
+// iframe里可能首次布局不完整，延迟重算
+setTimeout(setupCanvases, 500);
+setTimeout(setupCanvases, 1500);
 // ==================== SOUL BRIDGE ====================
 (function() {
   const _app = 'pixel-paint';
