@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>小D的相册</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:#0f380f;font-family:'Courier New','Consolas',monospace;color:#0f380f;display:flex;justify-content:center;align-items:center;min-height:100vh;overflow:hidden;}
+#app{background:#9bbc0f;border:4px solid #0f380f;box-shadow:8px 8px 0px #306230;width:min(98vw,520px);height:min(96vh,700px);display:flex;flex-direction:column;}
+#titlebar{background:#306230;color:#9bbc0f;padding:6px 14px;font-size:14px;font-weight:bold;letter-spacing:3px;border-bottom:3px solid #0f380f;display:flex;align-items:center;gap:8px;flex-shrink:0;}
+#titlebar span{flex:1;}
+.tab{background:#8bac0f;color:#0f380f;border:2px solid #0f380f;padding:3px 10px;font-family:monospace;font-size:11px;font-weight:bold;cursor:pointer;}
+.tab.active{background:#9bbc0f;box-shadow:inset 2px 2px 0px #306230;}
+
+#view-camera{flex:1;display:flex;flex-direction:column;overflow:hidden;}
+#view-album{flex:1;display:none;flex-direction:column;overflow:hidden;}
+
+#cam-wrap{position:relative;background:#0f380f;border:3px solid #0f380f;margin:8px;flex:1;overflow:hidden;display:flex;align-items:center;justify-content:center;}
+#cam-wrap video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1);}
+#cam-wrap canvas{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;}
+#flash{position:absolute;top:0;left:0;width:100%;height:100%;background:#fcfcfc;opacity:0;pointer-events:none;transition:opacity 0.05s;}
+#caption-bar{display:flex;gap:4px;padding:4px 8px;flex-shrink:0;}
+#caption-input{flex:1;background:#8bac0f;border:2px solid #0f380f;padding:4px 8px;font-family:monospace;font-size:12px;color:#0f380f;outline:none;}
+#caption-input::placeholder{color:#306230;}
+
+.controls{display:flex;gap:6px;justify-content:center;padding:6px;flex-shrink:0;flex-wrap:wrap;}
+button{background:#8bac0f;color:#0f380f;border:3px solid #0f380f;box-shadow:3px 3px 0px #306230;font-family:monospace;font-size:13px;font-weight:bold;padding:8px 16px;cursor:pointer;}
+button:hover{background:#9bbc0f;transform:translate(1px,1px);box-shadow:2px 2px 0px #306230;}
+button:active{transform:translate(3px,3px);box-shadow:none;}
+#snap-btn{background:#e63946;color:#fcfcfc;font-size:16px;padding:10px 28px;}
+
+#album-grid{flex:1;overflow-y:auto;padding:8px;display:grid;grid-template-columns:repeat(3,1fr);gap:6px;}
+.photo-card{background:#306230;border:3px solid #0f380f;cursor:pointer;position:relative;aspect-ratio:1;overflow:hidden;}
+.photo-card img{width:100%;height:100%;object-fit:cover;image-rendering:pixelated;}
+.photo-card .photo-caption{position:absolute;bottom:0;left:0;right:0;background:rgba(15,56,15,0.85);color:#9bbc0f;font-size:9px;padding:2px 4px;text-align:center;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;}
+.photo-card .photo-time{position:absolute;top:2px;right:3px;font-size:8px;color:#8bac0f;background:rgba(15,56,15,0.7);padding:1px 3px;}
+#album-empty{text-align:center;color:#306230;font-weight:bold;padding:40px;font-size:14px;}
+#photo-count{font-size:11px;color:#306230;text-align:center;padding:4px;flex-shrink:0;}
+
+#lightbox{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(15,56,15,0.95);z-index:999;flex-direction:column;align-items:center;justify-content:center;padding:16px;}
+#lightbox img{max-width:90%;max-height:60vh;border:4px solid #9bbc0f;image-rendering:auto;}
+#lightbox .lb-caption{color:#9bbc0f;font-size:14px;font-weight:bold;margin-top:8px;text-align:center;}
+#lightbox .lb-time{color:#8bac0f;font-size:11px;margin-top:4px;}
+#lightbox .lb-controls{display:flex;gap:8px;margin-top:12px;}
+#lightbox .lb-controls button{font-size:12px;padding:6px 14px;}
+
+#bottombar{background:#306230;color:#9bbc0f;padding:4px 10px;font-size:11px;border-top:3px solid #0f380f;flex-shrink:0;text-align:center;}
+
+@media(max-width:600px){
+  body{overflow-y:auto!important;min-height:100vh;}
+  #app{width:100%!important;max-width:100%!important;height:100vh!important;border:none!important;box-shadow:none!important;}
+  button,.tab{min-height:44px;touch-action:manipulation;}
+  input{font-size:16px!important;}
+  #album-grid{grid-template-columns:repeat(2,1fr);}
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="titlebar">
+    <span>&#9733; 小D的相册 &#9733;</span>
+    <div class="tab active" onclick="showView('camera')">拍照</div>
+    <div class="tab" onclick="showView('album')">相册</div>
+  </div>
+
+  <div id="view-camera">
+    <div id="cam-wrap">
+      <video id="video" autoplay playsinline muted></video>
+      <canvas id="overlay-canvas"></canvas>
+      <div id="flash"></div>
+    </div>
+    <div id="caption-bar">
+      <input id="caption-input" type="text" placeholder="写点什么..." maxlength="50">
+    </div>
+    <div class="controls">
+      <button id="snap-btn" onclick="takePhoto()">&#128247; 咔嚓！</button>
+      <button onclick="toggleFilter()">&#9733; 滤镜</button>
+    </div>
+  </div>
+
+  <div id="view-album">
+    <div id="photo-count"></div>
+    <div id="album-grid"></div>
+    <div class="controls">
+      <button onclick="clearAlbum()">清空相册</button>
+      <button onclick="exportAlbum()">导出全部</button>
+    </div>
+  </div>
+
+  <div id="bottombar">&#9617; 记录小D的红尘生活 &#9617;</div>
+</div>
+
+<div id="lightbox" onclick="closeLightbox(event)">
+  <img id="lb-img" src="">
+  <div class="lb-caption" id="lb-caption"></div>
+  <div class="lb-time" id="lb-time"></div>
+  <div class="lb-controls">
+    <button onclick="event.stopPropagation();navPhoto(-1)">&#9664; 上一张</button>
+    <button onclick="event.stopPropagation();deleteCurrentPhoto()">&#10005; 删除</button>
+    <button onclick="event.stopPropagation();navPhoto(1)">下一张 &#9654;</button>
+  </div>
+</div>
+
+<script>
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+function beep(f,d,v=0.08){const o=audioCtx.createOscillator(),g=audioCtx.createGain();o.type='square';o.frequency.value=f;g.gain.value=v;g.gain.exponentialRampToValueAtTime(0.001,audioCtx.currentTime+d);o.connect(g);g.connect(audioCtx.destination);o.start();o.stop(audioCtx.currentTime+d);}
+function sfxShutter(){beep(1200,0.04);setTimeout(()=>beep(800,0.06),50);}
+function sfxClick(){beep(600,0.04);}
+
+const video = document.getElementById('video');
+const flash = document.getElementById('flash');
+const captionInput = document.getElementById('caption-input');
+const snapCanvas = document.createElement('canvas');
+const snapCtx = snapCanvas.getContext('2d');
+
+let photos = [];
+let filterMode = 0;
+const FILTERS = ['none', 'pixel', 'sepia', 'gameboy'];
+let currentLbIndex = -1;
+
+try { photos = JSON.parse(localStorage.getItem('xiaod-album') || '[]'); } catch(e) {}
+
+function showView(v) {
+  document.getElementById('view-camera').style.display = v === 'camera' ? 'flex' : 'none';
+  document.getElementById('view-album').style.display = v === 'album' ? 'flex' : 'none';
+  document.querySelectorAll('.tab').forEach((t, i) => t.classList.toggle('active', (i === 0 && v === 'camera') || (i === 1 && v === 'album')));
+  if (v === 'album') renderAlbum();
+  sfxClick();
+}
+
+async function startCamera() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } } });
+    video.srcObject = stream;
+    await video.play();
+  } catch(e) {
+    document.getElementById('cam-wrap').innerHTML = '<div style="color:#9bbc0f;text-align:center;padding:20px;font-weight:bold;">摄像头启动失败<br>点击重试</div>';
+    document.getElementById('cam-wrap').style.cursor = 'pointer';
+    document.getElementById('cam-wrap').onclick = () => location.reload();
+  }
+}
+
+function applyFilter(ctx, w, h) {
+  if (filterMode === 0) return;
+  const imageData = ctx.getImageData(0, 0, w, h);
+  const d = imageData.data;
+
+  if (filterMode === 1) {
+    // Pixelate
+    const ps = 6;
+    for (let y = 0; y < h; y += ps) for (let x = 0; x < w; x += ps) {
+      const i = (y * w + x) * 4;
+      for (let dy = 0; dy < ps && y + dy < h; dy++) for (let dx = 0; dx < ps && x + dx < w; dx++) {
+        const j = ((y + dy) * w + (x + dx)) * 4;
+        d[j] = d[i]; d[j+1] = d[i+1]; d[j+2] = d[i+2];
+      }
+    }
+  } else if (filterMode === 2) {
+    // Sepia
+    for (let i = 0; i < d.length; i += 4) {
+      const r = d[i], g = d[i+1], b = d[i+2];
+      d[i] = Math.min(255, r * 0.393 + g * 0.769 + b * 0.189);
+      d[i+1] = Math.min(255, r * 0.349 + g * 0.686 + b * 0.168);
+      d[i+2] = Math.min(255, r * 0.272 + g * 0.534 + b * 0.131);
+    }
+  } else if (filterMode === 3) {
+    // GameBoy 4-color
+    const gb = [[15,56,15],[48,98,48],[139,172,15],[155,188,15]];
+    for (let i = 0; i < d.length; i += 4) {
+      const lum = (d[i] * 0.299 + d[i+1] * 0.587 + d[i+2] * 0.114) / 255;
+      const idx = Math.min(3, Math.floor(lum * 4));
+      d[i] = gb[idx][0]; d[i+1] = gb[idx][1]; d[i+2] = gb[idx][2];
+    }
+  }
+  ctx.putImageData(imageData, 0, 0);
+}
+
+function toggleFilter() {
+  filterMode = (filterMode + 1) % FILTERS.length;
+  beep(400 + filterMode * 200, 0.05);
+  document.getElementById('bottombar').textContent = '滤镜: ' + ['原始', '像素', '复古', 'GameBoy'][filterMode];
+  setTimeout(() => { document.getElementById('bottombar').textContent = '░ 记录小D的红尘生活 ░'; }, 2000);
+}
+
+function takePhoto() {
+  if (!video.srcObject && !video._bridgeActive) return;
+
+  sfxShutter();
+  flash.style.opacity = '1';
+  setTimeout(() => { flash.style.opacity = '0'; }, 100);
+
+  const w = video.videoWidth || 640;
+  const h = video.videoHeight || 480;
+  snapCanvas.width = w;
+  snapCanvas.height = h;
+  snapCtx.save();
+  snapCtx.translate(w, 0);
+  snapCtx.scale(-1, 1);
+  snapCtx.drawImage(video, 0, 0, w, h);
+  snapCtx.restore();
+  applyFilter(snapCtx, w, h);
+
+  // Compress to smaller size for storage
+  const thumbCanvas = document.createElement('canvas');
+  thumbCanvas.width = 320;
+  thumbCanvas.height = Math.round(320 * h / w);
+  const tCtx = thumbCanvas.getContext('2d');
+  tCtx.drawImage(snapCanvas, 0, 0, thumbCanvas.width, thumbCanvas.height);
+
+  const dataUrl = thumbCanvas.toDataURL('image/jpeg', 0.7);
+  const caption = captionInput.value.trim() || autoCaption();
+  const now = new Date();
+
+  const photo = {
+    image: dataUrl,
+    caption: caption,
+    time: now.toLocaleString('zh'),
+    timestamp: now.getTime(),
+    filter: FILTERS[filterMode]
+  };
+
+  photos.unshift(photo);
+  if (photos.length > 50) photos.pop();
+  savePhotos();
+  captionInput.value = '';
+
+  // Success feedback
+  beep(523, 0.06); setTimeout(() => beep(659, 0.06), 80); setTimeout(() => beep(784, 0.08), 160);
+}
+
+function autoCaption() {
+  const captions = [
+    '红尘一瞬', '下山所见', '人间烟火', '偷得浮生半日闲',
+    '此刻安好', '路上风景', '小D的一天', '尘世记录',
+    '修行途中', '人间值得', '闲来一拍', '且行且看'
+  ];
+  return captions[Math.floor(Math.random() * captions.length)];
+}
+
+function savePhotos() {
+  try { localStorage.setItem('xiaod-album', JSON.stringify(photos)); } catch(e) {
+    // Storage full, remove oldest
+    while (photos.length > 10) photos.pop();
+    try { localStorage.setItem('xiaod-album', JSON.stringify(photos)); } catch(e2) {}
+  }
+}
+
+function renderAlbum() {
+  const grid = document.getElementById('album-grid');
+  const countEl = document.getElementById('photo-count');
+  countEl.textContent = photos.length > 0 ? photos.length + ' 张照片' : '';
+
+  if (photos.length === 0) {
+    grid.innerHTML = '<div id="album-empty">还没有照片<br>去拍一张吧！</div>';
+    return;
+  }
+
+  grid.innerHTML = photos.map((p, i) => `
+    <div class="photo-card" onclick="openLightbox(${i})">
+      <img src="${p.image}" alt="${p.caption}">
+      <div class="photo-time">${p.time.split(' ')[1] || p.time}</div>
+      <div class="photo-caption">${p.caption}</div>
+    </div>
+  `).join('');
+}
+
+function openLightbox(index) {
+  currentLbIndex = index;
+  const p = photos[index];
+  document.getElementById('lb-img').src = p.image;
+  document.getElementById('lb-caption').textContent = p.caption;
+  document.getElementById('lb-time').textContent = p.time;
+  document.getElementById('lightbox').style.display = 'flex';
+  sfxClick();
+}
+
+function closeLightbox(e) {
+  if (e.target === document.getElementById('lightbox')) {
+    document.getElementById('lightbox').style.display = 'none';
+  }
+}
+
+function navPhoto(dir) {
+  currentLbIndex = (currentLbIndex + dir + photos.length) % photos.length;
+  openLightbox(currentLbIndex);
+}
+
+function deleteCurrentPhoto() {
+  if (currentLbIndex < 0 || currentLbIndex >= photos.length) return;
+  photos.splice(currentLbIndex, 1);
+  savePhotos();
+  beep(300, 0.1);
+  if (photos.length === 0) {
+    document.getElementById('lightbox').style.display = 'none';
+    renderAlbum();
+    return;
+  }
+  if (currentLbIndex >= photos.length) currentLbIndex = photos.length - 1;
+  openLightbox(currentLbIndex);
+  renderAlbum();
+}
+
+function clearAlbum() {
+  if (photos.length === 0) return;
+  photos = [];
+  savePhotos();
+  renderAlbum();
+  beep(200, 0.15);
+}
+
+function exportAlbum() {
+  if (photos.length === 0) return;
+  photos.forEach((p, i) => {
+    const a = document.createElement('a');
+    a.href = p.image;
+    a.download = 'xiaod_' + (i + 1) + '.jpg';
+    a.click();
+  });
+  sfxClick();
+}
+
+// Keyboard
+document.addEventListener('keydown', e => {
+  if (e.key === ' ' && document.getElementById('view-camera').style.display !== 'none' && document.activeElement !== captionInput) {
+    e.preventDefault(); takePhoto();
+  }
+});
+
+// Init camera
+startCamera();
+
+// ==================== SOUL BRIDGE ====================
+(function() {
+  const _app = '相册';
+  window.addEventListener('message', e => {
+    if (!e.data || e.data.type !== 'soul_command') return;
+    if (e.data.action === 'get_status') {
+      window.parent.postMessage({
+        type: 'skill_status', app: _app, status: 'ready',
+        data: { photoCount: photos.length, lastCaption: photos[0]?.caption || '' }
+      }, '*');
+    }
+    if (e.data.action === 'take_photo' || e.data.action === 'snap') {
+      if (e.data.text) captionInput.value = e.data.text;
+      setTimeout(takePhoto, 300);
+    }
+    if (e.data.action === 'set_filter' && e.data.text) {
+      const idx = FILTERS.indexOf(e.data.text);
+      if (idx >= 0) filterMode = idx;
+    }
+    if (e.data.action === 'view_album') {
+      showView('album');
+    }
+  });
+
+  // Auto-take a photo on load (小D记录生活)
+  setTimeout(() => {
+    captionInput.value = autoCaption();
+    takePhoto();
+  }, 2000);
+
+  // === WS direct connection ===
+  let _ws = null;
+  function _connectWS() {
+    try {
+      _ws = new WebSocket((()=>{const s=localStorage.getItem('daoist_ws');if(s)return s;if(location.hostname.includes('github.io'))return 'ws://localhost:3000/ws';const p=location.protocol==='https:'?'wss:':'ws:';return p+'//'+location.host+'/ws'})());
+      _ws.onmessage = (evt) => {
+        try {
+          const d = JSON.parse(evt.data);
+          if (d.type === 'soul_interact' && d.app === _app && d.command) {
+            window.dispatchEvent(new MessageEvent('message', {
+              data: d.command.action ? { type: 'soul_command', ...d.command } : d.command
+            }));
+          }
+        } catch(e) {}
+      };
+      _ws.onclose = () => { _ws = null; setTimeout(_connectWS, 5000); };
+      _ws.onerror = () => {};
+    } catch(e) { setTimeout(_connectWS, 10000); }
+  }
+  _connectWS();
+
+  window.parent.postMessage({ type: 'skill_ready', app: _app }, '*');
+})();
+</script>
+</body>
+</html>

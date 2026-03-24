@@ -175,5 +175,14 @@
     "path": "../喝酒检测器/app.html",
     "description": "检测有没有在喝酒，提醒少喝点，对身体好",
     "camera": true
+  },
+  {
+    "id": "相册",
+    "name": "相册",
+    "icon": "相",
+    "color": "#94c545",
+    "path": "../相册/app.html",
+    "description": "记录小D自己的生活",
+    "camera": true
   }
 ]
