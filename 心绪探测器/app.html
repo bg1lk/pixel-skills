@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mind Reader</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0f380f;font-family:'Courier New',monospace;color:#8bac0f;height:100vh;display:flex;flex-direction:column;overflow:hidden;user-select:none}
+.soul-bar{font-size:10px;padding:3px 8px;background:#0a2a0a;border-bottom:1px solid #306230;color:#306230;display:flex;align-items:center;gap:6px}
+.header{display:flex;justify-content:space-between;align-items:center;padding:6px 10px;background:#0f380f;border-bottom:2px solid #306230}
+.header h1{font-size:13px;color:#9bbc0f;letter-spacing:1px}
+.header .status{font-size:10px;color:#306230}
+.main{flex:1;display:flex;overflow:hidden}
+.cam-panel{flex:1;display:flex;flex-direction:column;position:relative;background:#0a2a0a;min-width:0}
+.cam-wrap{flex:1;position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center}
+#camCanvas{width:100%;height:100%;object-fit:contain;image-rendering:pixelated}
+.no-cam{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#306230;font-size:11px;text-align:center;padding:20px;line-height:1.8}
+.overlay-boxes{position:absolute;inset:0;pointer-events:none}
+.face-box{position:absolute;border:2px solid #8bac0f;box-shadow:0 0 8px rgba(139,172,15,0.3)}
+.face-label{position:absolute;top:-18px;left:0;background:#306230;color:#9bbc0f;font-size:9px;padding:1px 5px;font-family:monospace;white-space:nowrap}
+.face-thought{position:absolute;bottom:-22px;left:0;background:#0f380f;color:#8bac0f;font-size:8px;padding:1px 4px;font-family:monospace;white-space:nowrap;border:1px solid #306230;max-width:160px;overflow:hidden;text-overflow:ellipsis}
+.side-panel{width:200px;min-width:200px;border-left:2px solid #306230;display:flex;flex-direction:column;overflow:hidden;background:#0f380f}
+.panel-title{font-size:11px;padding:6px 8px;background:#0a2a0a;border-bottom:1px solid #306230;color:#9bbc0f;font-weight:bold}
+.people-list{flex:1;overflow-y:auto;padding:4px}
+.person-card{background:#0a2a0a;border:1px solid #306230;margin-bottom:4px;padding:6px;font-size:10px}
+.person-card .p-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:3px}
+.person-card .p-name{color:#9bbc0f;font-weight:bold}
+.person-card .p-mood{font-size:12px}
+.person-card .p-thought{color:#306230;font-size:9px;margin-top:2px;line-height:1.4}
+.person-card .p-bar{height:4px;background:#1a4a1a;margin-top:3px;border:1px solid #306230}
+.person-card .p-bar-fill{height:100%;transition:width 0.3s}
+.mood-summary{padding:6px 8px;border-top:2px solid #306230;font-size:10px;background:#0a2a0a}
+.mood-row{display:flex;justify-content:space-between;margin-bottom:2px}
+.controls{display:flex;gap:4px;padding:6px 8px;border-top:1px solid #306230;background:#0f380f}
+.btn{background:#306230;border:2px solid #0f380f;box-shadow:2px 2px 0 #0a2a0a;color:#8bac0f;font-family:monospace;font-size:10px;padding:3px 8px;cursor:pointer;font-weight:bold;flex:1;text-align:center}
+.btn:hover{background:#8bac0f;color:#0f380f}
+.btn:active{box-shadow:none;transform:translate(1px,1px)}
+.btn.active{background:#8bac0f;color:#0f380f}
+.log-area{max-height:60px;overflow-y:auto;font-size:8px;color:#1a4a1a;padding:4px 8px;border-top:1px solid #1a4a1a}
+@media(max-width:600px){
+  .main{flex-direction:column}
+  .side-panel{width:100%;min-width:0;max-height:40vh;border-left:none;border-top:2px solid #306230}
+}
+</style>
+</head>
+<body>
+<div class="soul-bar" id="vBar">Soul Bridge | waiting...</div>
+<div class="header">
+  <h1>MIND READER v1.0</h1>
+  <span class="status" id="statusText">idle</span>
+</div>
+<div class="main">
+  <div class="cam-panel">
+    <div class="cam-wrap">
+      <canvas id="camCanvas" width="640" height="480"></canvas>
+      <div class="no-cam" id="noCam">[ CAMERA OFF ]<br>click START to begin<br>observing emotions</div>
+      <div class="overlay-boxes" id="overlayBoxes"></div>
+    </div>
+  </div>
+  <div class="side-panel">
+    <div class="panel-title">DETECTED MINDS</div>
+    <div class="people-list" id="peopleList">
+      <div style="padding:12px;color:#306230;text-align:center;font-size:10px">
+        waiting for<br>observation...
+      </div>
+    </div>
+    <div class="mood-summary" id="moodSummary">
+      <div class="mood-row"><span>Group Mood:</span><span id="groupMood">--</span></div>
+      <div class="mood-row"><span>Energy:</span><span id="groupEnergy">--</span></div>
+      <div class="mood-row"><span>People:</span><span id="peopleCount">0</span></div>
+    </div>
+    <div class="controls">
+      <button class="btn" id="btnStart" onclick="toggleDetect()">START</button>
+      <button class="btn" onclick="captureSnapshot()">SNAP</button>
+    </div>
+    <div class="log-area" id="logArea"></div>
+  </div>
+</div>
+
+<script>
+// ===== 8-bit Sounds =====
+const AC=new(window.AudioContext||window.webkitAudioContext)();
+function beep(f=600,d=0.06,v=0.08){try{const o=AC.createOscillator(),g=AC.createGain();o.type='square';o.frequency.value=f;g.gain.value=v;o.connect(g);g.connect(AC.destination);o.start();g.gain.exponentialRampToValueAtTime(0.001,AC.currentTime+d);o.stop(AC.currentTime+d)}catch(e){}}
+function sfxStart(){beep(400,0.05);setTimeout(()=>beep(600,0.05),60);setTimeout(()=>beep(800,0.07),120)}
+function sfxDetect(){beep(1000,0.03,0.05)}
+function sfxSnap(){beep(1200,0.04);setTimeout(()=>beep(800,0.06),50)}
+
+// ===== State =====
+let running=false;
+let video=null;
+let camStream=null;
+const camCanvas=document.getElementById('camCanvas');
+const camCtx=camCanvas.getContext('2d');
+let people=[];
+let analyzeTimer=null;
+let frameCount=0;
+
+// ===== Gemini Config (uses Soul Bridge / parent for API) =====
+const GEMINI_KEY=(()=>{try{return localStorage.getItem('gemini_key')||''}catch(e){return ''}})();
+const GEMINI_URL='https://ai.ssnai.com/gemini/v1beta/models';
+
+// ===== Camera =====
+async function startCamera(){
+  try{
+    camStream=await Promise.race([
+      navigator.mediaDevices.getUserMedia({video:{facingMode:'user',width:{ideal:640},height:{ideal:480}},audio:false}),
+      new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),4000))
+    ]);
+    video=document.createElement('video');
+    video.srcObject=camStream;
+    video.playsInline=true;
+    await video.play();
+    document.getElementById('noCam').style.display='none';
+    drawLoop();
+    log('Camera started');
+    return true;
+  }catch(e){
+    log('Camera failed: '+e.message);
+    return false;
+  }
+}
+function stopCamera(){
+  if(camStream){camStream.getTracks().forEach(t=>t.stop());camStream=null}
+  video=null;
+  document.getElementById('noCam').style.display='flex';
+}
+
+// ===== Draw Loop =====
+let animFrame=null;
+function drawLoop(){
+  if(!video&&!_bridgeActive)return;
+  const src=video||pcCv;
+  if(src.videoWidth||src.width){
+    camCanvas.width=src.videoWidth||src.width;
+    camCanvas.height=src.videoHeight||src.height;
+    camCtx.save();
+    camCtx.translate(camCanvas.width,0);
+    camCtx.scale(-1,1);
+    camCtx.drawImage(src,0,0);
+    camCtx.restore();
+    // Green tint
+    camCtx.fillStyle='rgba(15,56,15,0.15)';
+    camCtx.fillRect(0,0,camCanvas.width,camCanvas.height);
+    // Scanlines
+    camCtx.fillStyle='rgba(15,56,15,0.08)';
+    for(let y=0;y<camCanvas.height;y+=3)camCtx.fillRect(0,y,camCanvas.width,1);
+  }
+  frameCount++;
+  animFrame=requestAnimationFrame(drawLoop);
+}
+
+// ===== Capture frame as base64 =====
+function captureFrame(){
+  const c=document.createElement('canvas');
+  c.width=320;c.height=240;
+  const ctx=c.getContext('2d');
+  const src=video||pcCv;
+  if(src)ctx.drawImage(src,0,0,320,240);
+  return c.toDataURL('image/jpeg',0.6).split(',')[1];
+}
+
+// ===== Analyze with Gemini =====
+async function analyzeFrame(){
+  if(!running)return;
+  const b64=captureFrame();
+  if(!b64||b64.length<100){log('No frame');return}
+  document.getElementById('statusText').textContent='analyzing...';
+
+  try{
+    const key=GEMINI_KEY||'Nmqoo7UOx2z4PW6X7oNkUb8WRCZrDvwB';
+    const res=await fetch(`${GEMINI_URL}/gemini-2.5-flash:generateContent`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json','X-goog-api-key':key},
+      body:JSON.stringify({
+        contents:[{parts:[
+          {text:`You are an emotion and mind reader analyzing a camera frame from a meeting or gathering.
+
+Detect each visible person and analyze their emotional state, body language, and what they might be thinking.
+
+Return ONLY valid JSON array (no markdown fences):
+[
+  {
+    "id": 1,
+    "position": {"x": 0.3, "y": 0.4, "w": 0.2, "h": 0.3},
+    "emotion": "focused|bored|happy|anxious|confused|excited|tired|neutral",
+    "confidence": 0.8,
+    "energy": 0.7,
+    "thought": "short guess of what they might be thinking in Chinese, max 15 chars",
+    "body_language": "brief description in Chinese, max 10 chars"
+  }
+]
+
+position x,y,w,h are normalized 0-1 relative to image.
+If no people visible, return empty array [].
+Be creative and fun with the "thought" guesses.`},
+          {inlineData:{mimeType:'image/jpeg',data:b64}}
+        ]}],
+        generationConfig:{temperature:0.8,maxOutputTokens:2048}
+      })
+    });
+    const data=await res.json();
+    const txt=data.candidates?.[0]?.content?.parts?.[0]?.text||'';
+    const jsonStr=txt.match(/\[[\s\S]*\]/)?.[0];
+    if(jsonStr){
+      const parsed=JSON.parse(jsonStr);
+      if(Array.isArray(parsed)){
+        people=parsed;
+        renderPeople();
+        renderOverlay();
+        updateSummary();
+        if(parsed.length>0)sfxDetect();
+        log('Detected '+parsed.length+' people');
+      }
+    }
+  }catch(e){
+    log('Analysis error: '+e.message);
+  }
+  document.getElementById('statusText').textContent=running?'observing':'idle';
+}
+
+// ===== Render People Cards =====
+function renderPeople(){
+  const el=document.getElementById('peopleList');
+  if(!people.length){
+    el.innerHTML='<div style="padding:12px;color:#306230;text-align:center;font-size:10px">no one detected<br>yet...</div>';
+    return;
+  }
+  const EMOJIS={focused:'-_-',bored:'=_=',happy:':)',anxious:'o_o',confused:'?_?',excited:':D',tired:'-.-',neutral:'._.'};
+  const COLORS={focused:'#8bac0f',bored:'#556b2f',happy:'#9bbc0f',anxious:'#ff8844',confused:'#88aaff',excited:'#ffcc00',tired:'#666688',neutral:'#306230'};
+  el.innerHTML=people.map((p,i)=>`
+    <div class="person-card">
+      <div class="p-head">
+        <span class="p-name">P${p.id||i+1}</span>
+        <span class="p-mood">${EMOJIS[p.emotion]||'._.'} ${p.emotion||'?'}</span>
+      </div>
+      <div class="p-thought">${p.body_language||''}</div>
+      <div class="p-thought" style="color:#8bac0f">"${p.thought||'...'}"</div>
+      <div class="p-bar"><div class="p-bar-fill" style="width:${(p.energy||0.5)*100}%;background:${COLORS[p.emotion]||'#306230'}"></div></div>
+    </div>
+  `).join('');
+}
+
+// ===== Render Overlay Boxes =====
+function renderOverlay(){
+  const el=document.getElementById('overlayBoxes');
+  const cw=camCanvas.clientWidth,ch=camCanvas.clientHeight;
+  const EMOJIS={focused:'-_-',bored:'=_=',happy:':)',anxious:'o_o',confused:'?_?',excited:':D',tired:'-.-',neutral:'._.'};
+  el.innerHTML=people.map((p,i)=>{
+    if(!p.position)return '';
+    const x=p.position.x*cw,y=p.position.y*ch,w=p.position.w*cw,h=p.position.h*ch;
+    return `<div class="face-box" style="left:${x}px;top:${y}px;width:${w}px;height:${h}px">
+      <div class="face-label">${EMOJIS[p.emotion]||'?'} P${p.id||i+1} ${p.emotion||''}</div>
+      <div class="face-thought">"${(p.thought||'').slice(0,20)}"</div>
+    </div>`;
+  }).join('');
+}
+
+// ===== Update Summary =====
+function updateSummary(){
+  document.getElementById('peopleCount').textContent=people.length;
+  if(!people.length){
+    document.getElementById('groupMood').textContent='--';
+    document.getElementById('groupEnergy').textContent='--';
+    return;
+  }
+  // Most common emotion
+  const counts={};
+  people.forEach(p=>{counts[p.emotion]=(counts[p.emotion]||0)+1});
+  const topMood=Object.entries(counts).sort((a,b)=>b[1]-a[1])[0]?.[0]||'neutral';
+  document.getElementById('groupMood').textContent=topMood;
+  // Avg energy
+  const avgE=people.reduce((s,p)=>s+(p.energy||0.5),0)/people.length;
+  const bars='|'.repeat(Math.round(avgE*10))+'_'.repeat(10-Math.round(avgE*10));
+  document.getElementById('groupEnergy').textContent=`[${bars}]`;
+}
+
+// ===== Toggle Detection =====
+async function toggleDetect(){
+  if(running){
+    running=false;
+    if(analyzeTimer)clearInterval(analyzeTimer);
+    analyzeTimer=null;
+    document.getElementById('btnStart').textContent='START';
+    document.getElementById('btnStart').classList.remove('active');
+    document.getElementById('statusText').textContent='idle';
+    stopCamera();
+    if(animFrame)cancelAnimationFrame(animFrame);
+    log('Stopped');
+    return;
+  }
+  running=true;
+  sfxStart();
+  document.getElementById('btnStart').textContent='STOP';
+  document.getElementById('btnStart').classList.add('active');
+  document.getElementById('statusText').textContent='starting...';
+
+  if(!_bridgeActive){
+    const ok=await startCamera();
+    if(!ok){
+      document.getElementById('noCam').innerHTML='[ WAITING FOR BRIDGE ]<br>camera unavailable<br>waiting for Soul Bridge...';
+      log('Waiting for bridge frames');
+    }
+  }else{
+    document.getElementById('noCam').style.display='none';
+    drawLoop();
+  }
+
+  // Analyze every 8 seconds
+  analyzeFrame();
+  analyzeTimer=setInterval(analyzeFrame,8000);
+  log('Detection started (8s interval)');
+}
+
+// ===== Snapshot =====
+function captureSnapshot(){
+  sfxSnap();
+  analyzeFrame();
+  log('Snapshot taken');
+}
+
+// ===== Log =====
+function log(msg){
+  const el=document.getElementById('logArea');
+  const t=new Date().toLocaleTimeString();
+  el.innerHTML+=`<div>[${t}] ${msg}</div>`;
+  el.scrollTop=el.scrollHeight;
+}
+
+// ==================== SOUL BRIDGE ====================
+(function(){
+  const _app='心绪探测器';
+  const vBar=document.getElementById('vBar');
+
+  const pcCv=document.createElement('canvas');
+  pcCv.width=320;pcCv.height=240;
+  const pcCtx=pcCv.getContext('2d');
+  Object.defineProperty(pcCv,'videoWidth',{get:()=>320});
+  Object.defineProperty(pcCv,'videoHeight',{get:()=>240});
+  let _started=false,_fc=0;
+  window._bridgeActive=false;
+  window.pcCv=pcCv;
+
+  function _autoStart(){
+    if(_started)return;
+    if(video&&video.srcObject&&_fc===0)return;
+    _started=true;
+    window._bridgeActive=true;
+    video=pcCv;
+    document.getElementById('noCam').style.display='none';
+    if(!running){toggleDetect()}
+    else{drawLoop()}
+  }
+
+  window.addEventListener('message',e=>{
+    if(!e.data)return;
+    if(e.data.type==='parent_camera_frame'){
+      const img=new Image();
+      img.onload=()=>{pcCtx.drawImage(img,0,0,320,240);_fc++;vBar.innerHTML='Soul Bridge | connected F'+_fc;_autoStart()};
+      img.src='data:image/jpeg;base64,'+e.data.frame;
+    }
+    if(e.data.type==='soul_vision_info'){vBar.innerHTML='Soul | '+e.data.description}
+    if(e.data.type==='soul_command'){
+      if(e.data.action==='get_status'){
+        window.parent.postMessage({type:'skill_status',app:_app,status:running?'detecting':'idle',data:{people:people.length,groupMood:document.getElementById('groupMood').textContent}}, '*');
+      }
+      if(e.data.action==='start'){if(!running)toggleDetect()}
+      if(e.data.action==='snap'){captureSnapshot()}
+    }
+  });
+
+  // === WS Direct Connection ===
+  let _ws=null;
+  function _connectWS(){
+    try{
+      const wsUrl=(()=>{const s=localStorage.getItem('daoist_ws');if(s)return s;if(location.hostname.includes('github.io'))return 'ws://localhost:3000/ws';const p=location.protocol==='https:'?'wss:':'ws:';return p+'//'+location.host+'/ws'})();
+      _ws=new WebSocket(wsUrl);
+      _ws.onopen=()=>{vBar.innerHTML='Soul Bridge | WS connected'};
+      _ws.onmessage=(evt)=>{try{const d=JSON.parse(evt.data);if(d.type==='soul_interact'&&d.app===_app&&d.command){window.dispatchEvent(new MessageEvent('message',{data:d.command.action?{type:'soul_command',...d.command}:d.command}))}}catch(e){}};
+      _ws.onclose=()=>{_ws=null;setTimeout(_connectWS,5000)};
+      _ws.onerror=()=>{};
+    }catch(e){setTimeout(_connectWS,10000)}
+  }
+  _connectWS();
+
+  // Auto-start
+  setTimeout(async()=>{
+    try{await startCamera();if(!running)toggleDetect()}catch(e){console.log('[mind] camera failed, waiting for bridge');_started=false}
+  },2000);
+
+  window.parent.postMessage({type:'skill_ready',app:_app}, '*');
+})();
+</script>
+</body>
+</html>

@@ -192,5 +192,14 @@
     "color": "#0074d1",
     "path": "../日记/app.html",
     "description": "记录我的每日所思所感"
+  },
+  {
+    "id": "心绪探测器",
+    "name": "心绪探测器",
+    "icon": "心",
+    "color": "#3a7b61",
+    "path": "../心绪探测器/app.html",
+    "description": "通过摄像头和图片，观察人们在会议或聚会中的情绪与心思。",
+    "camera": true
   }
 ]
