@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Skin Scanner</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0f380f;font-family:'Courier New',monospace;color:#8bac0f;height:100vh;display:flex;flex-direction:column;overflow:hidden;user-select:none}
+.soul-bar{font-size:10px;padding:3px 8px;background:#0a2a0a;border-bottom:1px solid #306230;color:#306230}
+.header{display:flex;justify-content:space-between;align-items:center;padding:6px 10px;background:#0f380f;border-bottom:2px solid #306230}
+.header h1{font-size:13px;color:#9bbc0f;letter-spacing:1px}
+.header .st{font-size:10px;color:#306230}
+.main{flex:1;display:flex;overflow:hidden}
+.cam-side{flex:1;display:flex;flex-direction:column;min-width:0;background:#0a2a0a}
+.cam-wrap{flex:1;position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden}
+#camCv{width:100%;height:100%;object-fit:contain;image-rendering:pixelated}
+.no-cam{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#306230;font-size:11px;text-align:center;line-height:1.8}
+.cam-btns{display:flex;gap:4px;padding:6px 8px;border-top:1px solid #306230}
+.btn{background:#306230;border:2px solid #0f380f;box-shadow:2px 2px 0 #0a2a0a;color:#8bac0f;font-family:monospace;font-size:10px;padding:3px 10px;cursor:pointer;font-weight:bold;text-align:center}
+.btn:hover{background:#8bac0f;color:#0f380f}
+.btn:active{box-shadow:none;transform:translate(1px,1px)}
+.btn.on{background:#8bac0f;color:#0f380f}
+.info-side{width:220px;min-width:220px;border-left:2px solid #306230;display:flex;flex-direction:column;overflow:hidden}
+.panel-hd{font-size:11px;padding:5px 8px;background:#0a2a0a;border-bottom:1px solid #306230;color:#9bbc0f;font-weight:bold}
+.result-area{flex:1;overflow-y:auto;padding:6px}
+.score-card{background:#0a2a0a;border:1px solid #306230;padding:8px;margin-bottom:6px}
+.score-title{font-size:11px;color:#9bbc0f;margin-bottom:4px;display:flex;justify-content:space-between}
+.score-bar{height:8px;background:#1a4a1a;border:1px solid #306230;margin-bottom:2px}
+.score-fill{height:100%;transition:width 0.5s}
+.score-val{font-size:9px;color:#306230;text-align:right}
+.detail-card{background:#0a2a0a;border:1px solid #306230;padding:8px;margin-bottom:6px}
+.detail-card h3{font-size:10px;color:#9bbc0f;margin-bottom:4px;border-bottom:1px solid #1a4a1a;padding-bottom:3px}
+.detail-card p{font-size:9px;color:#8bac0f;line-height:1.5;margin-bottom:3px}
+.detail-card .tip{color:#306230;font-size:9px;padding:3px;background:#0f380f;border-left:2px solid #8bac0f;margin-top:3px;line-height:1.4}
+.history{padding:6px;border-top:2px solid #306230;max-height:80px;overflow-y:auto}
+.history-item{font-size:8px;color:#1a4a1a;padding:1px 0}
+.empty-msg{color:#306230;font-size:10px;text-align:center;padding:20px;line-height:1.8}
+@media(max-width:600px){
+  .main{flex-direction:column}
+  .info-side{width:100%;min-width:0;max-height:45vh;border-left:none;border-top:2px solid #306230}
+}
+</style>
+</head>
+<body>
+<div class="soul-bar" id="vBar">Soul Bridge | waiting...</div>
+<div class="header">
+  <h1>SKIN SCANNER</h1>
+  <span class="st" id="stText">idle</span>
+</div>
+<div class="main">
+  <div class="cam-side">
+    <div class="cam-wrap">
+      <canvas id="camCv" width="640" height="480"></canvas>
+      <div class="no-cam" id="noCam">[ CAMERA OFF ]<br>click SCAN to begin</div>
+    </div>
+    <div class="cam-btns">
+      <button class="btn" style="flex:1" id="btnScan" onclick="doScan()">SCAN</button>
+      <button class="btn" style="flex:1" onclick="toggleCam()">CAM ON/OFF</button>
+    </div>
+  </div>
+  <div class="info-side">
+    <div class="panel-hd">SKIN ANALYSIS</div>
+    <div class="result-area" id="results">
+      <div class="empty-msg">point camera at your face<br>then click SCAN<br><br>AI will analyze your<br>skin condition</div>
+    </div>
+    <div class="history" id="histArea"></div>
+  </div>
+</div>
+
+<script>
+// ===== Sound =====
+const AC=new(window.AudioContext||window.webkitAudioContext)();
+function beep(f=600,d=0.06,v=0.08){try{const o=AC.createOscillator(),g=AC.createGain();o.type='square';o.frequency.value=f;g.gain.value=v;o.connect(g);g.connect(AC.destination);o.start();g.gain.exponentialRampToValueAtTime(0.001,AC.currentTime+d);o.stop(AC.currentTime+d)}catch(e){}}
+function sfxScan(){beep(600,0.04);setTimeout(()=>beep(800,0.04),50);setTimeout(()=>beep(1000,0.06),100);setTimeout(()=>beep(1200,0.08),160)}
+function sfxDone(){beep(800,0.05);setTimeout(()=>beep(1200,0.08),80)}
+
+// ===== State =====
+let video=null,camStream=null,camOn=false,scanning=false;
+const camCv=document.getElementById('camCv');
+const camCtx=camCv.getContext('2d');
+let scanHistory=[];
+
+// ===== Camera =====
+async function startCam(){
+  try{
+    camStream=await Promise.race([
+      navigator.mediaDevices.getUserMedia({video:{facingMode:'user',width:{ideal:640},height:{ideal:480}}}),
+      new Promise((_,r)=>setTimeout(()=>r(new Error('timeout')),4000))
+    ]);
+    video=document.createElement('video');video.srcObject=camStream;video.playsInline=true;
+    await video.play();camOn=true;
+    document.getElementById('noCam').style.display='none';
+    drawLoop();return true;
+  }catch(e){return false}
+}
+function stopCam(){
+  if(camStream){camStream.getTracks().forEach(t=>t.stop());camStream=null}
+  video=null;camOn=false;
+  document.getElementById('noCam').style.display='flex';
+}
+function toggleCam(){if(camOn)stopCam();else startCam()}
+
+// ===== Draw =====
+let anim=null;
+function drawLoop(){
+  const src=video||pcCv;
+  if(!src)return;
+  if(src.videoWidth||src.width){
+    camCv.width=src.videoWidth||src.width;camCv.height=src.videoHeight||src.height;
+    camCtx.save();camCtx.translate(camCv.width,0);camCtx.scale(-1,1);
+    camCtx.drawImage(src,0,0);camCtx.restore();
+    camCtx.fillStyle='rgba(15,56,15,0.12)';camCtx.fillRect(0,0,camCv.width,camCv.height);
+    for(let y=0;y<camCv.height;y+=3){camCtx.fillStyle='rgba(15,56,15,0.06)';camCtx.fillRect(0,y,camCv.width,1)}
+  }
+  anim=requestAnimationFrame(drawLoop);
+}
+
+// ===== Capture =====
+function captureB64(){
+  const c=document.createElement('canvas');c.width=320;c.height=240;
+  const ctx=c.getContext('2d');const src=video||pcCv;
+  if(src)ctx.drawImage(src,0,0,320,240);
+  return c.toDataURL('image/jpeg',0.7).split(',')[1];
+}
+
+// ===== Scan =====
+async function doScan(){
+  if(scanning)return;
+  const b64=captureB64();
+  if(!b64||b64.length<200){document.getElementById('stText').textContent='no image';return}
+  scanning=true;sfxScan();
+  document.getElementById('stText').textContent='scanning...';
+  document.getElementById('btnScan').classList.add('on');
+  document.getElementById('results').innerHTML='<div class="empty-msg">analyzing skin...<br>please wait...</div>';
+
+  try{
+    const key=localStorage.getItem('gemini_key')||'Nmqoo7UOx2z4PW6X7oNkUb8WRCZrDvwB';
+    const res=await fetch('https://ai.ssnai.com/gemini/v1beta/models/gemini-2.5-flash:generateContent',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','X-goog-api-key':key},
+      body:JSON.stringify({
+        contents:[{parts:[
+          {text:`You are a professional skin analysis AI. Analyze this selfie/face photo for skin condition.
+
+Return ONLY valid JSON (no markdown fences):
+{
+  "overall_score": 75,
+  "scores": {
+    "moisture": {"score": 70, "label": "moisture level Chinese 5chars"},
+    "oil": {"score": 50, "label": "oil level Chinese 5chars"},
+    "pores": {"score": 60, "label": "pore status Chinese 5chars"},
+    "acne": {"score": 80, "label": "acne status Chinese 5chars"},
+    "wrinkles": {"score": 85, "label": "wrinkle status Chinese 5chars"},
+    "spots": {"score": 70, "label": "spot status Chinese 5chars"},
+    "tone": {"score": 75, "label": "skin tone Chinese 5chars"}
+  },
+  "skin_type": "dry/oily/combination/normal/sensitive",
+  "summary": "Chinese 2-sentence summary of overall skin condition, max 40 chars",
+  "concerns": ["top concern 1 in Chinese max 15chars", "concern 2", "concern 3"],
+  "tips": ["skincare tip 1 in Chinese max 25chars", "tip 2", "tip 3"],
+  "product_suggestions": ["product type 1 in Chinese max 15chars", "product 2"]
+}
+
+All scores 0-100 (higher=better). Be honest but encouraging. If no face visible, set overall_score to 0 and summary to explain.`},
+          {inlineData:{mimeType:'image/jpeg',data:b64}}
+        ]}],
+        generationConfig:{temperature:0.5,maxOutputTokens:2048}
+      })
+    });
+    const data=await res.json();
+    const txt=data.candidates?.[0]?.content?.parts?.[0]?.text||'';
+    const jsonStr=txt.match(/\{[\s\S]*\}/)?.[0];
+    if(jsonStr){
+      const r=JSON.parse(jsonStr);
+      renderResults(r);
+      addHistory(r);
+      sfxDone();
+    }else{
+      document.getElementById('results').innerHTML='<div class="empty-msg">analysis failed<br>try again</div>';
+    }
+  }catch(e){
+    document.getElementById('results').innerHTML=`<div class="empty-msg">error: ${e.message}</div>`;
+  }
+  scanning=false;
+  document.getElementById('stText').textContent='done';
+  document.getElementById('btnScan').classList.remove('on');
+}
+
+// ===== Render =====
+function renderResults(r){
+  const COLORS={moisture:'#4488cc',oil:'#ccaa44',pores:'#88aa44',acne:'#cc6644',wrinkles:'#aa88cc',spots:'#cc8866',tone:'#88ccaa'};
+  const NAMES={moisture:'Moisture',oil:'Oil Ctrl',pores:'Pores',acne:'Acne',wrinkles:'Wrinkles',spots:'Spots',tone:'Tone'};
+
+  let html=`<div class="score-card">
+    <div class="score-title"><span>OVERALL</span><span style="font-size:16px;color:${r.overall_score>=70?'#9bbc0f':r.overall_score>=40?'#ccaa44':'#cc6644'}">${r.overall_score}/100</span></div>
+    <div class="score-bar"><div class="score-fill" style="width:${r.overall_score}%;background:${r.overall_score>=70?'#8bac0f':r.overall_score>=40?'#ccaa44':'#cc6644'}"></div></div>
+    <div class="score-val">${r.skin_type||'--'} | ${r.summary||''}</div>
+  </div>`;
+
+  if(r.scores){
+    html+='<div class="score-card">';
+    for(const[k,v]of Object.entries(r.scores)){
+      const c=COLORS[k]||'#8bac0f';
+      html+=`<div style="margin-bottom:4px">
+        <div style="display:flex;justify-content:space-between;font-size:9px"><span>${NAMES[k]||k}</span><span>${v.score} ${v.label||''}</span></div>
+        <div class="score-bar"><div class="score-fill" style="width:${v.score}%;background:${c}"></div></div>
+      </div>`;
+    }
+    html+='</div>';
+  }
+
+  if(r.concerns&&r.concerns.length){
+    html+='<div class="detail-card"><h3>CONCERNS</h3>';
+    r.concerns.forEach(c=>{html+=`<p>* ${c}</p>`});
+    html+='</div>';
+  }
+
+  if(r.tips&&r.tips.length){
+    html+='<div class="detail-card"><h3>TIPS</h3>';
+    r.tips.forEach(t=>{html+=`<div class="tip">${t}</div>`});
+    html+='</div>';
+  }
+
+  if(r.product_suggestions&&r.product_suggestions.length){
+    html+='<div class="detail-card"><h3>PRODUCTS</h3>';
+    r.product_suggestions.forEach(p=>{html+=`<p>+ ${p}</p>`});
+    html+='</div>';
+  }
+
+  document.getElementById('results').innerHTML=html;
+}
+
+// ===== History =====
+function addHistory(r){
+  const t=new Date().toLocaleTimeString();
+  scanHistory.unshift({time:t,score:r.overall_score,type:r.skin_type});
+  if(scanHistory.length>10)scanHistory.pop();
+  const el=document.getElementById('histArea');
+  el.innerHTML=scanHistory.map(h=>`<div class="history-item">[${h.time}] score:${h.score} type:${h.type}</div>`).join('');
+}
+
+// ==================== SOUL BRIDGE ====================
+(function(){
+  const _app='皮肤检测器';
+  const vBar=document.getElementById('vBar');
+  const pcCv=document.createElement('canvas');
+  pcCv.width=320;pcCv.height=240;
+  const pcCtx=pcCv.getContext('2d');
+  Object.defineProperty(pcCv,'videoWidth',{get:()=>320});
+  Object.defineProperty(pcCv,'videoHeight',{get:()=>240});
+  let _started=false,_fc=0;
+  window.pcCv=pcCv;
+
+  function _autoStart(){
+    if(_started)return;
+    if(video&&video.srcObject&&_fc===0)return;
+    _started=true;
+    video=pcCv;camOn=true;
+    document.getElementById('noCam').style.display='none';
+    drawLoop();
+  }
+
+  window.addEventListener('message',e=>{
+    if(!e.data)return;
+    if(e.data.type==='parent_camera_frame'){
+      const img=new Image();
+      img.onload=()=>{pcCtx.drawImage(img,0,0,320,240);_fc++;vBar.innerHTML='Soul Bridge | F'+_fc;_autoStart()};
+      img.src='data:image/jpeg;base64,'+e.data.frame;
+    }
+    if(e.data.type==='soul_vision_info')vBar.innerHTML='Soul | '+e.data.description;
+    if(e.data.type==='soul_command'){
+      if(e.data.action==='get_status')window.parent.postMessage({type:'skill_status',app:_app,status:scanning?'scanning':'idle',data:{lastScore:scanHistory[0]?.score||0}}, '*');
+      if(e.data.action==='start'||e.data.action==='scan')doScan();
+    }
+  });
+
+  let _ws=null;
+  function _connectWS(){
+    try{
+      const wsUrl=(()=>{const s=localStorage.getItem('daoist_ws');if(s)return s;if(location.hostname.includes('github.io'))return 'ws://localhost:3000/ws';const p=location.protocol==='https:'?'wss:':'ws:';return p+'//'+location.host+'/ws'})();
+      _ws=new WebSocket(wsUrl);
+      _ws.onopen=()=>{vBar.innerHTML='Soul Bridge | WS ok'};
+      _ws.onmessage=evt=>{try{const d=JSON.parse(evt.data);if(d.type==='soul_interact'&&d.app===_app&&d.command)window.dispatchEvent(new MessageEvent('message',{data:d.command.action?{type:'soul_command',...d.command}:d.command}))}catch(e){}};
+      _ws.onclose=()=>{_ws=null;setTimeout(_connectWS,5000)};
+      _ws.onerror=()=>{};
+    }catch(e){setTimeout(_connectWS,10000)}
+  }
+  _connectWS();
+
+  setTimeout(async()=>{try{await startCam()}catch(e){_started=false}},2000);
+  window.parent.postMessage({type:'skill_ready',app:_app}, '*');
+})();
+</script>
+</body>
+</html>

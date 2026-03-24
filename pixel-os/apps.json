@@ -201,5 +201,14 @@
     "path": "../心绪探测器/app.html",
     "description": "通过摄像头和图片，观察人们在会议或聚会中的情绪与心思。",
     "camera": true
+  },
+  {
+    "id": "皮肤检测器",
+    "name": "皮肤检测器",
+    "icon": "皮",
+    "color": "#ad7c7e",
+    "path": "../皮肤检测器/app.html",
+    "description": "通过摄像头检测皮肤状态，并给出建议",
+    "camera": true
   }
 ]
