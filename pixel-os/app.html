@@ -3026,6 +3026,8 @@ setInterval(()=>{if(naruto.state!=='drag'&&Math.random()<0.15)narutoSpeak();},60
       if (c) { c.style.color = '#58d854'; c.textContent = '⬤'; }
       const a = soulActivity();
       if (a) a.textContent = '已连接';
+      // WS连接成功后自动启动摄像头
+      if (!camReady) startCamera();
     };
 
     ws.onmessage = (e) => {
