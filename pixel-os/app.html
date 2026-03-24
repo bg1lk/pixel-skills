@@ -485,39 +485,73 @@ body {
   0%,100% { opacity: 0.7; }
   50% { opacity: 1; }
 }
+@keyframes soulBubblePop {
+  0% { transform: translateX(-50%) scale(0.5); opacity: 0; }
+  50% { transform: translateX(-50%) scale(1.1); opacity: 1; }
+  100% { transform: translateX(-50%) scale(1); opacity: 1; }
+}
 .screen.cyber .taskbar { animation: neon-pulse 3s ease-in-out infinite; }
 
 /* ===== RESPONSIVE ===== */
 @media (max-width: 700px) {
-  .crt-shell { padding: 0; border-radius: 0; width: 100vw; height: 100vh; max-width: none; max-height: none; background: none; box-shadow: none; }
+  html, body { overflow: hidden; position: fixed; width: 100%; height: 100%; }
+  .crt-shell { padding: 0; border-radius: 0; width: 100vw; height: 100vh; height: 100dvh; max-width: none; max-height: none; background: #1a1a2e; box-shadow: none; }
   .crt-bottom { display: none; }
-  .screen { border: none; }
-  .screen::before, .screen::after { display: none; } /* remove scanlines on mobile for perf */
-  .desktop { bottom: 48px; }
-  .desk-icons { gap: 10px; padding: 12px; }
-  .d-icon { width: 68px; }
-  .d-icon-gfx { width: 36px; height: 36px; }
-  .d-label { font-size: 10px; }
+  .screen { border: none; border-radius: 0; }
+  .screen::before, .screen::after { display: none; }
+  .desktop { bottom: 48px; top: 0; }
+  .desk-icons { gap: 8px; padding: 10px 8px; justify-content: flex-start; align-content: flex-start; }
+  .d-icon { width: 64px; }
+  .d-icon-gfx { width: 36px; height: 36px; font-size: 18px; }
+  .d-label { font-size: 9px; }
   .taskbar { height: 48px; }
-  .menu-btn { height: 38px; font-size: 13px; padding: 0 14px; }
-  .t-area { gap: 4px; }
-  .t-item { min-width: 50px; max-width: 80px; font-size: 8px; height: 32px; }
-  .tray { height: 38px; padding: 0 8px; }
-  .tray-clk { font-size: 12px; }
-  .game-menu { width: 260px; bottom: 48px; }
-  .gm-item { padding: 10px 16px; font-size: 13px; }
-  .window { min-width: 100px; min-height: 80px; }
-  .window .w-title { height: 32px; }
-  .window .w-btn { width: 26px; height: 26px; font-size: 12px; }
-  .w-resize { width: 24px; height: 24px; }
-  .ctx-menu { font-size: 13px; }
-  .cx-item { padding: 10px 16px; }
+  .menu-btn { height: 40px; font-size: 13px; padding: 0 12px; min-width: 44px; }
+  .t-area { gap: 3px; overflow: hidden; }
+  .t-item { min-width: 44px; max-width: 70px; font-size: 8px; height: 32px; padding: 0 4px; }
+  .tray { height: 40px; padding: 0 6px; gap: 4px; }
+  .tray-clk { font-size: 11px; }
+  .game-menu { width: 260px; bottom: 48px; max-height: 70vh; overflow-y: auto; }
+  .gm-item { padding: 12px 16px; font-size: 14px; min-height: 44px; }
+  /* 窗口在手机上强制全屏 */
+  .window { min-width: unset !important; min-height: unset !important; border-width: 2px; }
+  .window.max { height: calc(100% - 48px) !important; border: none; box-shadow: none; }
+  .window .w-title { height: 34px; padding: 0 4px; }
+  .window .w-btn { width: 28px; height: 28px; font-size: 13px; min-width: 28px; min-height: 28px; }
+  .w-resize { display: none; }
+  .ctx-menu { font-size: 14px; }
+  .cx-item { padding: 12px 16px; min-height: 44px; }
+  /* iframe全屏 */
+  .window iframe { width: 100% !important; height: 100% !important; }
 }
-@media (max-width: 500px) {
-  .desk-icons { gap: 6px; padding: 8px; }
-  .d-icon { width: 62px; }
-  .t-item { display: none; } /* hide taskbar items on very small screens */
-  .game-menu { left: 0; right: 0; width: auto; margin: 0 4px; }
+@media (max-width: 420px) {
+  .desk-icons { gap: 6px; padding: 6px; }
+  .d-icon { width: 58px; }
+  .d-icon-gfx { width: 32px; height: 32px; font-size: 16px; }
+  .d-label { font-size: 8px; }
+  .t-item { display: none; }
+  .game-menu { left: 0; right: 0; width: auto; margin: 0; border-radius: 0; }
+  .tray-clk { font-size: 10px; }
+}
+/* 横屏手机：高度不足时压缩布局 */
+@media (max-height: 500px) and (max-width: 900px) {
+  .crt-shell { padding: 0; border-radius: 0; width: 100vw; height: 100vh; height: 100dvh; max-width: none; max-height: none; background: #1a1a2e; box-shadow: none; }
+  .crt-bottom { display: none; }
+  .screen { border: none; border-radius: 0; }
+  .screen::before, .screen::after { display: none; }
+  .desktop { bottom: 36px; top: 0; }
+  .desk-icons { gap: 4px; padding: 6px; flex-direction: row; flex-wrap: wrap; align-content: flex-start; }
+  .d-icon { width: 56px; }
+  .d-icon-gfx { width: 28px; height: 28px; font-size: 14px; }
+  .d-label { font-size: 8px; }
+  .taskbar { height: 36px; }
+  .menu-btn { height: 30px; font-size: 11px; padding: 0 8px; }
+  .tray { height: 30px; }
+  .tray-clk { font-size: 10px; }
+  .window.max { height: calc(100% - 36px) !important; border: none; box-shadow: none; }
+  .window .w-title { height: 28px; }
+  .window .w-btn { width: 24px; height: 24px; font-size: 11px; }
+  .w-resize { display: none; }
+  .game-menu { bottom: 36px; max-height: 80vh; }
 }
 </style>
 </head>
@@ -877,14 +911,15 @@ let wpIdx = 0;
 
 function drawWallpaper(idx) {
   const c = document.getElementById('wpCanvas');
-  const w = c.parentElement.offsetWidth;
-  const h = c.parentElement.offsetHeight;
+  const parent = c.parentElement;
+  const w = parent.offsetWidth || window.innerWidth;
+  const h = parent.offsetHeight || window.innerHeight;
   // Low res then scale up for pixel look
   const PX = 6;
   const cw = Math.ceil(w / PX);
   const ch = Math.ceil(h / PX);
   c.width = cw; c.height = ch;
-  c.style.width = w + 'px'; c.style.height = h + 'px';
+  c.style.width = '100%'; c.style.height = '100%';
   const ctx = c.getContext('2d');
 
   if (idx === 0) drawHinata(ctx, cw, ch);
@@ -1428,6 +1463,7 @@ function init() {
   setInterval(updateClk, 15000);
 
   window.addEventListener('resize', () => drawWallpaper(wpIdx));
+  window.addEventListener('orientationchange', () => setTimeout(() => drawWallpaper(wpIdx), 300));
 
   document.getElementById('desktop').addEventListener('contextmenu', e => {
     e.preventDefault();
@@ -2855,11 +2891,20 @@ setInterval(()=>{if(naruto.state!=='drag'&&Math.random()<0.15)narutoSpeak();},60
 
   // --- WebSocket 连接 ---
   const WS_URL = (() => {
-    if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
-      const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-      return `${proto}//${location.host}/ws`;
+    // 1. URL参数优先（方便飞书链接传入服务器地址）
+    const urlParams = new URLSearchParams(location.search);
+    const wsParam = urlParams.get('ws');
+    if (wsParam) { localStorage.setItem('daoist_ws', wsParam); return wsParam; }
+    // 2. localStorage 手动设置
+    const saved = localStorage.getItem('daoist_ws');
+    if (saved) return saved;
+    // 3. 如果是GitHub Pages等外部托管，无法推断WS地址
+    if (location.hostname.includes('github.io') || location.hostname.includes('pages.dev')) {
+      return 'ws://localhost:3000/ws';
     }
-    return localStorage.getItem('daoist_ws') || 'ws://localhost:3000/ws';
+    // 4. 从当前页面地址推断WS地址（本地服务器/自托管）
+    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    return `${proto}//${location.host}/ws`;
   })();
 
   let ws = null, reconTimer = null;
@@ -2962,7 +3007,20 @@ setInterval(()=>{if(naruto.state!=='drag'&&Math.random()<0.15)narutoSpeak();},60
 
     // 服务器让小D操作当前应用
     if (data.type === 'soul_interact' && data.app && data.command) {
-      showSoulNotify(`小D正在操作「${data.app}」...`, 4000);
+      // 跳过 get_status 这种内部命令的显示
+      if (data.command.action !== 'get_status') {
+        const actionLabels = {
+          'say': '💬 说', 'start': '▶ 启动', 'roll': '🎲 摇骰子',
+          'pet': '🐱 抚摸', 'feed': '🍖 喂食', 'play': '🎾 玩耍',
+          'capture': '📸 拍照', 'honk': '🦆 嘎嘎',
+          'add_water': '💧 喝水', 'write': '✏ 写',
+          'add': '➕ 添加', 'set_mood': '😊 心情',
+        };
+        const label = actionLabels[data.command.action] || `⚡ ${data.command.action}`;
+        const detail = data.command.text || data.actionDesc || '';
+        const thought = data.thought ? `\n💭 ${data.thought}` : '';
+        showSoulActionBubble(data.app, label, detail, thought);
+      }
       sendCommandToApp(data.app, data.command);
     }
   }
@@ -3066,7 +3124,7 @@ setInterval(()=>{if(naruto.state!=='drag'&&Math.random()<0.15)narutoSpeak();},60
   const camBox = document.createElement('div');
   camBox.id = 'soulCam';
   Object.assign(camBox.style, {
-    position:'absolute', bottom:'44px', left:'4px', width:'200px', height:'150px',
+    position:'absolute', bottom:'52px', right:'4px', width: isMobile ? '120px' : '200px', height: isMobile ? '90px' : '150px',
     zIndex:'99999', border:'3px solid #2038ec', borderRadius:'6px',
     overflow:'hidden', background:'#000', boxShadow:'0 0 12px rgba(60,188,252,0.5)',
     transition: 'width 0.3s, height 0.3s',
@@ -3089,10 +3147,10 @@ setInterval(()=>{if(naruto.state!=='drag'&&Math.random()<0.15)narutoSpeak();},60
     if (e.target.id === 'camToggle' || e.target === camLabel) {
       camExpanded = !camExpanded;
       if (camExpanded) {
-        Object.assign(camBox.style, { width:'320px', height:'240px' });
+        Object.assign(camBox.style, { width: isMobile ? '200px' : '320px', height: isMobile ? '150px' : '240px' });
         camBox.querySelector('#camToggle').textContent = '⊖';
       } else {
-        Object.assign(camBox.style, { width:'200px', height:'150px' });
+        Object.assign(camBox.style, { width: isMobile ? '120px' : '200px', height: isMobile ? '90px' : '150px' });
         camBox.querySelector('#camToggle').textContent = '⊕';
       }
     }
@@ -3164,6 +3222,29 @@ setInterval(()=>{if(naruto.state!=='drag'&&Math.random()<0.15)narutoSpeak();},60
 
   // 显示动态通知（滑入 → 停留 → 滑出）
   let notifyTimer = null;
+  // 小D操作Skill时的浮动气泡（显示在应用窗口上方）
+  let actionBubbleTimer = null;
+  function showSoulActionBubble(appId, label, detail, thought) {
+    // 在 soulActivityOverlay 中显示
+    const detailStr = detail ? `<div style="color:#fcfcfc;font-size:11px;margin-top:4px;max-width:240px;word-break:break-all">${detail.length > 60 ? detail.slice(0, 60) + '...' : detail}</div>` : '';
+    const thoughtStr = thought ? `<div style="color:#8bac0f;font-size:10px;margin-top:3px;font-style:italic">${thought}</div>` : '';
+    soulActivityOverlay.innerHTML = `
+      <div style="position:absolute;top:12px;left:50%;transform:translateX(-50%);
+        background:rgba(15,56,15,0.95);border:3px solid #8bac0f;border-radius:0;
+        padding:10px 16px;font-family:monospace;color:#9bbc0f;text-align:center;
+        box-shadow:4px 4px 0 rgba(0,0,0,0.5);image-rendering:pixelated;
+        animation:soulBubblePop 0.2s steps(3)">
+        <div style="font-size:13px;font-weight:bold">${label}</div>
+        ${detailStr}
+        ${thoughtStr}
+      </div>`;
+    soulActivityOverlay.style.display = 'block';
+    if (actionBubbleTimer) clearTimeout(actionBubbleTimer);
+    actionBubbleTimer = setTimeout(() => {
+      soulActivityOverlay.style.display = 'none';
+    }, 4000);
+  }
+
   function showSoulNotify(text, duration = 5000) {
     soulNotify.textContent = '🧘 ' + text;
     soulNotify.style.opacity = '1';
@@ -3177,6 +3258,14 @@ setInterval(()=>{if(naruto.state!=='drag'&&Math.random()<0.15)narutoSpeak();},60
 
   async function startCamera() {
     try {
+      // 检查是否支持 getUserMedia
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        // 非HTTPS环境下可能不可用
+        camLabel.textContent = '👁 需要HTTPS';
+        camLabel.style.color = '#f8b800';
+        console.warn('[CAM] getUserMedia不可用，可能需要HTTPS');
+        return;
+      }
       camStream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode:'user', width:{ideal:320}, height:{ideal:240} },
         audio: false,
@@ -3186,11 +3275,34 @@ setInterval(()=>{if(naruto.state!=='drag'&&Math.random()<0.15)narutoSpeak();},60
       camReady = true;
       camCanvas.width = 320;
       camCanvas.height = 240;
-      camLabel.textContent = '👁 小D之眼 ✓';
+      camLabel.innerHTML = '👁 小D之眼 ✓ <span id="camToggle" style="cursor:pointer;float:right;margin-right:4px">⊕</span>';
+      camLabel.style.color = '#3cbcfc';
       console.log('[CAM] 摄像头已启动');
     } catch(e) {
-      camLabel.textContent = '👁 无法开启';
-      camLabel.style.color = '#e40058';
+      camLabel.textContent = '👁 点击开启';
+      camLabel.style.color = '#f8b800';
+      camLabel.style.cursor = 'pointer';
+      // 手机端可能需要用户手动点击授权
+      camBox.onclick = async () => {
+        camBox.onclick = null;
+        camLabel.textContent = '👁 开启中...';
+        try {
+          camStream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode:'user', width:{ideal:320}, height:{ideal:240} },
+            audio: false,
+          });
+          camVideo.srcObject = camStream;
+          await camVideo.play();
+          camReady = true;
+          camCanvas.width = 320;
+          camCanvas.height = 240;
+          camLabel.innerHTML = '👁 小D之眼 ✓ <span id="camToggle" style="cursor:pointer;float:right;margin-right:4px">⊕</span>';
+          camLabel.style.color = '#3cbcfc';
+        } catch(e2) {
+          camLabel.textContent = '👁 无法开启';
+          camLabel.style.color = '#e40058';
+        }
+      };
       console.warn('[CAM] 摄像头启动失败:', e.message);
     }
   }

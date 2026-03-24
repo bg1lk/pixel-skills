@@ -50,7 +50,7 @@
 <canvas id="tmpCv" style="display:none"></canvas>
 <script src="../cam-core/cam-core.js"></script>
 <script>
-let vid=document.getElementById('vid');const tmpCv=document.getElementById('tmpCv'),tmpCtx=tmpCv.getContext('2d');
+const vid=document.getElementById('vid'),tmpCv=document.getElementById('tmpCv'),tmpCtx=tmpCv.getContext('2d');
 const rainCv=document.getElementById('rainCv'),rainCtx=rainCv.getContext('2d');
 let stream=null,running=false,paused=false,soundOn=true;
 let present=true,awayStart=null,lockTimeout=30,skinThresh=5;
@@ -119,45 +119,19 @@ function hideLock(){document.getElementById('lockScreen').classList.remove('acti
 function checkPin(){const pin=document.getElementById('pinInput').value;const setPin=document.getElementById('pinSet').value||'0000';if(pin===setPin){hideLock();unlockSound();addLog('手动PIN解锁')}}
 function addLog(msg){const t=new Date().toLocaleTimeString();logs.unshift(t+' - '+msg);if(logs.length>50)logs.pop();
 document.getElementById('logList').innerHTML=logs.map(l=>'<div>'+l+'</div>').join('')}
+${BRIDGE_CODE}
+</script><script>
 // ==================== SOUL BRIDGE ====================
-(function() {
-  const _app = 'away-lock';
-  const vBar = document.createElement('div');
-  vBar.style.cssText = 'background:#0a2a0a;border:2px solid #3cbcfc;padding:5px 10px;font-size:10px;color:#3cbcfc;text-align:center;letter-spacing:1px;font-family:monospace;width:100%;max-width:720px;margin:4px auto 0';
-  vBar.innerHTML = '👁 <b style="color:#f4d03f">小D之眼</b> | 等待连接...';
-  const _ct = document.querySelector('.main');
-  if (_ct) _ct.insertBefore(vBar, _ct.firstChild);
-
-  const pcCv = document.createElement('canvas');
-  pcCv.width = 320; pcCv.height = 240;
-  const pcCtx = pcCv.getContext('2d');
-  Object.defineProperty(pcCv, 'videoWidth', { get: () => 320 });
-  Object.defineProperty(pcCv, 'videoHeight', { get: () => 240 });
-  let _started = false, _fc = 0;
-
-  function _autoStart() {
-    if (_started || running) return; _started = true;
-    vid = pcCv;
-    tmpCv.width = 160; tmpCv.height = 120;
-    rainCv.width = window.innerWidth; rainCv.height = window.innerHeight;
-    running = true;
-    addLog('已接入小D之眼');
-    requestAnimationFrame(loop);
+window.addEventListener('load', () => {
+  if (window.CamBridge) {
+    CamBridge.onSoulCommand((cmd) => {
+      console.log('[' + s.id + '] Soul指令:', cmd.type);
+      setTimeout(() => {
+        CamBridge.reportDone('检查了离席状态');
+      }, 20 * 1000);
+    });
   }
-
-  window.addEventListener('message', e => {
-    if (!e.data) return;
-    if (e.data.type === 'parent_camera_frame') {
-      const img = new Image();
-      img.onload = () => { pcCtx.drawImage(img, 0, 0, 320, 240); _fc++; vBar.innerHTML = '👁 <b style="color:#f4d03f">小D之眼</b> | 已连接 · F' + _fc; _autoStart(); };
-      img.src = 'data:image/jpeg;base64,' + e.data.frame;
-    }
-    if (e.data.type === 'soul_vision_info') vBar.innerHTML = '👁 <b style="color:#f4d03f">小D看到</b> | ' + e.data.description;
-    if (e.data.type === 'soul_command') {
-      if (e.data.action === 'get_status') window.parent.postMessage({type:'skill_status',app:_app,status:running?(present?'present':'away'):'idle'}, '*');
-      if (e.data.action === 'start') _autoStart();
-    }
-  });
-  window.parent.postMessage({type:'skill_ready',app:_app}, '*');
-})();
-</script></body></html>
+});
+</script>
+<script src="../cam-core/cam-bridge.js"></script>
+</body></html>

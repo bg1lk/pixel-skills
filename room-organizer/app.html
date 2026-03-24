@@ -805,28 +805,21 @@ function playAchieve(){try{const c=new(window.AudioContext||window.webkitAudioCo
 
 // ===== INIT =====
 renderZones();renderGuides();renderClothes();renderPhotos();
-// ==================== SOUL BRIDGE ====================
-(function() {
-  const _app = 'room-organizer';
-  const vBar = document.createElement('div');
-  vBar.style.cssText = 'background:#0a2a0a;border:2px solid #3cbcfc;padding:5px 10px;font-size:10px;color:#3cbcfc;text-align:center;letter-spacing:1px;font-family:monospace;width:100%;margin:4px 0';
-  vBar.innerHTML = '👁 <b style="color:#f4d03f">小D之眼</b> | 等待连接...';
-  const _ct = document.querySelector('.main,.container') || document.body;
-  _ct.insertBefore(vBar, _ct.firstChild);
-
-  window.addEventListener('message', e => {
-    if (!e.data) return;
-    if (e.data.type === 'parent_camera_frame') {
-      vBar.innerHTML = '👁 <b style="color:#f4d03f">小D之眼</b> | 已连接';
-    }
-    if (e.data.type === 'soul_vision_info') vBar.innerHTML = '👁 <b style="color:#f4d03f">小D看到</b> | ' + e.data.description;
-    if (e.data.type === 'soul_command') {
-      if (e.data.action === 'get_status') window.parent.postMessage({type:'skill_status',app:_app,status:'ready',data:{zones:zones.length,clothes:clothes.length}}, '*');
-      if (e.data.action === 'scan') toggleScan();
-    }
-  });
-  window.parent.postMessage({type:'skill_ready',app:_app}, '*');
-})();
 </script>
+${BRIDGE_CODE}
+<script>
+// ==================== SOUL BRIDGE ====================
+window.addEventListener('load', () => {
+  if (window.CamBridge) {
+    CamBridge.onSoulCommand((cmd) => {
+      console.log('[' + s.id + '] Soul指令:', cmd.type);
+      setTimeout(() => {
+        CamBridge.reportDone('看了一下房间，还算整洁');
+      }, 30 * 1000);
+    });
+  }
+});
+</script>
+<script src="../cam-core/cam-bridge.js"></script>
 </body>
 </html>

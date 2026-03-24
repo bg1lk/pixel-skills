@@ -851,6 +851,8 @@ soundBtn.classList.add('active-toggle');
   });
   // === WS 直连：接收服务端指令 ===
   let _ws=null;function _connectWS(){try{_ws=new WebSocket(localStorage.getItem('daoist_ws')||'ws://localhost:3000/ws');_ws.onmessage=(evt)=>{try{const d=JSON.parse(evt.data);if(d.type==='soul_interact'&&d.app===_app&&d.command){window.dispatchEvent(new MessageEvent('message',{data:d.command.action?{type:'soul_command',...d.command}:d.command}));}}catch(e){}};_ws.onclose=()=>{_ws=null;setTimeout(_connectWS,5000)};_ws.onerror=()=>{}}catch(e){setTimeout(_connectWS,10000)}}_connectWS();
+  // 自动启动
+  setTimeout(async()=>{if(!sessionActive&&typeof startCamera==='function'){try{await startCamera();if(typeof startSession==='function')startSession();}catch(e){_autoStart();}}},2000);
   window.parent.postMessage({type:'skill_ready',app:_app}, '*');
 })();
 </script>

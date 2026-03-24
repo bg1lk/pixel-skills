@@ -870,7 +870,17 @@ window.addEventListener('DOMContentLoaded',init);
   });
 
   // === WS 直连：接收服务端指令 ===
-  let _ws=null;function _connectWS(){try{_ws=new WebSocket(localStorage.getItem('daoist_ws')||'ws://localhost:3000/ws');_ws.onmessage=(evt)=>{try{const d=JSON.parse(evt.data);if(d.type==='soul_interact'&&d.app===_app&&d.command){window.dispatchEvent(new MessageEvent('message',{data:d.command.action?{type:'soul_command',...d.command}:d.command}));}}catch(e){}};_ws.onclose=()=>{_ws=null;setTimeout(_connectWS,5000)};_ws.onerror=()=>{}}catch(e){setTimeout(_connectWS,10000)}}_connectWS();
+  let _ws=null;function _connectWS(){try{_ws=new WebSocket(localStorage.getItem('daoist_ws')||'ws://localhost:3000/ws');_ws.onopen=()=>{vBar.innerHTML='👁 <b style="color:#f4d03f">小D之眼</b> | 已连接';};_ws.onmessage=(evt)=>{try{const d=JSON.parse(evt.data);if(d.type==='soul_interact'&&d.app===_app&&d.command){window.dispatchEvent(new MessageEvent('message',{data:d.command.action?{type:'soul_command',...d.command}:d.command}));}}catch(e){}};_ws.onclose=()=>{_ws=null;vBar.innerHTML='👁 <b style="color:#f4d03f">小D之眼</b> | 等待连接...';setTimeout(_connectWS,5000)};_ws.onerror=()=>{}}catch(e){setTimeout(_connectWS,10000)}}_connectWS();
+
+  // 自动启动：小D打开后自动开始摄像头并生成像素世界
+  setTimeout(async () => {
+    if (typeof startCamera === 'function' && typeof game !== 'undefined' && !game.camActive) {
+      await startCamera();
+      if (game.camActive && typeof generateRoom === 'function' && !game.generating) {
+        generateRoom();
+      }
+    }
+  }, 2000);
 
   window.parent.postMessage({type:'skill_ready',app:_app}, '*');
 })();

@@ -619,15 +619,6 @@ gameLoop();
 if(placedFurniture.length===0){
   setTimeout(autoDecorate,500);
 }
-// ==================== SOUL BRIDGE ====================
-(function() {
-  const _app = 'claude-room';
-  window.addEventListener('message', e => {
-    if (!e.data || e.data.type !== 'soul_command') return;
-    if (e.data.action === 'get_status') window.parent.postMessage({type:'skill_status',app:_app,status:'running'}, '*');
-  });
-  window.parent.postMessage({type:'skill_ready',app:_app}, '*');
-})();
 </script>
 </body>
 </html>
