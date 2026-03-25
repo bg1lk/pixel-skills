@@ -1,8 +1,326 @@
-已生成 `test-timer.html`，功能包括：
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Test Timer</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
 
-- **GameBoy 绿色调色板** 像素风 UI
-- **1/3/5 分钟** 预设按钮，页面加载后自动以 1 分钟开始倒计时
-- **进度条** 实时显示剩余时间比例
-- **最后 5 秒** tick 音效 + 倒计时结束时 8-bit 旋律提醒
-- **暂停/重置** 控制按钮
-- **Soul Bridge** WebSocket 连接已内置，支持 `start`/`stop`/`reset` 指令
+body {
+  background: #9bbc0f;
+  font-family: monospace;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  color: #0f380f;
+  user-select: none;
+}
+
+.container {
+  text-align: center;
+  width: 100%;
+  max-width: 400px;
+  padding: 20px;
+}
+
+h1 {
+  font-size: 24px;
+  letter-spacing: 2px;
+  margin-bottom: 24px;
+  color: #0f380f;
+  text-transform: uppercase;
+  text-shadow: 2px 2px 0 #8bac0f;
+}
+
+.timer-display {
+  font-size: 72px;
+  font-weight: bold;
+  color: #0f380f;
+  background: #8bac0f;
+  border: 4px solid #306230;
+  padding: 20px 32px;
+  margin: 20px auto;
+  display: inline-block;
+  min-width: 260px;
+  letter-spacing: 4px;
+  box-shadow: 4px 4px 0 #306230;
+}
+
+.timer-display.warning {
+  animation: blink 0.5s step-end infinite;
+}
+
+@keyframes blink {
+  50% { background: #306230; color: #9bbc0f; }
+}
+
+.progress-bar {
+  width: 260px;
+  height: 12px;
+  background: #306230;
+  border: 3px solid #0f380f;
+  margin: 0 auto 20px;
+  box-shadow: 2px 2px 0 #0f380f;
+}
+
+.progress-fill {
+  height: 100%;
+  background: #0f380f;
+  width: 100%;
+  transition: width 1s linear;
+}
+
+.btn-group {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  margin: 20px 0;
+  flex-wrap: wrap;
+}
+
+.btn {
+  font-family: monospace;
+  font-size: 16px;
+  font-weight: bold;
+  padding: 12px 20px;
+  border: 3px solid #0f380f;
+  background: #306230;
+  color: #9bbc0f;
+  cursor: pointer;
+  box-shadow: 3px 3px 0 #0f380f;
+  letter-spacing: 1px;
+}
+
+.btn:hover {
+  background: #0f380f;
+  color: #8bac0f;
+}
+
+.btn:active {
+  box-shadow: 1px 1px 0 #0f380f;
+  transform: translate(2px, 2px);
+}
+
+.btn.active {
+  background: #0f380f;
+  color: #9bbc0f;
+  box-shadow: 1px 1px 0 #0f380f;
+  transform: translate(2px, 2px);
+}
+
+.controls {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  margin-top: 16px;
+}
+
+.ctrl-btn {
+  font-family: monospace;
+  font-size: 18px;
+  font-weight: bold;
+  padding: 14px 28px;
+  border: 3px solid #0f380f;
+  background: #8bac0f;
+  color: #0f380f;
+  cursor: pointer;
+  box-shadow: 3px 3px 0 #0f380f;
+  letter-spacing: 1px;
+}
+
+.ctrl-btn:hover { background: #306230; color: #9bbc0f; }
+.ctrl-btn:active { box-shadow: 1px 1px 0 #0f380f; transform: translate(2px, 2px); }
+
+.status {
+  margin-top: 16px;
+  font-size: 14px;
+  color: #306230;
+  letter-spacing: 1px;
+  height: 20px;
+}
+
+@media (max-width: 480px) {
+  .timer-display { font-size: 48px; min-width: 200px; padding: 16px 20px; }
+  .progress-bar { width: 200px; }
+  h1 { font-size: 18px; }
+  .btn { font-size: 14px; padding: 10px 16px; }
+  .ctrl-btn { font-size: 16px; padding: 12px 22px; }
+}
+</style>
+</head>
+<body>
+
+<div class="container">
+  <h1>Pixel Timer</h1>
+
+  <div class="btn-group">
+    <button class="btn" onclick="setTime(60)" id="btn1">1 MIN</button>
+    <button class="btn" onclick="setTime(180)" id="btn3">3 MIN</button>
+    <button class="btn" onclick="setTime(300)" id="btn5">5 MIN</button>
+  </div>
+
+  <div class="timer-display" id="display">01:00</div>
+
+  <div class="progress-bar"><div class="progress-fill" id="progress"></div></div>
+
+  <div class="controls">
+    <button class="ctrl-btn" id="startBtn" onclick="toggleTimer()">PAUSE</button>
+    <button class="ctrl-btn" id="resetBtn" onclick="resetTimer()">RESET</button>
+  </div>
+
+  <div class="status" id="status">Running...</div>
+</div>
+
+<script>
+// === Soul Bridge ===
+(function(){
+  function getWsUrl(){
+    try{ const s=localStorage.getItem('pixelos_ws_url'); if(s) return s; }catch(e){}
+    if(location.hostname.includes('github.io')) return 'wss://your-server.com/ws';
+    const p=location.protocol==='https:'?'wss:':'ws:';
+    return p+'//'+location.hostname+':3000/ws';
+  }
+  let ws, reconnectTimer;
+  function connect(){
+    ws=new WebSocket(getWsUrl());
+    ws.onopen=()=>console.log('[SoulBridge] Connected');
+    ws.onmessage=(e)=>{try{const d=JSON.parse(e.data);if(d.type==='soul_interact')handleSoulCommand(d.command);}catch(err){}};
+    ws.onclose=()=>{reconnectTimer=setTimeout(connect,3000);};
+  }
+  function handleSoulCommand(cmd){
+    console.log('[SoulBridge] Command:',cmd);
+    if(cmd==='start') startTimer();
+    else if(cmd==='stop') stopTimer();
+    else if(cmd==='reset') resetTimer();
+    else if(cmd==='1min') setTime(60);
+    else if(cmd==='3min') setTime(180);
+    else if(cmd==='5min') setTime(300);
+  }
+  window.soulBridge={send:(data)=>{if(ws?.readyState===1)ws.send(JSON.stringify(data));}};
+  connect();
+
+  window.addEventListener('message',(e)=>{
+    if(e.data?.type==='parent_camera_frame') window._latestCameraFrame=e.data.frame;
+    if(e.data?.type==='soul_interact') handleSoulCommand(e.data.command);
+  });
+})();
+
+// === Timer Logic ===
+let totalSeconds = 60;
+let remaining = 60;
+let interval = null;
+let running = false;
+
+const display = document.getElementById('display');
+const progress = document.getElementById('progress');
+const startBtn = document.getElementById('startBtn');
+const statusEl = document.getElementById('status');
+
+function formatTime(s) {
+  const m = Math.floor(s / 60);
+  const sec = s % 60;
+  return String(m).padStart(2, '0') + ':' + String(sec).padStart(2, '0');
+}
+
+function updateDisplay() {
+  display.textContent = formatTime(remaining);
+  progress.style.width = (totalSeconds > 0 ? (remaining / totalSeconds) * 100 : 0) + '%';
+  display.classList.toggle('warning', remaining <= 10 && remaining > 0 && running);
+}
+
+function setTime(seconds) {
+  stopTimer();
+  totalSeconds = seconds;
+  remaining = seconds;
+  updateDisplay();
+  display.classList.remove('warning');
+
+  document.querySelectorAll('.btn').forEach(b => b.classList.remove('active'));
+  const id = 'btn' + (seconds / 60);
+  const el = document.getElementById(id);
+  if (el) el.classList.add('active');
+
+  statusEl.textContent = 'Ready';
+  startTimer();
+}
+
+function playTick() {
+  const ctx = new (window.AudioContext || window.webkitAudioContext)();
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = 'square';
+  osc.frequency.value = 440;
+  gain.gain.setValueAtTime(0.08, ctx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08);
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+  osc.start();
+  osc.stop(ctx.currentTime + 0.08);
+}
+
+function playAlarm() {
+  const ctx = new (window.AudioContext || window.webkitAudioContext)();
+  const melody = [523, 659, 784, 1047, 784, 659, 523, 784, 1047];
+  melody.forEach((freq, i) => {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'square';
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(0.15, ctx.currentTime + i * 0.15);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.15 + 0.14);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(ctx.currentTime + i * 0.15);
+    osc.stop(ctx.currentTime + i * 0.15 + 0.14);
+  });
+}
+
+function startTimer() {
+  if (running || remaining <= 0) return;
+  running = true;
+  startBtn.textContent = 'PAUSE';
+  statusEl.textContent = 'Running...';
+
+  interval = setInterval(() => {
+    remaining--;
+    updateDisplay();
+    if (remaining <= 5 && remaining > 0) playTick();
+    if (remaining <= 0) {
+      stopTimer();
+      display.classList.remove('warning');
+      statusEl.textContent = '-- TIME UP! --';
+      playAlarm();
+    }
+  }, 1000);
+}
+
+function stopTimer() {
+  running = false;
+  clearInterval(interval);
+  interval = null;
+  startBtn.textContent = 'START';
+  display.classList.remove('warning');
+  if (remaining > 0 && remaining < totalSeconds) statusEl.textContent = 'Paused';
+}
+
+function toggleTimer() {
+  if (running) stopTimer();
+  else startTimer();
+}
+
+function resetTimer() {
+  stopTimer();
+  remaining = totalSeconds;
+  updateDisplay();
+  statusEl.textContent = 'Ready';
+}
+
+// Auto-start: default 1 min
+document.getElementById('btn1').classList.add('active');
+updateDisplay();
+startTimer();
+</script>
+</body>
+</html>
