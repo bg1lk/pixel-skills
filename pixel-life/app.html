@@ -199,9 +199,10 @@ async function startCamera(){
 function capturePhoto(){
   if(!game.camActive)return null;
   const c=document.createElement('canvas');
-  c.width=game.cam.videoWidth;c.height=game.cam.videoHeight;
-  c.getContext('2d').drawImage(game.cam,0,0);
-  return c.toDataURL('image/jpeg',0.8);
+  // 缩小到 320x240 减少 API 请求体积
+  c.width=320;c.height=240;
+  c.getContext('2d').drawImage(game.cam,0,0,320,240);
+  return c.toDataURL('image/jpeg',0.6);
 }
 
 // Quick hash for change detection
@@ -304,36 +305,44 @@ Return 4-8 objects. x,y are 0-1 normalized.`},
     log('✅ 场景分析: '+scene.name+' ('+scene.key_items?.join(', ')+')');
   }catch(e){
     log('❌ 场景分析失败: '+e.message);
+    showGenOverlay('❌ 场景分析失败: '+e.message+'\n3秒后关闭...');
+    await new Promise(r=>setTimeout(r,3000));
     game.generating=false;hideGenOverlay();return;
   }
 
-  // Step 3: Generate pixel art room with Nano Banana 2
-  showGenOverlay('🎨 Nano Banana 2 生成像素房间中...\n（约30秒）');
+  // Step 3: Generate pixel art room with Nano Banana 2（自动重试1次）
   let roomImage;
-  try{
-    const b64ref=photo.split(',')[1];
-    const prompt=`Convert this real photo into a top-down 2D RPG pixel art game room. Keep the EXACT same layout, furniture positions, and proportions as the photo. Style: 16-bit SNES RPG top-down view (like Earthbound/Pokemon/Zelda), cute and cozy pixel art, warm lighting, no people/characters. The view should be slightly angled from above, showing the floor and furniture from a bird's eye perspective typical of classic 2D RPGs.`;
+  const b64ref=photo.split(',')[1];
+  const prompt=`Convert this real photo into a top-down 2D RPG pixel art game room. Keep the EXACT same layout, furniture positions, and proportions as the photo. Style: 16-bit SNES RPG top-down view (like Earthbound/Pokemon/Zelda), cute and cozy pixel art, warm lighting, no people/characters. The view should be slightly angled from above, showing the floor and furniture from a bird's eye perspective typical of classic 2D RPGs.`;
 
-    log('🎨 以摄像头照片为参考生成像素房间...');
+  for(let attempt=0;attempt<2&&!roomImage;attempt++){
+    showGenOverlay('🎨 Nano Banana 2 生成像素房间中...'+(attempt>0?'\n(第2次尝试)':'')+'\n（约30秒）');
+    try{
+      log('🎨 '+(attempt>0?'重试':'')+'生成像素房间...');
+      const imgResult=await callGemini('gemini-2.5-flash-image',[
+        {text:prompt},
+        {inlineData:{mimeType:'image/jpeg',data:b64ref}}
+      ],{responseModalities:['IMAGE','TEXT']});
 
-    const imgResult=await callGemini('gemini-2.5-flash-image',[
-      {text:prompt},
-      {inlineData:{mimeType:'image/jpeg',data:b64ref}}
-    ],{responseModalities:['IMAGE','TEXT']});
-
-    const parts=imgResult.candidates?.[0]?.content?.parts||[];
-    for(const part of parts){
-      if(part.inlineData?.data){
-        roomImage='data:image/png;base64,'+part.inlineData.data;
-        break;
+      const parts=imgResult.candidates?.[0]?.content?.parts||[];
+      for(const part of parts){
+        if(part.inlineData?.data){roomImage='data:image/png;base64,'+part.inlineData.data;break}
       }
+      if(!roomImage){
+        log('⚠️ 第'+(attempt+1)+'次未返回图片(reason='+(imgResult.candidates?.[0]?.finishReason||'?')+')');
+        if(attempt===0)await new Promise(r=>setTimeout(r,2000));
+      }
+    }catch(e){
+      log('❌ 第'+(attempt+1)+'次失败: '+e.message);
+      if(attempt===0)await new Promise(r=>setTimeout(r,2000));
     }
-    if(!roomImage)throw new Error('未返回图片');
-    log('✅ 像素房间已生成！');
-  }catch(e){
-    log('❌ 房间生成失败: '+e.message);
+  }
+  if(!roomImage){
+    showGenOverlay('❌ 房间生成失败，请点击重试');
+    await new Promise(r=>setTimeout(r,3000));
     game.generating=false;hideGenOverlay();return;
   }
+  log('✅ 像素房间已生成！');
 
   // Step 4: Create/update room
   showGenOverlay('🏠 构建房间...');
@@ -532,10 +541,30 @@ function getCurrentSprite(){
 const particles=[];
 
 function drawDiva(ctx,W,H){
-  if(!spritesLoaded)return;
-  const sprite=getCurrentSprite();if(!sprite||!sprite.complete)return;
-  const sz=Math.min(W,H)*0.15; // slightly smaller for top-down
+  const sz=Math.min(W,H)*0.15;
   const px=diva.x*W, py=diva.y*H;
+  const sprite=spritesLoaded?getCurrentSprite():null;
+  // Fallback: if sprites not loaded, draw a pixel placeholder
+  if(!sprite||!sprite.complete||!sprite.naturalWidth){
+    ctx.save();ctx.translate(px,py);
+    // Body
+    ctx.fillStyle='#f8a0c8';ctx.fillRect(-sz*0.2,-sz*0.45,sz*0.4,sz*0.35);
+    // Head
+    ctx.fillStyle='#fce4b8';ctx.fillRect(-sz*0.15,-sz*0.7,sz*0.3,sz*0.28);
+    // Hair
+    ctx.fillStyle='#2a1a3a';ctx.fillRect(-sz*0.18,-sz*0.75,sz*0.36,sz*0.12);
+    // Eyes
+    ctx.fillStyle='#1a1a2e';ctx.fillRect(-sz*0.08,-sz*0.58,sz*0.06,sz*0.06);ctx.fillRect(sz*0.02,-sz*0.58,sz*0.06,sz*0.06);
+    // Shadow
+    ctx.globalAlpha=0.25;ctx.fillStyle='#000';ctx.beginPath();ctx.ellipse(0,sz*0.35,sz*0.3,sz*0.08,0,0,Math.PI*2);ctx.fill();
+    ctx.globalAlpha=1;
+    // Name tag
+    ctx.font='bold 10px monospace';ctx.fillStyle='#f8a0c8';ctx.textAlign='center';ctx.fillText('Diva',0,-sz*0.8);ctx.textAlign='left';
+    ctx.restore();
+    // Speech bubble position
+    if(diva.speechTimer>0){const el=document.getElementById('speechBubble');const wr=document.getElementById('game-wrap').getBoundingClientRect();const cr=game.canvas.getBoundingClientRect();const sx=cr.width/W;el.style.left=Math.max(10,Math.min(wr.width-260,px*sx+cr.left-wr.left-60))+'px';el.style.top=Math.max(30,(py-sz)*cr.height/H+cr.top-wr.top-40)+'px';}
+    return;
+  }
 
   ctx.save();
   ctx.translate(px,py);
@@ -862,16 +891,45 @@ window.addEventListener('DOMContentLoaded',init);
     if (e.data.type === 'soul_vision_info') vBar.innerHTML = '👁 <b style="color:#f4d03f">小D看到</b> | ' + e.data.description;
     if (e.data.type === 'soul_command') {
       const a = e.data.action;
-      if (a === 'get_status') window.parent.postMessage({type:'skill_status',app:_app,status:'running',data:{mood:typeof diva!=='undefined'?diva.mood:'unknown'}}, '*');
+      if (a === 'get_status') {
+        const rm = typeof game !== 'undefined' ? game.rooms[game.currentRoom] : null;
+        const statusData = {
+          mood: typeof diva !== 'undefined' ? diva.mood : 'unknown',
+          state: typeof diva !== 'undefined' ? diva.state : 'idle',
+          x: typeof diva !== 'undefined' ? diva.x : 0.5,
+          hunger: typeof diva !== 'undefined' ? diva.hunger : 0,
+          energy: typeof diva !== 'undefined' ? diva.energy : 100,
+          fun: typeof diva !== 'undefined' ? diva.fun : 50,
+          room: rm ? rm.name : '未扫描',
+          roomObjects: rm ? rm.objects.map(o => o.emoji + o.name + '(x=' + o.x.toFixed(1) + ')').join(', ') : '',
+          rooms: typeof game !== 'undefined' ? game.rooms.map(r => r.name) : [],
+        };
+        window.parent.postMessage({type:'skill_status',app:_app,status:'running',data:statusData}, '*');
+        if (_ws && _ws.readyState === 1) _ws.send(JSON.stringify({type:'skill_status',app:_app,data:statusData}));
+      }
       // Diva = 小D，接收小D的状态控制
-      if (a === 'say' && e.data.text && typeof spawnChat === 'function') spawnChat(e.data.text);
+      if (a === 'say' && e.data.text) { if (typeof showSpeech === 'function') showSpeech(e.data.text, 5); }
       if (a === 'mood' && e.data.value && typeof diva !== 'undefined') diva.mood = e.data.value;
-      if (a === 'eat' && typeof diva !== 'undefined') diva.hunger = Math.max(0, diva.hunger - 25);
-      if (a === 'sleep' && typeof diva !== 'undefined') diva.energy = Math.min(100, diva.energy + 30);
-      if (a === 'dance' && typeof diva !== 'undefined') diva.fun = Math.min(100, diva.fun + 20);
+      if (a === 'eat' && typeof diva !== 'undefined') { diva.hunger = Math.max(0, diva.hunger - 25); if (typeof setDivaState === 'function') setDivaState('eat'); }
+      if (a === 'sleep' && typeof diva !== 'undefined') { diva.energy = Math.min(100, diva.energy + 30); if (typeof setDivaState === 'function') setDivaState('sleep'); }
+      if (a === 'dance' && typeof diva !== 'undefined') { diva.fun = Math.min(100, diva.fun + 20); if (typeof setDivaState === 'function') setDivaState('dance'); }
       if (a === 'work' && typeof setDivaState === 'function') setDivaState('work');
       if (a === 'read' && typeof setDivaState === 'function') setDivaState('read');
       if (a === 'rest' && typeof setDivaState === 'function') setDivaState('sit');
+      if (a === 'wave' && typeof setDivaState === 'function') setDivaState('wave');
+      if (a === 'excited' && typeof setDivaState === 'function') setDivaState('excited');
+      if (a === 'sad' && typeof setDivaState === 'function') setDivaState('sad');
+      if (a === 'explore' && typeof diva !== 'undefined') { diva.targetX = Math.random(); if (typeof setDivaState === 'function') setDivaState('explore'); }
+      if (a === 'walk_to' && e.data.x !== undefined && typeof diva !== 'undefined') { diva.targetX = parseFloat(e.data.x); if (typeof setDivaState === 'function') setDivaState('walk'); }
+      if (a === 'walk_to_object' && e.data.name && typeof game !== 'undefined') {
+        const rm = game.rooms[game.currentRoom];
+        const obj = rm?.objects.find(o => o.name === e.data.name);
+        if (obj && typeof diva !== 'undefined') { diva.targetX = obj.x; diva.targetObj = obj; if (typeof setDivaState === 'function') setDivaState('walk'); }
+      }
+      if (a === 'switch_room' && e.data.name && typeof game !== 'undefined') {
+        const idx = game.rooms.findIndex(r => r.name === e.data.name);
+        if (idx >= 0 && idx !== game.currentRoom) { game.currentRoom = idx; if (typeof updateRoomTabs === 'function') updateRoomTabs(); if (typeof diva !== 'undefined') diva.x = 0.1; if (typeof showSpeech === 'function') showSpeech('去' + e.data.name + '看看~', 2); }
+      }
     }
   });
 
