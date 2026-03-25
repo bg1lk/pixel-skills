@@ -379,7 +379,7 @@ let histIdx = 0;
 let stream = null;
 const alertState = new CamCore.StateFilter(6, 0.5, 0.2);
 
-const video = document.getElementById('camVideo');
+let video = document.getElementById('camVideo');
 const diffCanvas = document.getElementById('diffCanvas');
 const diffCtx = diffCanvas.getContext('2d', { willReadFrequently: true });
 const histCanvas = document.getElementById('historyCanvas');
@@ -387,59 +387,9 @@ const histCtx = histCanvas.getContext('2d');
 const captureCanvas = document.createElement('canvas');
 const captureCtx = captureCanvas.getContext('2d', { willReadFrequently: true });
 
-// ===== PARENT CAMERA BRIDGE (PixelOS iframe) =====
-let usingBridge = false;
-const bridgeImg = new Image();
-const bridgeCanvas = document.createElement('canvas');
-bridgeCanvas.width = 320; bridgeCanvas.height = 240;
-const bridgeCtx = bridgeCanvas.getContext('2d');
-window.addEventListener('message', (e) => {
-  if (e.data?.type === 'parent_camera_frame' && e.data.frame) {
-    if (!usingBridge) {
-      usingBridge = true;
-      // 把 video 替换为 bridgeCanvas 显示
-      video.style.display = 'none';
-      bridgeCanvas.style.cssText = video.style.cssText || '';
-      bridgeCanvas.className = 'bridge-cam';
-      video.parentNode.insertBefore(bridgeCanvas, video);
-      addLog('safe-log', '[摄像头] 使用PixelOS桥接摄像头');
-      document.getElementById('camLabel').textContent = 'CAM BRIDGE';
-      document.getElementById('camRec').style.display = 'block';
-    }
-    bridgeImg.src = 'data:image/jpeg;base64,' + e.data.frame;
-  }
-});
-bridgeImg.onload = function() {
-  if (captureCanvas.width !== bridgeImg.width || captureCanvas.height !== bridgeImg.height) {
-    captureCanvas.width = bridgeImg.width || 320;
-    captureCanvas.height = bridgeImg.height || 240;
-    bridgeCanvas.width = bridgeImg.width || 320;
-    bridgeCanvas.height = bridgeImg.height || 240;
-    diffCanvas.width = captureCanvas.width;
-    diffCanvas.height = captureCanvas.height;
-  }
-  // 画到 captureCanvas 供运动检测用
-  captureCtx.drawImage(bridgeImg, 0, 0, captureCanvas.width, captureCanvas.height);
-  // 画到 bridgeCanvas 供页面显示
-  bridgeCtx.drawImage(bridgeImg, 0, 0, bridgeCanvas.width, bridgeCanvas.height);
-};
 
 // ===== CAMERA =====
 async function startCamera() {
-  // 在 iframe 中优先等待 bridge 帧
-  if (window !== window.top) {
-    addLog('', '[摄像头] 等待PixelOS桥接...');
-    const got = await new Promise(r => {
-      if (usingBridge) return r(true);
-      const t = setTimeout(() => r(false), 2000);
-      const check = setInterval(() => { if (usingBridge) { clearTimeout(t); clearInterval(check); r(true); } }, 100);
-    });
-    if (got) {
-      addLog('safe-log', '[摄像头] 桥接成功');
-      return true;
-    }
-    addLog('', '[摄像头] 桥接超时，尝试直接获取...');
-  }
   try {
     stream = await navigator.mediaDevices.getUserMedia({
       video: { facingMode: 'environment', width: { ideal: 320 }, height: { ideal: 240 } },
@@ -505,9 +455,9 @@ const PIXEL_THRESHOLD = 20; // per-pixel change threshold
 const LARGE_CHANGE_THRESHOLD = 30; // large change = likely intruder, don't absorb into bg
 
 function detectMotion() {
-  if (!monitoring || (!stream && !usingBridge)) return;
+  if (!monitoring) return;
 
-  if (!usingBridge) captureCtx.drawImage(video, 0, 0, captureCanvas.width, captureCanvas.height);
+  captureCtx.drawImage(video, 0, 0, captureCanvas.width, captureCanvas.height);
   const currentFrame = captureCtx.getImageData(0, 0, captureCanvas.width, captureCanvas.height);
   // CamCore: normalize light for stability across lighting changes
   CamCore.normalize(currentFrame);
@@ -741,8 +691,12 @@ function playAlarm() {
 async function toggleMonitor() {
   const btn = document.getElementById('btnStart');
   if (!monitoring) {
-    const ok = await startCamera();
-    if (!ok) return;
+    // If bridge already replaced video, skip getUserMedia
+    const isBridge = (video !== document.getElementById('camVideo'));
+    if (!isBridge) {
+      const ok = await startCamera();
+      if (!ok) return;
+    }
     monitoring = true;
     btn.textContent = '\u25A0 \u505C\u6B62\u76D1\u63A7';
     btn.classList.add('active');
@@ -906,20 +860,90 @@ document.addEventListener('keydown', e => {
 // Draw initial history
 drawHistory();
 </script>
-${BRIDGE_CODE}
 <script>
-// ==================== SOUL BRIDGE ====================
-window.addEventListener('load', () => {
-  if (window.CamBridge) {
-    CamBridge.onSoulCommand((cmd) => {
-      console.log('[' + s.id + '] Soul指令:', cmd.type);
-      setTimeout(() => {
-        CamBridge.reportDone('扫描了一下周围，没发现老板');
-      }, 30 * 1000);
-    });
+// === Soul Bridge (light-meter pattern) ===
+(function(){
+  // Bridge canvas — receives frames from PixelOS parent
+  const pcCv = document.createElement('canvas');
+  pcCv.width = 320; pcCv.height = 240;
+  const pcCtx = pcCv.getContext('2d');
+  let _started = false, _fc = 0;
+
+  // Visible canvas to show bridge feed in the cam-wrap
+  const vCv = document.createElement('canvas');
+  vCv.width = 320; vCv.height = 240;
+  vCv.className = 'bridge-cam';
+  const vCtx = vCv.getContext('2d');
+
+  function _autoStart() {
+    if (_started || monitoring) return;
+    _started = true;
+    // If real camera is working and no bridge frames, skip
+    if (video.srcObject && _fc === 0) return;
+    // KEY: replace global video with bridge canvas
+    video = pcCv;
+    captureCanvas.width = 320;
+    captureCanvas.height = 240;
+    diffCanvas.width = 320;
+    diffCanvas.height = 240;
+    // Show bridge feed visually
+    const camVideo = document.getElementById('camVideo');
+    camVideo.style.display = 'none';
+    camVideo.parentNode.insertBefore(vCv, camVideo);
+    document.getElementById('camLabel').textContent = 'CAM BRIDGE';
+    document.getElementById('camRec').style.display = 'block';
+    addLog('safe-log', '[摄像头] PixelOS桥接已连接');
+    // Auto-start monitoring
+    toggleMonitor();
   }
-});
+
+  // Listen for camera frames from PixelOS parent iframe
+  window.addEventListener('message', e => {
+    if (!e.data) return;
+    if (e.data.type === 'parent_camera_frame') {
+      const img = new Image();
+      img.onload = () => {
+        pcCtx.drawImage(img, 0, 0, 320, 240);
+        vCtx.drawImage(img, 0, 0, 320, 240);
+        _fc++;
+        _autoStart();
+      };
+      img.src = 'data:image/jpeg;base64,' + e.data.frame;
+    }
+    if (e.data.type === 'soul_interact') {
+      const cmd = e.data.command;
+      console.log('[SoulBridge] Command:', cmd);
+      if (cmd === 'start' && !monitoring) toggleMonitor();
+      else if (cmd === 'stop' && monitoring) toggleMonitor();
+      else if (cmd === 'panic') panicMode();
+    }
+  });
+
+  // WS direct connection
+  function getWsUrl(){
+    try{ const s=localStorage.getItem('pixelos_ws_url'); if(s) return s; }catch(e){}
+    if(location.hostname.includes('github.io')) return 'wss://your-server.com/ws';
+    const p=location.protocol==='https:'?'wss:':'ws:';
+    return p+'//'+location.hostname+':3000/ws';
+  }
+  let ws;
+  function connect(){
+    try {
+      ws=new WebSocket(getWsUrl());
+      ws.onopen=()=>console.log('[SoulBridge] Connected');
+      ws.onmessage=(e)=>{try{const d=JSON.parse(e.data);if(d.type==='soul_interact'){const cmd=d.command;if(cmd==='start'&&!monitoring)toggleMonitor();else if(cmd==='stop'&&monitoring)toggleMonitor();else if(cmd==='panic')panicMode();}}catch(err){}};
+      ws.onclose=()=>{setTimeout(connect,3000);};
+    } catch(e){}
+  }
+  window.soulBridge={send:(data)=>{if(ws?.readyState===1)ws.send(JSON.stringify(data));}};
+  connect();
+
+  // Auto-start after 2s timeout (in case bridge frames arrive late)
+  setTimeout(() => { _autoStart(); }, 2000);
+
+  // Tell parent we're ready
+  try { window.parent.postMessage({ type: 'skill_ready', id: 'boss-radar' }, '*'); } catch(e) {}
+})();
 </script>
-<script src="../cam-core/cam-bridge.js"></script>
 </body>
 </html>
