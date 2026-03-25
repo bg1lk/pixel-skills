@@ -145,7 +145,7 @@ const game = {
 
 // Diva character
 const diva = {
-  x: 0.5, y: 0.75, dir: 1, walkDir: 'down',
+  x: 0.5, y: 0.55, dir: 1, walkDir: 'down',
   state: 'idle', stateTimer: 0,
   targetX: -1, targetObj: null,
   speed: 0.0008,
@@ -541,7 +541,7 @@ function getCurrentSprite(){
 const particles=[];
 
 function drawDiva(ctx,W,H){
-  const sz=Math.min(W,H)*0.15;
+  const sz=Math.min(W,H)*0.2;
   const px=diva.x*W, py=diva.y*H;
   const sprite=spritesLoaded?getCurrentSprite():null;
   // Fallback: if sprites not loaded, draw a pixel placeholder
@@ -747,7 +747,7 @@ function update(dt){
   }
 
   const room=game.rooms[game.currentRoom];
-  if(room)diva.y=room.groundY;
+  if(room)diva.y=Math.min(room.groundY, 0.62); // 不超过0.62，避免被底部UI遮挡
   diva.x=Math.max(0.05,Math.min(0.95,diva.x));
 
   if(diva.stateTimer<=0&&diva.state!=='idle'&&diva.state!=='walk')setDivaState('idle');
@@ -756,6 +756,13 @@ function update(dt){
   if(diva.state==='idle'&&diva.stateTimer<=0&&!game.brainThinking){
     if(diva.hunger>75){setDivaState('eat');showSpeech('肚子饿了...',2);diva.hunger-=20}
     else if(diva.energy<20){setDivaState('sleep');showSpeech('好困...',2)}
+    // 自主闲逛：idle超过一段时间就随机走走或去物体旁
+    else if(Math.random()<0.02){
+      if(room?.objects.length&&Math.random()<0.6){
+        const o=room.objects[Math.floor(Math.random()*room.objects.length)];
+        diva.targetX=o.x;diva.targetObj=o;setDivaState('walk');
+      }else{diva.targetX=0.1+Math.random()*0.8;setDivaState('walk')}
+    }
   }
 
   // AI think
