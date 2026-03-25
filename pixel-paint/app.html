@@ -1144,7 +1144,8 @@ updateColorUI();
 
   // === 服务端生成图片的渲染函数 ===
   function handleRenderImage(cmd) {
-    if (!cmd || !cmd.image || aiDrawing) return;
+    if (!cmd || !cmd.image) return;
+    // 服务端生成的图片优先级最高，强制覆盖 aiDrawing 锁
     aiDrawing = true;
     setProgress(5);
     const img = new Image();
