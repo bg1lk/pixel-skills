@@ -66,7 +66,7 @@ body {
   overflow: hidden;
   aspect-ratio: 4/3;
 }
-.cam-wrap video {
+.cam-wrap video, .cam-wrap .bridge-cam {
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -390,10 +390,18 @@ const captureCtx = captureCanvas.getContext('2d', { willReadFrequently: true });
 // ===== PARENT CAMERA BRIDGE (PixelOS iframe) =====
 let usingBridge = false;
 const bridgeImg = new Image();
+const bridgeCanvas = document.createElement('canvas');
+bridgeCanvas.width = 320; bridgeCanvas.height = 240;
+const bridgeCtx = bridgeCanvas.getContext('2d');
 window.addEventListener('message', (e) => {
   if (e.data?.type === 'parent_camera_frame' && e.data.frame) {
     if (!usingBridge) {
       usingBridge = true;
+      // 把 video 替换为 bridgeCanvas 显示
+      video.style.display = 'none';
+      bridgeCanvas.style.cssText = video.style.cssText || '';
+      bridgeCanvas.className = 'bridge-cam';
+      video.parentNode.insertBefore(bridgeCanvas, video);
       addLog('safe-log', '[摄像头] 使用PixelOS桥接摄像头');
       document.getElementById('camLabel').textContent = 'CAM BRIDGE';
       document.getElementById('camRec').style.display = 'block';
@@ -405,11 +413,15 @@ bridgeImg.onload = function() {
   if (captureCanvas.width !== bridgeImg.width || captureCanvas.height !== bridgeImg.height) {
     captureCanvas.width = bridgeImg.width || 320;
     captureCanvas.height = bridgeImg.height || 240;
+    bridgeCanvas.width = bridgeImg.width || 320;
+    bridgeCanvas.height = bridgeImg.height || 240;
     diffCanvas.width = captureCanvas.width;
     diffCanvas.height = captureCanvas.height;
   }
+  // 画到 captureCanvas 供运动检测用
   captureCtx.drawImage(bridgeImg, 0, 0, captureCanvas.width, captureCanvas.height);
-  video.style.display = 'none';
+  // 画到 bridgeCanvas 供页面显示
+  bridgeCtx.drawImage(bridgeImg, 0, 0, bridgeCanvas.width, bridgeCanvas.height);
 };
 
 // ===== CAMERA =====
