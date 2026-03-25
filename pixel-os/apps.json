@@ -210,5 +210,13 @@
     "path": "../皮肤检测器/app.html",
     "description": "通过摄像头检测皮肤状态，并给出建议",
     "camera": true
+  },
+  {
+    "id": "test-timer",
+    "name": "测试计时器",
+    "icon": "测",
+    "color": "#58d854",
+    "path": "../test-timer/app.html",
+    "description": "一个简单的像素风倒计时器，可以设置1分钟/3分钟/5分钟，倒计时结束时发出8-bit音效提醒"
   }
 ]
