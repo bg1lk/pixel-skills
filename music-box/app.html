@@ -1,0 +1,139 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>留声机</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0f380f;color:#9bbc0f;font-family:'Courier New',monospace;overflow:hidden;width:100vw;height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.scene{width:320px;height:400px;background:#1a2a1a;border:3px solid #8bac0f;border-radius:8px;position:relative;overflow:hidden;display:flex;flex-direction:column}
+.title{font-size:14px;color:#8bac0f;margin:8px 0;text-align:center;letter-spacing:2px}
+.player{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px}
+.disc{width:120px;height:120px;border:3px solid #8bac0f;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:40px;transition:transform .3s}
+.disc.spinning{animation:spin 3s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.song-name{margin-top:16px;font-size:13px;text-align:center;max-width:260px}
+.song-artist{font-size:10px;color:#306230;margin-top:4px}
+.mood-text{margin-top:12px;font-size:11px;color:#8bac0f;font-style:italic;text-align:center;max-width:260px;min-height:30px}
+.visualizer{display:flex;gap:3px;align-items:end;height:40px;margin-top:12px}
+.bar{width:6px;background:#8bac0f;border-radius:2px 2px 0 0;transition:height .15s}
+.playlist{padding:8px;border-top:2px solid #306230;max-height:140px;overflow-y:auto}
+.playlist::-webkit-scrollbar{width:4px}
+.playlist::-webkit-scrollbar-thumb{background:#306230}
+.song-item{padding:4px 8px;font-size:10px;cursor:pointer;border-radius:3px;margin-bottom:2px}
+.song-item:hover{background:#306230}
+.song-item.active{background:#306230;color:#9bbc0f}
+.controls{display:flex;gap:8px;justify-content:center;padding:8px;border-top:2px solid #306230}
+.btn{background:#306230;border:2px solid #8bac0f;color:#9bbc0f;padding:4px 12px;border-radius:4px;font-size:12px;cursor:pointer;font-family:inherit}
+.btn:hover{background:#8bac0f;color:#0f380f}
+</style></head><body>
+<div class="title">🎵 留 声 机 🎵</div>
+<div class="scene">
+  <div class="player">
+    <div class="disc" id="disc">📀</div>
+    <div class="song-name" id="songName">选一首曲子吧</div>
+    <div class="song-artist" id="songArtist"></div>
+    <div class="mood-text" id="mood"></div>
+    <div class="visualizer" id="vis"></div>
+  </div>
+  <div class="playlist" id="playlist"></div>
+  <div class="controls">
+    <div class="btn" onclick="prev()">⏮</div>
+    <div class="btn" onclick="toggle()">⏯</div>
+    <div class="btn" onclick="next()">⏭</div>
+    <div class="btn" onclick="shuffle()">🔀</div>
+  </div>
+</div>
+
+<script>
+const SONGS = [
+  {name:'高山流水',artist:'古琴名曲',mood:'知音难觅，弹到这段心就静了',notes:[262,294,330,349,392,349,330,294]},
+  {name:'渔舟唱晚',artist:'古筝名曲',mood:'夕阳下划着小船，微风拂面',notes:[330,392,440,494,523,494,440,392]},
+  {name:'二泉映月',artist:'阿炳',mood:'月光洒在泉水上...有点想师父了',notes:[262,262,294,330,294,262,220,196]},
+  {name:'春江花月夜',artist:'古曲',mood:'春天的江边，月亮刚升起来',notes:[330,349,392,440,523,494,440,392]},
+  {name:'梁祝',artist:'小提琴协奏曲',mood:'蝴蝶双飞，这就是人间情啊',notes:[330,392,440,392,349,330,294,330]},
+  {name:'茉莉花',artist:'江苏民歌',mood:'好一朵美丽的茉莉花~',notes:[330,330,392,440,440,392,330,294]},
+  {name:'牧羊曲',artist:'电影少林寺',mood:'日出嵩山坳，晨钟惊飞鸟',notes:[294,330,392,440,392,330,294,262]},
+  {name:'沧海一声笑',artist:'黄霑',mood:'沧海一声笑，滔滔两岸潮！痛快！',notes:[523,440,392,330,294,262,294,330]},
+  {name:'道德经吟诵',artist:'道家音乐',mood:'道可道，非常道...嗯，每次听都有新感悟',notes:[220,262,294,262,220,196,220,262]},
+  {name:'太极琴韵',artist:'养生音乐',mood:'适合打坐冥想，气沉丹田',notes:[196,220,262,294,262,220,196,175]},
+];
+
+let current = -1, playing = false, audioCtx = null, bars = [];
+
+// init visualizer
+const vis = document.getElementById('vis');
+for (let i = 0; i < 16; i++) {
+  const bar = document.createElement('div');
+  bar.className = 'bar';
+  bar.style.height = '4px';
+  vis.appendChild(bar);
+  bars.push(bar);
+}
+
+function renderPlaylist() {
+  const el = document.getElementById('playlist');
+  el.innerHTML = SONGS.map((s,i) => `<div class="song-item ${i===current?'active':''}" onclick="play(${i})">${s.name} — ${s.artist}</div>`).join('');
+}
+
+function play(idx) {
+  current = idx;
+  playing = true;
+  const s = SONGS[current];
+  document.getElementById('songName').textContent = `♫ ${s.name}`;
+  document.getElementById('songArtist').textContent = s.artist;
+  document.getElementById('mood').textContent = `💭 ${s.mood}`;
+  document.getElementById('disc').classList.add('spinning');
+  renderPlaylist();
+  playNotes(s.notes);
+}
+
+function toggle() {
+  if (current < 0) { play(0); return; }
+  playing = !playing;
+  document.getElementById('disc').classList.toggle('spinning', playing);
+  if (playing) playNotes(SONGS[current].notes);
+}
+
+function next() { play((current + 1) % SONGS.length); }
+function prev() { play((current - 1 + SONGS.length) % SONGS.length); }
+function shuffle() { play(Math.floor(Math.random() * SONGS.length)); }
+
+function playNotes(notes) {
+  if (!audioCtx) audioCtx = new AudioContext();
+  notes.forEach((freq, i) => {
+    setTimeout(() => {
+      if (!playing) return;
+      try {
+        const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+        o.type = 'sine'; o.frequency.value = freq; g.gain.value = 0.08;
+        g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.4);
+        o.connect(g); g.connect(audioCtx.destination);
+        o.start(); o.stop(audioCtx.currentTime + 0.4);
+      } catch(e){}
+      // update visualizer
+      bars.forEach((b, j) => {
+        b.style.height = (4 + Math.random() * 30) + 'px';
+        setTimeout(() => b.style.height = '4px', 200);
+      });
+    }, i * 350);
+  });
+  // loop
+  setTimeout(() => { if (playing && current >= 0) playNotes(SONGS[current].notes); }, notes.length * 350 + 500);
+}
+
+// === Soul Bridge ===
+const _app = 'music-box';
+let _ws = null;
+function _initWS(){const url=(location.protocol==='https:'?'wss':'ws')+'://'+location.hostname+':'+location.port+'/ws';try{_ws=new WebSocket(url);_ws.onopen=()=>console.log('[SoulBridge] WS connected');_ws.onmessage=e=>{try{const msg=JSON.parse(e.data);if(msg.type==='soul_interact'&&msg.app===_app)handleCmd(msg.command)}catch(e){}};_ws.onclose=()=>setTimeout(_initWS,3000)}catch(e){setTimeout(_initWS,3000)}}
+function handleCmd(c){
+  const a=c.action||c.type;
+  if(a==='play'||a==='listen'){const name=c.text||c.name||'';const idx=SONGS.findIndex(s=>name.includes(s.name));play(idx>=0?idx:Math.floor(Math.random()*SONGS.length))}
+  if(a==='next'||a==='skip')next();
+  if(a==='prev')prev();
+  if(a==='shuffle'||a==='random')shuffle();
+  if(a==='pause'||a==='stop'){playing=false;document.getElementById('disc').classList.remove('spinning')}
+  if(a==='say')document.getElementById('mood').textContent='💭 '+(c.text||'');
+  if(a==='get_status'){const s=current>=0?SONGS[current]:null;const data={playing,currentSong:s?.name||'无',artist:s?.artist||'',allSongs:SONGS.map(s=>s.name).join('、')};if(_ws&&_ws.readyState===1)_ws.send(JSON.stringify({type:'skill_status',app:_app,data}));window.parent.postMessage({type:'skill_status',app:_app,status:playing?'playing':'paused',data},'*')}
+}
+window.addEventListener('message',e=>{if(e.data?.type==='soul_interact'&&e.data?.app===_app)handleCmd(e.data.command||e.data)});
+window.parent.postMessage({type:'skill_ready',app:_app},'*');
+_initWS();renderPlaylist();
+</script></body></html>

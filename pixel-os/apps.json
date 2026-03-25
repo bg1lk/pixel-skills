@@ -1,14 +1,5 @@
 [
   {
-    "id": "water-reminder",
-    "name": "喝水",
-    "icon": "~",
-    "color": "#3cbcfc",
-    "path": "../water-reminder/app.html",
-    "description": "智能喝水追踪·摄像头AI检测",
-    "camera": true
-  },
-  {
     "id": "pixel-paint",
     "name": "画板",
     "icon": "#",
@@ -26,65 +17,12 @@
     "description": "随机决定器"
   },
   {
-    "id": "claude-room",
-    "name": "房间",
-    "icon": "C",
-    "color": "#d4764e",
-    "path": "../claude-room/app.html",
-    "description": "Claude的像素小房间"
-  },
-  {
-    "id": "boss-radar",
-    "name": "雷达",
-    "icon": "!",
-    "color": "#e63946",
-    "path": "../boss-radar/app.html",
-    "description": "摸鱼辅助·老板雷达",
-    "camera": true
-  },
-  {
     "id": "naruto-pet",
     "name": "鸣人",
     "icon": "N",
     "color": "#ff6b35",
     "path": "../naruto-pet/app.html",
     "description": "鸣人像素桌宠"
-  },
-  {
-    "id": "room-organizer",
-    "name": "整理",
-    "icon": "R",
-    "color": "#58d854",
-    "path": "../room-organizer/app.html",
-    "description": "房间整理分类·收纳助手",
-    "camera": true
-  },
-  {
-    "id": "posture-check",
-    "name": "坐姿",
-    "icon": "P",
-    "color": "#4ecdc4",
-    "path": "../posture-check/app.html",
-    "description": "坐姿矫正器·摄像头检测",
-    "camera": true
-  },
-  {
-    "id": "eye-guardian",
-    "name": "护眼",
-    "icon": "E",
-    "color": "#45b7d1",
-    "path": "../eye-guardian/app.html",
-    "description": "护眼卫士·20-20-20法则",
-    "camera": true
-  },
-  {
-    "id": "seat-tracker",
-    "name": "久坐",
-    "icon": "S",
-    "color": "#ff8c42",
-    "path": "../seat-tracker/app.html",
-    "description": "久坐提醒·拉伸运动",
-    "camera": true
   },
   {
     "id": "anime-filter",
@@ -105,51 +43,6 @@
     "camera": true
   },
   {
-    "id": "breath-coach",
-    "name": "呼吸",
-    "icon": "O",
-    "color": "#7ecfc0",
-    "path": "../breath-coach/app.html",
-    "description": "压力呼吸教练·4-7-8放松法",
-    "camera": true
-  },
-  {
-    "id": "light-meter",
-    "name": "光线",
-    "icon": "L",
-    "color": "#f4d03f",
-    "path": "../light-meter/app.html",
-    "description": "光线检测器·护眼提醒",
-    "camera": true
-  },
-  {
-    "id": "pet-monitor",
-    "name": "宠物",
-    "icon": "W",
-    "color": "#f8a030",
-    "path": "../pet-monitor/app.html",
-    "description": "宠物监控·活动日报",
-    "camera": true
-  },
-  {
-    "id": "away-lock",
-    "name": "锁屏",
-    "icon": "K",
-    "color": "#0078f8",
-    "path": "../away-lock/app.html",
-    "description": "离席自动锁屏·隐私保护",
-    "camera": true
-  },
-  {
-    "id": "mood-buddy",
-    "name": "情绪",
-    "icon": "♥",
-    "color": "#f878f8",
-    "path": "../mood-buddy/app.html",
-    "description": "情绪检测·温暖安慰伙伴",
-    "camera": true
-  },
-  {
     "id": "ar-pet",
     "name": "AR宠物",
     "icon": "🐱",
@@ -165,15 +58,6 @@
     "color": "#f878f8",
     "path": "../pixel-life/app.html",
     "description": "Diva的像素生活·摄像头还原空间",
-    "camera": true
-  },
-  {
-    "id": "喝酒检测器",
-    "name": "喝酒检测器",
-    "icon": "🍺",
-    "color": "#e63946",
-    "path": "../喝酒检测器/app.html",
-    "description": "检测有没有在喝酒，提醒少喝点，对身体好",
     "camera": true
   },
   {
@@ -199,7 +83,7 @@
     "icon": "心",
     "color": "#2a1f4d",
     "path": "../心绪探测器/app.html",
-    "description": "通过摄像头和图片，观察人们在会议或聚会中的情绪与心思。页面将适配手机，并加入有梗有趣的模拟想法。",
+    "description": "通过摄像头观察人们的情绪与心思",
     "camera": true
   },
   {
@@ -208,7 +92,7 @@
     "icon": "皮",
     "color": "#ad7c7e",
     "path": "../皮肤检测器/app.html",
-    "description": "通过摄像头检测皮肤状态，并给出建议",
+    "description": "通过摄像头检测皮肤状态",
     "camera": true
   },
   {
@@ -217,7 +101,7 @@
     "icon": "测",
     "color": "#58d854",
     "path": "../test-timer/app.html",
-    "description": "一个简单的像素风倒计时器，可以设置1分钟/3分钟/5分钟，倒计时结束时发出8-bit音效提醒"
+    "description": "像素风倒计时器"
   },
   {
     "id": "修行日记吧",
@@ -226,5 +110,53 @@
     "color": "#46ae26",
     "path": "../修行日记吧/app.html",
     "description": "修行日记吧"
+  },
+  {
+    "id": "street-food",
+    "name": "街边小摊",
+    "icon": "🍜",
+    "color": "#f4a030",
+    "path": "../street-food/app.html",
+    "description": "街边觅食·吃面吃包子"
+  },
+  {
+    "id": "dao-study",
+    "name": "道经阁",
+    "icon": "📜",
+    "color": "#8bac0f",
+    "path": "../dao-study/app.html",
+    "description": "读道德经·参悟大道"
+  },
+  {
+    "id": "taiji-practice",
+    "name": "修炼场",
+    "icon": "☯",
+    "color": "#58d854",
+    "path": "../taiji-practice/app.html",
+    "description": "太极修炼·练功打坐"
+  },
+  {
+    "id": "street-wander",
+    "name": "闲逛",
+    "icon": "🚶",
+    "color": "#94c545",
+    "path": "../street-wander/app.html",
+    "description": "上海街头闲逛·散步"
+  },
+  {
+    "id": "fishing-spot",
+    "name": "钓鱼",
+    "icon": "🎣",
+    "color": "#0a3a2a",
+    "path": "../fishing-spot/app.html",
+    "description": "河边钓鱼·放空"
+  },
+  {
+    "id": "music-box",
+    "name": "留声机",
+    "icon": "🎵",
+    "color": "#9b59b6",
+    "path": "../music-box/app.html",
+    "description": "听古曲·品道韵"
   }
 ]

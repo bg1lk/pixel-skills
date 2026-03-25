@@ -1,0 +1,135 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>道经阁</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0f380f;color:#9bbc0f;font-family:'Courier New',monospace;overflow:hidden;width:100vw;height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.scene{width:320px;height:420px;background:#1a2a1a;border:3px solid #8bac0f;border-radius:8px;position:relative;overflow:hidden;display:flex;flex-direction:column}
+.title{font-size:14px;color:#8bac0f;margin:8px 0;text-align:center;letter-spacing:2px}
+.book-area{flex:1;padding:16px;display:flex;flex-direction:column}
+.book-title{font-size:13px;color:#9bbc0f;text-align:center;margin-bottom:8px;border-bottom:1px dashed #306230;padding-bottom:6px}
+.passage{flex:1;font-size:12px;line-height:2;color:#8bac0f;overflow-y:auto;padding:4px}
+.passage::-webkit-scrollbar{width:4px}
+.passage::-webkit-scrollbar-thumb{background:#306230;border-radius:2px}
+.insight{background:#306230;margin-top:8px;padding:8px;border-radius:4px;font-size:11px;color:#9bbc0f;min-height:40px;font-style:italic}
+.controls{display:flex;gap:6px;padding:8px;border-top:2px solid #306230;flex-wrap:wrap;justify-content:center}
+.btn{background:#306230;border:2px solid #8bac0f;color:#9bbc0f;padding:5px 10px;border-radius:4px;font-size:11px;cursor:pointer;font-family:inherit}
+.btn:hover{background:#8bac0f;color:#0f380f}
+.progress{font-size:10px;text-align:center;padding:4px;color:#306230}
+.candle{position:absolute;top:10px;right:12px;font-size:20px;animation:flicker 2s infinite}
+@keyframes flicker{0%,100%{opacity:1}50%{opacity:.6}}
+</style></head><body>
+<div class="title">📜 道 经 阁 📜</div>
+<div class="scene">
+  <div class="candle">🕯</div>
+  <div class="book-area">
+    <div class="book-title" id="bookTitle">道德经 · 第一章</div>
+    <div class="passage" id="passage"></div>
+    <div class="insight" id="insight">💭 静心读经，感悟自来...</div>
+  </div>
+  <div class="progress" id="progress">第 1 / 81 章</div>
+  <div class="controls">
+    <div class="btn" onclick="prevChapter()">◀ 上一章</div>
+    <div class="btn" onclick="ponder()">🧘 参悟</div>
+    <div class="btn" onclick="nextChapter()">下一章 ▶</div>
+    <div class="btn" onclick="randomChapter()">🎲 随机</div>
+  </div>
+</div>
+
+<script>
+const CHAPTERS = [
+  {t:'第一章',p:'道可道，非常道；名可名，非常名。无名天地之始；有名万物之母。故常无欲，以观其妙；常有欲，以观其徼。此两者同出而异名，同谓之玄。玄之又玄，众妙之门。'},
+  {t:'第二章',p:'天下皆知美之为美，斯恶已。皆知善之为善，斯不善已。有无相生，难易相成，长短相形，高下相盈，音声相和，前后相随。恒也。'},
+  {t:'第三章',p:'不尚贤，使民不争；不贵难得之货，使民不为盗；不见可欲，使民心不乱。是以圣人之治，虚其心，实其腹，弱其志，强其骨。'},
+  {t:'第四章',p:'道冲，而用之或不盈。渊兮，似万物之宗。挫其锐，解其纷，和其光，同其尘。湛兮，似或存。吾不知谁之子，象帝之先。'},
+  {t:'第五章',p:'天地不仁，以万物为刍狗；圣人不仁，以百姓为刍狗。天地之间，其犹橐籥乎？虚而不屈，动而愈出。多言数穷，不如守中。'},
+  {t:'第六章',p:'谷神不死，是谓玄牝。玄牝之门，是谓天地根。绵绵若存，用之不勤。'},
+  {t:'第七章',p:'天长地久。天地所以能长且久者，以其不自生，故能长生。是以圣人后其身而身先，外其身而身存。非以其无私邪？故能成其私。'},
+  {t:'第八章',p:'上善若水。水善利万物而不争，处众人之所恶，故几于道。居善地，心善渊，与善仁，言善信，政善治，事善能，动善时。夫唯不争，故无尤。'},
+  {t:'第九章',p:'持而盈之，不如其已。揣而锐之，不可长保。金玉满堂，莫之能守。富贵而骄，自遗其咎。功遂身退，天之道也。'},
+  {t:'第十章',p:'载营魄抱一，能无离乎？专气致柔，能如婴儿乎？涤除玄鉴，能无疵乎？爱民治国，能无为乎？天门开阖，能为雌乎？明白四达，能无知乎？'},
+  {t:'第十一章',p:'三十辐共一毂，当其无，有车之用。埏埴以为器，当其无，有器之用。凿户牖以为室，当其无，有室之用。故有之以为利，无之以为用。'},
+  {t:'第十六章',p:'致虚极，守静笃。万物并作，吾以观复。夫物芸芸，各复归其根。归根曰静，静曰复命。复命曰常，知常曰明。'},
+  {t:'第二十二章',p:'曲则全，枉则直，洼则盈，敝则新，少则得，多则惑。是以圣人抱一为天下式。不自见，故明；不自是，故彰；不自伐，故有功；不自矜，故长。'},
+  {t:'第二十五章',p:'有物混成，先天地生。寂兮寥兮，独立而不改，周行而不殆，可以为天地母。吾不知其名，字之曰道，强为之名曰大。'},
+  {t:'第三十三章',p:'知人者智，自知者明。胜人者有力，自胜者强。知足者富。强行者有志。不失其所者久。死而不亡者寿。'},
+  {t:'第三十七章',p:'道常无为而无不为。侯王若能守之，万物将自化。化而欲作，吾将镇之以无名之朴。无名之朴，夫亦将不欲。不欲以静，天下将自正。'},
+  {t:'第四十二章',p:'道生一，一生二，二生三，三生万物。万物负阴而抱阳，冲气以为和。人之所恶，唯孤、寡、不谷，而王公以为称。'},
+  {t:'第四十八章',p:'为学日益，为道日损。损之又损，以至于无为。无为而无不为。取天下常以无事，及其有事，不足以取天下。'},
+  {t:'第五十六章',p:'知者不言，言者不知。塞其兑，闭其门。挫其锐，解其纷。和其光，同其尘。是谓玄同。'},
+  {t:'第七十六章',p:'人之生也柔弱，其死也坚强。草木之生也柔脆，其死也枯槁。故坚强者死之徒，柔弱者生之徒。是以兵强则灭，木强则折。强大处下，柔弱处上。'},
+  {t:'第七十八章',p:'天下莫柔弱于水，而攻坚强者莫之能胜，以其无以易之。弱之胜强，柔之胜刚，天下莫不知，莫能行。'},
+  {t:'第八十一章',p:'信言不美，美言不信。善者不辩，辩者不善。知者不博，博者不知。圣人不积，既以为人，己愈有，既以与人，己愈多。天之道，利而不害。圣人之道，为而不争。'},
+];
+
+const INSIGHTS = [
+  '这段话是在说...万物本无定名，定名了反而看不到本质。','水最柔弱却能穿石，以柔克刚才是大道。',
+  '知足常乐，不是躺平，而是知道自己要什么。','功成身退，不恋栈，才是真通透。',
+  '有和无互相成就，就像碗——空的部分才是能盛东西的。','回到根本就是安静，安静才能看清。',
+  '道法自然...自然也不是什么都不做，而是顺势而为。','柔弱胜刚强，师父说的果然没错。',
+  '不争，所以天下莫能与之争。嗯...擦鞋也是修行。','虚心实腹，这个道理在红尘中更深有体会。',
+];
+
+let chapter = 0;
+
+function showChapter() {
+  const ch = CHAPTERS[chapter];
+  document.getElementById('bookTitle').textContent = `道德经 · ${ch.t}`;
+  document.getElementById('passage').textContent = ch.p;
+  document.getElementById('progress').textContent = `第 ${chapter+1} / ${CHAPTERS.length} 章`;
+  document.getElementById('insight').textContent = '💭 静心读经，感悟自来...';
+}
+
+function nextChapter() { chapter = (chapter + 1) % CHAPTERS.length; showChapter(); beep(500,60); }
+function prevChapter() { chapter = (chapter - 1 + CHAPTERS.length) % CHAPTERS.length; showChapter(); beep(400,60); }
+function randomChapter() { chapter = Math.floor(Math.random() * CHAPTERS.length); showChapter(); beep(600,60); beep(700,60); }
+function ponder() {
+  const insight = INSIGHTS[Math.floor(Math.random() * INSIGHTS.length)];
+  document.getElementById('insight').textContent = '💭 ' + insight;
+  beep(400,100); setTimeout(()=>beep(500,100),120); setTimeout(()=>beep(600,150),250);
+}
+
+function beep(freq, dur) {
+  try { const c = new AudioContext(), o = c.createOscillator(), g = c.createGain();
+  o.type='triangle';o.frequency.value=freq;g.gain.value=0.06;
+  o.connect(g);g.connect(c.destination);o.start();o.stop(c.currentTime+dur/1000); } catch(e){}
+}
+
+// === Soul Bridge ===
+const _app = 'dao-study';
+let _ws = null;
+function _initWS() {
+  const url = (location.protocol==='https:'?'wss':'ws')+'://'+location.hostname+':'+location.port+'/ws';
+  try {
+    _ws = new WebSocket(url);
+    _ws.onopen = () => console.log('[SoulBridge] WS connected');
+    _ws.onmessage = e => {
+      try { const msg = JSON.parse(e.data);
+        if (msg.type === 'soul_interact' && msg.app === _app) handleCmd(msg.command);
+      } catch(e){}
+    };
+    _ws.onclose = () => setTimeout(_initWS, 3000);
+  } catch(e){ setTimeout(_initWS, 3000); }
+}
+
+function handleCmd(c) {
+  const a = c.action || c.type;
+  if (a === 'read' || a === 'next') nextChapter();
+  if (a === 'prev') prevChapter();
+  if (a === 'random') randomChapter();
+  if (a === 'ponder' || a === 'think') ponder();
+  if (a === 'say') { document.getElementById('insight').textContent = '💭 ' + (c.text||''); }
+  if (a === 'get_status') {
+    const ch = CHAPTERS[chapter];
+    const data = {chapter: ch.t, text: ch.p.slice(0,40), totalChapters: CHAPTERS.length, currentIndex: chapter+1};
+    if (_ws && _ws.readyState === 1) _ws.send(JSON.stringify({type:'skill_status',app:_app,data}));
+    window.parent.postMessage({type:'skill_status',app:_app,status:'reading',data}, '*');
+  }
+}
+
+window.addEventListener('message', e => {
+  if (e.data?.type === 'soul_interact' && e.data?.app === _app) handleCmd(e.data.command || e.data);
+});
+window.parent.postMessage({type:'skill_ready',app:_app}, '*');
+_initWS();
+showChapter();
+</script></body></html>

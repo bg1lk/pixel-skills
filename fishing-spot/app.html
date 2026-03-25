@@ -1,0 +1,129 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>河边钓鱼</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0f380f;color:#9bbc0f;font-family:'Courier New',monospace;overflow:hidden;width:100vw;height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.scene{width:320px;height:400px;background:#0a2a1a;border:3px solid #8bac0f;border-radius:8px;position:relative;overflow:hidden}
+.title{font-size:14px;color:#8bac0f;margin:8px 0;text-align:center;letter-spacing:2px}
+canvas{display:block}
+.speech{position:absolute;top:14px;left:50%;transform:translateX(-50%);background:#9bbc0f;color:#0f380f;padding:6px 12px;border-radius:8px;font-size:11px;max-width:260px;text-align:center;opacity:0;transition:opacity .3s;z-index:5}
+.speech.show{opacity:1}
+.controls{position:absolute;bottom:6px;left:0;right:0;display:flex;gap:6px;justify-content:center}
+.btn{background:#306230;border:2px solid #8bac0f;color:#9bbc0f;padding:4px 10px;border-radius:4px;font-size:10px;cursor:pointer;font-family:inherit}
+.btn:hover{background:#8bac0f;color:#0f380f}
+.catch-log{position:absolute;top:50px;right:8px;font-size:10px;text-align:right;line-height:1.8;max-height:120px;overflow:hidden}
+</style></head><body>
+<div class="title">🎣 河 边 钓 鱼 🎣</div>
+<div class="scene">
+  <div class="speech" id="speech"></div>
+  <canvas id="cv" width="320" height="400"></canvas>
+  <div class="catch-log" id="log"></div>
+  <div class="controls">
+    <div class="btn" onclick="cast()">🎣 抛竿</div>
+    <div class="btn" onclick="pull()">💪 收线!</div>
+    <div class="btn" onclick="wait()">😌 等等看</div>
+  </div>
+</div>
+
+<script>
+const ctx = document.getElementById('cv').getContext('2d');
+const FISH = [
+  {name:'小鲫鱼',emoji:'🐟',rate:.35,msg:'虽小但很鲜！'},
+  {name:'草鱼',emoji:'🐠',rate:.25,msg:'个头不错！'},
+  {name:'大鲤鱼',emoji:'🎏',rate:.12,msg:'好大一条！发了！'},
+  {name:'甲鱼',emoji:'🐢',rate:.05,msg:'这...放生吧'},
+  {name:'破鞋',emoji:'👟',rate:.15,msg:'......'},
+  {name:'空瓶子',emoji:'🍶',rate:.08,msg:'河里垃圾不少啊'},
+];
+
+let fishing = false, biting = false, bobY = 200, frame = 0, catches = [], ripples = [];
+
+function showSpeech(t,d=3000){const el=document.getElementById('speech');el.textContent=t;el.classList.add('show');setTimeout(()=>el.classList.remove('show'),d)}
+
+function cast() {
+  if (fishing) { showSpeech('鱼竿已经放下了，耐心等...'); return; }
+  fishing = true; biting = false;
+  showSpeech('🎣 鱼竿放下了...静静等待...', 2000);
+  ripples.push({x:180,y:240,r:5,life:30});
+  beep(300,60);
+  // random bite time
+  setTimeout(() => {
+    if (!fishing) return;
+    biting = true;
+    showSpeech('❗ 有动静了！快收线！', 4000);
+    beep(800,100); setTimeout(()=>beep(800,100),150);
+    // auto-escape
+    setTimeout(() => { if (biting) { biting = false; fishing = false; showSpeech('跑了...手太慢了'); }}, 5000);
+  }, 2000 + Math.random() * 6000);
+}
+
+function pull() {
+  if (!fishing) { showSpeech('先抛竿啊~'); return; }
+  if (!biting) { showSpeech('还没鱼上钩呢，别急'); fishing = false; return; }
+  fishing = false; biting = false;
+  // determine catch
+  const roll = Math.random();
+  let cumul = 0;
+  for (const f of FISH) {
+    cumul += f.rate;
+    if (roll <= cumul) {
+      catches.unshift(f);
+      if (catches.length > 5) catches.pop();
+      showSpeech(`${f.emoji} 钓到了${f.name}！${f.msg}`, 4000);
+      ripples.push({x:180,y:240,r:5,life:30});
+      beep(600,80); setTimeout(()=>beep(800,80),100); setTimeout(()=>beep(1000,120),200);
+      updateLog();
+      return;
+    }
+  }
+}
+
+function wait() {
+  showSpeech(['河风真舒服...','看水面发呆也不错','远处有船经过...','柳树影子在水面晃','一只白鹭飞过去了'][Math.floor(Math.random()*5)], 3000);
+  beep(250,100);
+}
+
+function updateLog() {
+  document.getElementById('log').innerHTML = catches.map(c => `${c.emoji}${c.name}`).join('<br>');
+}
+
+function draw() {
+  frame++;
+  ctx.fillStyle = '#0a2a1a'; ctx.fillRect(0,0,320,400);
+  // sky
+  ctx.fillStyle = '#0f1a2f';ctx.fillRect(0,0,320,180);
+  // stars
+  ctx.fillStyle='#306230';
+  for(let i=0;i<8;i++) ctx.fillRect(20+i*38+Math.sin(i)*10, 20+Math.cos(i*2)*30, 2, 2);
+  // water
+  ctx.fillStyle = '#0a3a2a';ctx.fillRect(0,200,320,200);
+  for(let i=0;i<16;i++){ctx.fillStyle=i%2?'#0f4a3a':'#083828';ctx.fillRect(i*20,210+Math.sin(frame*0.02+i)*3,20,4)}
+  // bank
+  ctx.fillStyle='#1a3a1a';ctx.fillRect(0,180,320,25);
+  // tree
+  ctx.fillStyle='#306230';ctx.fillRect(30,120,8,60);ctx.fillRect(10,100,48,30);
+  // figure
+  ctx.fillStyle='#9bbc0f';ctx.fillRect(100,165,8,16);ctx.fillRect(99,159,10,8);
+  // rod
+  ctx.strokeStyle='#8bac0f';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(108,162);ctx.lineTo(180,140);
+  if(fishing){ctx.lineTo(180,200+Math.sin(frame*0.1)*(biting?6:2));}
+  ctx.stroke();
+  // bobber
+  if(fishing){ctx.fillStyle=biting?'#ff4444':'#f4d03f';ctx.fillRect(178,198+Math.sin(frame*0.1)*(biting?6:2),4,4);}
+  // ripples
+  ripples=ripples.filter(r=>{r.r+=0.5;r.life--;ctx.strokeStyle='#306230';ctx.globalAlpha=r.life/30;ctx.beginPath();ctx.arc(r.x,r.y,r.r,0,Math.PI*2);ctx.stroke();ctx.globalAlpha=1;return r.life>0;});
+  // moon
+  ctx.fillStyle='#306230';ctx.beginPath();ctx.arc(260,50,18,0,Math.PI*2);ctx.fill();
+  requestAnimationFrame(draw);
+}
+
+function beep(f,d){try{const c=new AudioContext(),o=c.createOscillator(),g=c.createGain();o.type='sine';o.frequency.value=f;g.gain.value=0.06;o.connect(g);g.connect(c.destination);o.start();o.stop(c.currentTime+d/1000)}catch(e){}}
+
+// === Soul Bridge ===
+const _app='fishing-spot';let _ws=null;
+function _initWS(){const url=(location.protocol==='https:'?'wss':'ws')+'://'+location.hostname+':'+location.port+'/ws';try{_ws=new WebSocket(url);_ws.onopen=()=>console.log('[SoulBridge] WS connected');_ws.onmessage=e=>{try{const msg=JSON.parse(e.data);if(msg.type==='soul_interact'&&msg.app===_app)handleCmd(msg.command)}catch(e){}};_ws.onclose=()=>setTimeout(_initWS,3000)}catch(e){setTimeout(_initWS,3000)}}
+function handleCmd(c){const a=c.action||c.type;if(a==='cast'||a==='fish')cast();if(a==='pull'||a==='reel')pull();if(a==='wait'||a==='relax')wait();if(a==='say')showSpeech(c.text||'',4000);if(a==='get_status'){const data={fishing,biting,catches:catches.map(c=>c.name),totalCatch:catches.length};if(_ws&&_ws.readyState===1)_ws.send(JSON.stringify({type:'skill_status',app:_app,data}));window.parent.postMessage({type:'skill_status',app:_app,status:fishing?'fishing':'idle',data},'*')}}
+window.addEventListener('message',e=>{if(e.data?.type==='soul_interact'&&e.data?.app===_app)handleCmd(e.data.command||e.data)});
+window.parent.postMessage({type:'skill_ready',app:_app},'*');
+_initWS();draw();showSpeech('找了个好位置，开钓~',3000);
+</script></body></html>

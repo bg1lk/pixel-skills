@@ -1,0 +1,169 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>太极修炼场</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0f380f;color:#9bbc0f;font-family:'Courier New',monospace;overflow:hidden;width:100vw;height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.scene{width:320px;height:400px;background:#1a2a1a;border:3px solid #8bac0f;border-radius:8px;position:relative;overflow:hidden}
+.title{font-size:14px;color:#8bac0f;margin:8px 0;text-align:center;letter-spacing:2px}
+canvas{display:block;margin:0 auto}
+.speech{position:absolute;top:14px;left:50%;transform:translateX(-50%);background:#9bbc0f;color:#0f380f;padding:6px 12px;border-radius:8px;font-size:11px;max-width:260px;text-align:center;opacity:0;transition:opacity .3s;z-index:5}
+.speech.show{opacity:1}
+.controls{position:absolute;bottom:8px;left:0;right:0;display:flex;gap:6px;justify-content:center;flex-wrap:wrap;padding:0 8px}
+.btn{background:#306230;border:2px solid #8bac0f;color:#9bbc0f;padding:4px 8px;border-radius:4px;font-size:10px;cursor:pointer;font-family:inherit}
+.btn:hover{background:#8bac0f;color:#0f380f}
+.btn.active{background:#9bbc0f;color:#0f380f}
+.stats{position:absolute;top:50px;right:8px;font-size:10px;text-align:right;line-height:1.8}
+</style></head><body>
+<div class="title">☯ 太 极 修 炼 场 ☯</div>
+<div class="scene" id="scene">
+  <div class="speech" id="speech"></div>
+  <canvas id="cv" width="320" height="400"></canvas>
+  <div class="stats" id="stats"></div>
+  <div class="controls">
+    <div class="btn" onclick="doMove('太极拳')">🥋 太极拳</div>
+    <div class="btn" onclick="doMove('打坐')">🧘 打坐</div>
+    <div class="btn" onclick="doMove('站桩')">🧍 站桩</div>
+    <div class="btn" onclick="doMove('剑法')">⚔ 剑法</div>
+    <div class="btn" onclick="doMove('吐纳')">🌬 吐纳</div>
+  </div>
+</div>
+
+<script>
+const ctx = document.getElementById('cv').getContext('2d');
+let energy = 50, cultivation = 0, currentMove = '待命', frame = 0, particles = [];
+const MOVES = {
+  '太极拳': {energyCost:8, cultGain:3, color:'#8bac0f', msg:'以柔克刚，四两拨千斤...'},
+  '打坐':   {energyCost:-10,cultGain:2, color:'#9bbc0f', msg:'心如止水，气沉丹田...'},
+  '站桩':   {energyCost:5, cultGain:4, color:'#306230', msg:'扎根大地，感受天地灵气...'},
+  '剑法':   {energyCost:12,cultGain:5, color:'#f4d03f', msg:'剑走偏锋，快如闪电！'},
+  '吐纳':   {energyCost:-8,cultGain:1, color:'#88cc88', msg:'吸...呼...吸...呼...'},
+};
+
+function doMove(name) {
+  const m = MOVES[name];
+  if (energy - m.energyCost < 0 && m.energyCost > 0) { showSpeech('精力不够了，先歇歇...'); return; }
+  currentMove = name;
+  energy = Math.min(100, Math.max(0, energy - m.energyCost));
+  cultivation += m.cultGain;
+  showSpeech(m.msg, 3000);
+  for (let i = 0; i < 8; i++) particles.push({x:160,y:200,vx:(Math.random()-.5)*4,vy:(Math.random()-.5)*4,life:40,color:m.color});
+  beep(400,80); setTimeout(()=>beep(600,80),100);
+}
+
+function showSpeech(text, dur=3000) {
+  const el = document.getElementById('speech');
+  el.textContent = text; el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), dur);
+}
+
+function drawFigure() {
+  const cx = 160, cy = 220;
+  ctx.fillStyle = '#9bbc0f';
+  // head
+  ctx.fillRect(cx-6, cy-40, 12, 12);
+  // body
+  ctx.fillRect(cx-4, cy-28, 8, 20);
+  // legs
+  const legSpread = currentMove === '站桩' ? 10 : currentMove === '打坐' ? 4 : 6 + Math.sin(frame*0.1)*3;
+  ctx.fillRect(cx-legSpread, cy-8, 4, 18);
+  ctx.fillRect(cx+legSpread-4, cy-8, 4, 18);
+  // arms
+  const armAngle = frame * 0.05;
+  if (currentMove === '太极拳') {
+    const ax = Math.cos(armAngle) * 14, ay = Math.sin(armAngle) * 8;
+    ctx.fillRect(cx-18+ax, cy-26+ay, 12, 4);
+    ctx.fillRect(cx+6-ax, cy-26-ay, 12, 4);
+  } else if (currentMove === '剑法') {
+    ctx.fillStyle = '#f4d03f';
+    ctx.fillRect(cx+8, cy-36+Math.sin(frame*0.15)*6, 20, 3);
+    ctx.fillStyle = '#9bbc0f';
+    ctx.fillRect(cx+4, cy-28, 8, 4);
+  } else if (currentMove === '打坐') {
+    ctx.fillRect(cx-14, cy-24, 8, 4);
+    ctx.fillRect(cx+6, cy-24, 8, 4);
+  } else {
+    ctx.fillRect(cx-16, cy-26, 10, 4);
+    ctx.fillRect(cx+6, cy-26, 10, 4);
+  }
+  // yin-yang aura
+  if (cultivation > 10) {
+    ctx.strokeStyle = '#306230';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(cx, cy-14, 30+Math.sin(frame*0.03)*5, 0, Math.PI*2);
+    ctx.stroke();
+  }
+}
+
+function draw() {
+  frame++;
+  ctx.fillStyle = '#1a2a1a';
+  ctx.fillRect(0, 0, 320, 400);
+  // ground
+  ctx.fillStyle = '#0f380f';
+  ctx.fillRect(0, 340, 320, 60);
+  // mountains
+  ctx.fillStyle = '#162016';
+  ctx.beginPath();ctx.moveTo(0,200);ctx.lineTo(80,120);ctx.lineTo(160,180);ctx.lineTo(240,100);ctx.lineTo(320,160);ctx.lineTo(320,200);ctx.fill();
+  // moon
+  ctx.fillStyle = '#306230';
+  ctx.beginPath();ctx.arc(260,60,20,0,Math.PI*2);ctx.fill();
+
+  drawFigure();
+
+  // particles
+  particles = particles.filter(p => p.life > 0);
+  particles.forEach(p => {
+    p.x += p.vx; p.y += p.vy; p.life--;
+    ctx.fillStyle = p.color;
+    ctx.globalAlpha = p.life / 40;
+    ctx.fillRect(p.x, p.y, 3, 3);
+    ctx.globalAlpha = 1;
+  });
+
+  // stats
+  document.getElementById('stats').innerHTML = `精力:${energy}<br>修为:${cultivation}<br>招式:${currentMove}`;
+  requestAnimationFrame(draw);
+}
+
+function beep(f,d){try{const c=new AudioContext(),o=c.createOscillator(),g=c.createGain();o.type='triangle';o.frequency.value=f;g.gain.value=0.06;o.connect(g);g.connect(c.destination);o.start();o.stop(c.currentTime+d/1000)}catch(e){}}
+
+// === Soul Bridge ===
+const _app = 'taiji-practice';
+let _ws = null;
+function _initWS() {
+  const url = (location.protocol==='https:'?'wss':'ws')+'://'+location.hostname+':'+location.port+'/ws';
+  try {
+    _ws = new WebSocket(url);
+    _ws.onopen = () => console.log('[SoulBridge] WS connected');
+    _ws.onmessage = e => {
+      try { const msg = JSON.parse(e.data);
+        if (msg.type === 'soul_interact' && msg.app === _app) handleCmd(msg.command);
+      } catch(e){}
+    };
+    _ws.onclose = () => setTimeout(_initWS, 3000);
+  } catch(e){ setTimeout(_initWS, 3000); }
+}
+
+function handleCmd(c) {
+  const a = c.action || c.type;
+  if (a === 'practice' || a === 'taiji') doMove('太极拳');
+  if (a === 'meditate' || a === 'sit') doMove('打坐');
+  if (a === 'stand') doMove('站桩');
+  if (a === 'sword') doMove('剑法');
+  if (a === 'breathe') doMove('吐纳');
+  if (a === 'say') showSpeech(c.text || '', 4000);
+  if (a === 'get_status') {
+    const data = {energy, cultivation, currentMove};
+    if (_ws && _ws.readyState === 1) _ws.send(JSON.stringify({type:'skill_status',app:_app,data}));
+    window.parent.postMessage({type:'skill_status',app:_app,status:'practicing',data}, '*');
+  }
+}
+
+window.addEventListener('message', e => {
+  if (e.data?.type === 'soul_interact' && e.data?.app === _app) handleCmd(e.data.command || e.data);
+});
+window.parent.postMessage({type:'skill_ready',app:_app}, '*');
+_initWS();
+draw();
+</script></body></html>

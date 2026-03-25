@@ -1,0 +1,137 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>街边小摊</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0f380f;color:#9bbc0f;font-family:'Courier New',monospace;overflow:hidden;width:100vw;height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.scene{width:320px;height:400px;background:#306230;border:3px solid #8bac0f;border-radius:8px;position:relative;overflow:hidden;image-rendering:pixelated}
+.title{font-size:14px;color:#8bac0f;margin:8px 0;text-align:center;letter-spacing:2px}
+.stall{position:absolute;bottom:60px;left:50%;transform:translateX(-50%);text-align:center}
+.stall-top{font-size:40px;line-height:1}
+.menu-items{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;justify-content:center}
+.food-item{background:#0f380f;border:2px solid #8bac0f;border-radius:4px;padding:6px 10px;font-size:12px;cursor:pointer;transition:all .2s}
+.food-item:hover{background:#8bac0f;color:#0f380f}
+.food-item.selected{background:#9bbc0f;color:#0f380f;border-color:#9bbc0f}
+.speech{position:absolute;top:20px;left:50%;transform:translateX(-50%);background:#9bbc0f;color:#0f380f;padding:8px 14px;border-radius:8px;font-size:12px;max-width:260px;text-align:center;opacity:0;transition:opacity .3s}
+.speech.show{opacity:1}
+.status-bar{position:absolute;bottom:0;left:0;right:0;background:#0f380f;padding:6px;font-size:10px;display:flex;justify-content:space-between;border-top:2px solid #8bac0f}
+.npc{position:absolute;bottom:120px;font-size:28px}
+.npc.left{left:30px}.npc.right{right:30px}
+.steam{position:absolute;font-size:16px;animation:steam 1.5s infinite}
+@keyframes steam{0%{opacity:1;transform:translateY(0)}100%{opacity:0;transform:translateY(-20px)}}
+.coins{color:#f4d03f}
+</style></head><body>
+<div class="title">☰ 街 边 小 摊 ☰</div>
+<div class="scene" id="scene">
+  <div class="speech" id="speech"></div>
+  <div class="steam" style="top:80px;left:140px">♨</div>
+  <div class="steam" style="top:75px;left:170px;animation-delay:.5s">♨</div>
+  <div class="npc left">👨‍🍳</div>
+  <div class="npc right">🧑</div>
+  <div class="stall">
+    <div class="stall-top">🏪</div>
+    <div class="menu-items" id="menu"></div>
+  </div>
+  <div class="status-bar">
+    <span>饥饿: <span id="hunger">??</span></span>
+    <span class="coins">💰 <span id="money">??</span>元</span>
+  </div>
+</div>
+
+<script>
+const FOODS = [
+  {name:'阳春面',price:8,fill:25,emoji:'🍜',comment:'汤头鲜，面条劲道'},
+  {name:'肉包子',price:5,fill:15,emoji:'🥟',comment:'皮薄馅大，咬一口汁水四溢'},
+  {name:'煎饼果子',price:7,fill:20,emoji:'🥞',comment:'脆皮嘎嘣脆'},
+  {name:'豆浆油条',price:4,fill:12,emoji:'🥛',comment:'经典搭配，暖胃'},
+  {name:'烤红薯',price:3,fill:10,emoji:'🍠',comment:'甜丝丝的，暖手又暖心'},
+  {name:'馄饨',price:6,fill:18,emoji:'🥟',comment:'个头小但鲜得很'},
+  {name:'茶叶蛋',price:2,fill:8,emoji:'🥚',comment:'五香入味，路上吃刚好'},
+  {name:'凉皮',price:6,fill:16,emoji:'🥗',comment:'酸辣爽口，夏天最解馋'},
+];
+
+let hunger = 50, money = 50, lastEat = '';
+const menuEl = document.getElementById('menu');
+const speechEl = document.getElementById('speech');
+
+function render() {
+  menuEl.innerHTML = '';
+  const available = FOODS.sort(() => Math.random() - 0.5).slice(0, 4);
+  available.forEach(f => {
+    const el = document.createElement('div');
+    el.className = 'food-item';
+    el.textContent = `${f.emoji}${f.name} ${f.price}元`;
+    el.onclick = () => eat(f);
+    menuEl.appendChild(el);
+  });
+  document.getElementById('hunger').textContent = hunger;
+  document.getElementById('money').textContent = money;
+}
+
+function showSpeech(text, duration = 3000) {
+  speechEl.textContent = text;
+  speechEl.classList.add('show');
+  setTimeout(() => speechEl.classList.remove('show'), duration);
+}
+
+function eat(food) {
+  if (money < food.price) { showSpeech('银两不够了...只能咽咽口水'); return; }
+  money -= food.price;
+  hunger = Math.max(0, hunger - food.fill);
+  lastEat = food.name;
+  showSpeech(`${food.emoji} ${food.comment}`, 3500);
+  beep(600, 80); setTimeout(() => beep(800, 80), 100);
+  render();
+}
+
+function beep(freq, dur) {
+  try { const c = new AudioContext(), o = c.createOscillator(), g = c.createGain();
+  o.type = 'square'; o.frequency.value = freq; g.gain.value = 0.08;
+  o.connect(g); g.connect(c.destination); o.start(); o.stop(c.currentTime + dur/1000); } catch(e){}
+}
+
+// === Soul Bridge ===
+const _app = 'street-food';
+let _ws = null;
+function _initWS() {
+  const url = (location.protocol==='https:'?'wss':'ws')+'://'+location.hostname+':'+location.port+'/ws';
+  try {
+    _ws = new WebSocket(url);
+    _ws.onopen = () => console.log('[SoulBridge] WS connected');
+    _ws.onmessage = e => {
+      try {
+        const msg = JSON.parse(e.data);
+        if (msg.type === 'soul_interact' && msg.app === _app) handleCmd(msg.command);
+      } catch(e){}
+    };
+    _ws.onclose = () => setTimeout(_initWS, 3000);
+  } catch(e){ setTimeout(_initWS, 3000); }
+}
+
+function handleCmd(c) {
+  const a = c.action || c.type;
+  if (a === 'eat' || a === 'order') {
+    const name = c.text || c.name || '';
+    const food = FOODS.find(f => name.includes(f.name)) || FOODS[Math.floor(Math.random()*FOODS.length)];
+    eat(food);
+  }
+  if (a === 'say') showSpeech(c.text || '嗯...', 4000);
+  if (a === 'look' || a === 'browse') {
+    render();
+    showSpeech('看看今天有什么好吃的...', 3000);
+  }
+  if (a === 'get_status') {
+    const data = {hunger, money, lastEat, availableFoods: FOODS.map(f=>f.name).join('、')};
+    if (_ws && _ws.readyState === 1) _ws.send(JSON.stringify({type:'skill_status',app:_app,data}));
+    window.parent.postMessage({type:'skill_status',app:_app,status:'ready',data}, '*');
+  }
+}
+
+window.addEventListener('message', e => {
+  if (e.data?.type === 'soul_interact' && e.data?.app === _app) handleCmd(e.data.command || e.data);
+});
+
+window.parent.postMessage({type:'skill_ready',app:_app}, '*');
+_initWS();
+render();
+showSpeech('老板！来碗面~', 3000);
+</script></body></html>

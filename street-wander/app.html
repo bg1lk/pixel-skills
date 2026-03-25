@@ -1,0 +1,153 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>街头闲逛</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0f380f;color:#9bbc0f;font-family:'Courier New',monospace;overflow:hidden;width:100vw;height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.scene{width:320px;height:400px;background:#1a2a1a;border:3px solid #8bac0f;border-radius:8px;position:relative;overflow:hidden}
+.title{font-size:14px;color:#8bac0f;margin:8px 0;text-align:center;letter-spacing:2px}
+canvas{display:block}
+.speech{position:absolute;top:14px;left:50%;transform:translateX(-50%);background:#9bbc0f;color:#0f380f;padding:6px 12px;border-radius:8px;font-size:11px;max-width:260px;text-align:center;opacity:0;transition:opacity .3s;z-index:5}
+.speech.show{opacity:1}
+.location{position:absolute;bottom:36px;left:0;right:0;text-align:center;font-size:11px;color:#8bac0f}
+.controls{position:absolute;bottom:6px;left:0;right:0;display:flex;gap:6px;justify-content:center;padding:0 8px}
+.btn{background:#306230;border:2px solid #8bac0f;color:#9bbc0f;padding:4px 8px;border-radius:4px;font-size:10px;cursor:pointer;font-family:inherit}
+.btn:hover{background:#8bac0f;color:#0f380f}
+</style></head><body>
+<div class="title">🚶 街 头 闲 逛 🚶</div>
+<div class="scene">
+  <div class="speech" id="speech"></div>
+  <canvas id="cv" width="320" height="400"></canvas>
+  <div class="location" id="loc">📍 南京路步行街</div>
+  <div class="controls">
+    <div class="btn" onclick="walk()">👣 继续走</div>
+    <div class="btn" onclick="look()">👀 四处看看</div>
+    <div class="btn" onclick="rest()">🪑 坐一会</div>
+  </div>
+</div>
+
+<script>
+const ctx = document.getElementById('cv').getContext('2d');
+const PLACES = [
+  {name:'南京路步行街',things:['霓虹灯招牌','卖糖炒栗子的大爷','排队买奶茶的年轻人'],sky:'#1a2a1a',ground:'#306230'},
+  {name:'外滩江边',things:['东方明珠在对岸闪烁','江风吹来很舒服','有人在拍照'],sky:'#0f2a3f',ground:'#1a3a2a'},
+  {name:'城隍庙小巷',things:['卖糕点的老店','红灯笼挂满一条街','有人吆喝着叫卖'],sky:'#2a1a1a',ground:'#302020'},
+  {name:'人民公园角落',things:['大爷们在下棋','柳树垂到了湖面','鸽子在地上啄食'],sky:'#1a2a1a',ground:'#1a3a1a'},
+  {name:'弄堂深处',things:['晾衣绳上挂满衣服','谁家在烧红烧肉','猫咪趴在墙头打瞌睡'],sky:'#1a1a2a',ground:'#2a2a1a'},
+  {name:'地铁站出口',things:['行色匆匆的上班族','卖报的老奶奶','扫码骑车的小年轻'],sky:'#1a1a1a',ground:'#2a2a2a'},
+  {name:'便利店门口',things:['24小时亮着的招牌','玻璃门上贴着促销','有人蹲着吃关东煮'],sky:'#1a2a2a',ground:'#2a3a2a'},
+  {name:'天桥上',things:['下面车流如河','远处有高楼亮灯','有人在卖手机壳'],sky:'#0f1a2f',ground:'#3a3a3a'},
+];
+
+let placeIdx = 0, walkFrame = 0, daoX = 50, daoDir = 1, npcs = [], sitting = false;
+
+function genNPCs() {
+  npcs = [];
+  for (let i = 0; i < 3+Math.floor(Math.random()*3); i++) {
+    npcs.push({x:40+Math.random()*240, emoji:['👤','👩','👴','🧑','👶','🐕','🐈'][Math.floor(Math.random()*7)], speed:(Math.random()-.5)*0.5});
+  }
+}
+
+function showSpeech(t, d=3000) {
+  const el = document.getElementById('speech');
+  el.textContent = t; el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), d);
+}
+
+function walk() {
+  sitting = false;
+  placeIdx = (placeIdx + 1) % PLACES.length;
+  document.getElementById('loc').textContent = '📍 ' + PLACES[placeIdx].name;
+  genNPCs();
+  const thing = PLACES[placeIdx].things[Math.floor(Math.random()*PLACES[placeIdx].things.length)];
+  showSpeech(thing, 3500);
+  beep(500,60); setTimeout(()=>beep(600,60),80);
+}
+
+function look() {
+  const p = PLACES[placeIdx];
+  const thing = p.things[Math.floor(Math.random()*p.things.length)];
+  showSpeech('👀 ' + thing, 3500);
+  beep(400,50);
+}
+
+function rest() {
+  sitting = true;
+  showSpeech('找个台阶坐下歇歇脚...', 3000);
+  beep(300,80);
+}
+
+function draw() {
+  walkFrame++;
+  const p = PLACES[placeIdx];
+  ctx.fillStyle = p.sky; ctx.fillRect(0,0,320,280);
+  ctx.fillStyle = p.ground; ctx.fillRect(0,280,320,120);
+  // buildings
+  for (let i = 0; i < 6; i++) {
+    ctx.fillStyle = i%2?'#162016':'#1a2a1a';
+    const h = 60 + Math.sin(i*1.5)*30;
+    ctx.fillRect(i*55, 280-h, 48, h);
+    ctx.fillStyle = '#306230';
+    for (let w = 0; w < 3; w++) for (let r = 0; r < Math.floor(h/20); r++)
+      ctx.fillRect(i*55+6+w*14, 280-h+8+r*20, 8, 10);
+  }
+  // npcs
+  ctx.font = '18px serif';
+  npcs.forEach(n => {
+    n.x += n.speed;
+    if (n.x < 10 || n.x > 310) n.speed *= -1;
+    ctx.fillText(n.emoji, n.x, 310);
+  });
+  // daoist
+  if (!sitting) { daoX += daoDir * 0.3; if (daoX > 250 || daoX < 50) daoDir *= -1; }
+  ctx.fillStyle = '#9bbc0f';
+  ctx.fillRect(daoX, sitting?296:290, 8, sitting?10:16);
+  ctx.fillRect(daoX-1, sitting?290:284, 10, 8);
+  // moon/sun
+  ctx.fillStyle = '#306230';
+  ctx.beginPath(); ctx.arc(270, 40, 15, 0, Math.PI*2); ctx.fill();
+
+  requestAnimationFrame(draw);
+}
+
+function beep(f,d){try{const c=new AudioContext(),o=c.createOscillator(),g=c.createGain();o.type='square';o.frequency.value=f;g.gain.value=0.05;o.connect(g);g.connect(c.destination);o.start();o.stop(c.currentTime+d/1000)}catch(e){}}
+
+// === Soul Bridge ===
+const _app = 'street-wander';
+let _ws = null;
+function _initWS() {
+  const url = (location.protocol==='https:'?'wss':'ws')+'://'+location.hostname+':'+location.port+'/ws';
+  try {
+    _ws = new WebSocket(url);
+    _ws.onopen = () => console.log('[SoulBridge] WS connected');
+    _ws.onmessage = e => {
+      try { const msg = JSON.parse(e.data);
+        if (msg.type === 'soul_interact' && msg.app === _app) handleCmd(msg.command);
+      } catch(e){}
+    };
+    _ws.onclose = () => setTimeout(_initWS, 3000);
+  } catch(e){ setTimeout(_initWS, 3000); }
+}
+
+function handleCmd(c) {
+  const a = c.action || c.type;
+  if (a === 'walk' || a === 'move' || a === 'explore') walk();
+  if (a === 'look' || a === 'observe') look();
+  if (a === 'rest' || a === 'sit') rest();
+  if (a === 'say') showSpeech(c.text || '', 4000);
+  if (a === 'get_status') {
+    const p = PLACES[placeIdx];
+    const data = {location: p.name, things: p.things, sitting, npcCount: npcs.length};
+    if (_ws && _ws.readyState === 1) _ws.send(JSON.stringify({type:'skill_status',app:_app,data}));
+    window.parent.postMessage({type:'skill_status',app:_app,status:'wandering',data}, '*');
+  }
+}
+
+window.addEventListener('message', e => {
+  if (e.data?.type === 'soul_interact' && e.data?.app === _app) handleCmd(e.data.command || e.data);
+});
+window.parent.postMessage({type:'skill_ready',app:_app}, '*');
+_initWS();
+genNPCs();
+draw();
+showSpeech('出门溜达溜达~', 3000);
+</script></body></html>
