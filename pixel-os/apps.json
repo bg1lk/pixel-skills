@@ -218,5 +218,13 @@
     "color": "#58d854",
     "path": "../test-timer/app.html",
     "description": "一个简单的像素风倒计时器，可以设置1分钟/3分钟/5分钟，倒计时结束时发出8-bit音效提醒"
+  },
+  {
+    "id": "修行日记吧",
+    "name": "修行日记吧",
+    "icon": "修",
+    "color": "#46ae26",
+    "path": "../修行日记吧/app.html",
+    "description": "修行日记吧"
   }
 ]

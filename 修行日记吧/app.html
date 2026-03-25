@@ -1,0 +1,795 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>修行日记吧</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  background: #9bbc0f;
+  font-family: monospace;
+  color: #0f380f;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* 顶部标题栏 */
+.header {
+  width: 100%;
+  max-width: 480px;
+  background: #0f380f;
+  color: #9bbc0f;
+  text-align: center;
+  padding: 12px 8px;
+  font-size: 20px;
+  letter-spacing: 4px;
+  border-bottom: 4px solid #306230;
+  image-rendering: pixelated;
+}
+.header-sub {
+  font-size: 10px;
+  color: #8bac0f;
+  letter-spacing: 2px;
+  margin-top: 4px;
+}
+
+/* 主容器 */
+.container {
+  width: 100%;
+  max-width: 480px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 8px;
+}
+
+/* 统计栏 */
+.stats-bar {
+  display: flex;
+  justify-content: space-around;
+  background: #8bac0f;
+  border: 3px solid #306230;
+  padding: 8px;
+  margin-bottom: 8px;
+  font-size: 12px;
+}
+.stat-item {
+  text-align: center;
+}
+.stat-value {
+  font-size: 18px;
+  font-weight: bold;
+  color: #0f380f;
+}
+.stat-label {
+  font-size: 10px;
+  color: #306230;
+}
+
+/* 选项卡 */
+.tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+.tab {
+  flex: 1;
+  background: #306230;
+  color: #9bbc0f;
+  border: none;
+  padding: 8px 4px;
+  font-family: monospace;
+  font-size: 13px;
+  cursor: pointer;
+  border-top: 3px solid #8bac0f;
+  border-left: 3px solid #8bac0f;
+  border-right: 3px solid #0f380f;
+  border-bottom: 3px solid #0f380f;
+}
+.tab.active {
+  background: #8bac0f;
+  color: #0f380f;
+  border-top: 3px solid #0f380f;
+  border-left: 3px solid #0f380f;
+  border-right: 3px solid #8bac0f;
+  border-bottom: 3px solid #8bac0f;
+}
+
+/* 日记输入区 */
+.write-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.mood-selector {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  padding: 8px;
+  background: #8bac0f;
+  border: 3px solid #306230;
+}
+.mood-btn {
+  width: 40px;
+  height: 40px;
+  background: #306230;
+  color: #9bbc0f;
+  border: 2px solid #0f380f;
+  font-size: 11px;
+  cursor: pointer;
+  font-family: monospace;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+.mood-btn.selected {
+  background: #0f380f;
+  color: #9bbc0f;
+  border: 2px solid #8bac0f;
+  box-shadow: 0 0 0 1px #8bac0f;
+}
+
+.practice-type {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  justify-content: center;
+  padding: 8px;
+  background: #8bac0f;
+  border: 3px solid #306230;
+}
+.type-btn {
+  background: #306230;
+  color: #9bbc0f;
+  border: 2px solid #0f380f;
+  padding: 4px 10px;
+  font-family: monospace;
+  font-size: 11px;
+  cursor: pointer;
+}
+.type-btn.selected {
+  background: #0f380f;
+  color: #9bbc0f;
+  border: 2px solid #8bac0f;
+}
+
+.diary-input {
+  flex: 1;
+  min-height: 100px;
+  background: #8bac0f;
+  border: 3px solid #306230;
+  color: #0f380f;
+  font-family: monospace;
+  font-size: 13px;
+  padding: 8px;
+  resize: none;
+  outline: none;
+}
+.diary-input::placeholder {
+  color: #306230;
+}
+
+.duration-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #8bac0f;
+  border: 3px solid #306230;
+  padding: 8px;
+  font-size: 13px;
+}
+.duration-input {
+  width: 60px;
+  background: #9bbc0f;
+  border: 2px solid #0f380f;
+  color: #0f380f;
+  font-family: monospace;
+  font-size: 14px;
+  padding: 4px;
+  text-align: center;
+  outline: none;
+}
+
+.save-btn {
+  background: #0f380f;
+  color: #9bbc0f;
+  border: 3px solid #306230;
+  padding: 12px;
+  font-family: monospace;
+  font-size: 16px;
+  cursor: pointer;
+  letter-spacing: 4px;
+  border-top: 3px solid #8bac0f;
+  border-left: 3px solid #8bac0f;
+  border-right: 3px solid #0f380f;
+  border-bottom: 3px solid #0f380f;
+}
+.save-btn:active {
+  border-top: 3px solid #0f380f;
+  border-left: 3px solid #0f380f;
+  border-right: 3px solid #8bac0f;
+  border-bottom: 3px solid #8bac0f;
+}
+
+/* 日记列表 */
+.list-panel {
+  flex: 1;
+  display: none;
+  flex-direction: column;
+  gap: 6px;
+  overflow-y: auto;
+}
+.list-panel.active { display: flex; }
+.write-panel.active { display: flex; }
+.write-panel { display: none; }
+
+.diary-entry {
+  background: #8bac0f;
+  border: 3px solid #306230;
+  padding: 8px;
+  cursor: pointer;
+}
+.entry-header {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: #306230;
+  margin-bottom: 4px;
+}
+.entry-mood {
+  font-size: 12px;
+}
+.entry-tags {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 4px;
+}
+.entry-tag {
+  background: #306230;
+  color: #9bbc0f;
+  padding: 1px 6px;
+  font-size: 10px;
+}
+.entry-text {
+  font-size: 12px;
+  color: #0f380f;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.entry-duration {
+  font-size: 10px;
+  color: #306230;
+  margin-top: 4px;
+  text-align: right;
+}
+.entry-delete {
+  background: #306230;
+  color: #9bbc0f;
+  border: 2px solid #0f380f;
+  font-family: monospace;
+  font-size: 10px;
+  padding: 2px 6px;
+  cursor: pointer;
+  margin-left: 8px;
+}
+
+/* 成就面板 */
+.achieve-panel {
+  flex: 1;
+  display: none;
+  flex-direction: column;
+  gap: 6px;
+  overflow-y: auto;
+}
+.achieve-panel.active { display: flex; }
+
+.achieve-item {
+  background: #8bac0f;
+  border: 3px solid #306230;
+  padding: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.achieve-item.locked {
+  opacity: 0.5;
+}
+.achieve-icon {
+  width: 36px;
+  height: 36px;
+  background: #306230;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  color: #9bbc0f;
+  flex-shrink: 0;
+  border: 2px solid #0f380f;
+}
+.achieve-item.locked .achieve-icon {
+  background: #306230;
+  color: #306230;
+}
+.achieve-info {
+  flex: 1;
+}
+.achieve-name {
+  font-size: 13px;
+  font-weight: bold;
+}
+.achieve-desc {
+  font-size: 10px;
+  color: #306230;
+}
+
+/* 空状态 */
+.empty-state {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #306230;
+  font-size: 13px;
+  gap: 8px;
+}
+.pixel-lotus {
+  font-size: 10px;
+  line-height: 1;
+  white-space: pre;
+  color: #306230;
+}
+
+/* 弹窗 */
+.toast {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(0);
+  background: #0f380f;
+  color: #9bbc0f;
+  padding: 16px 24px;
+  font-family: monospace;
+  font-size: 14px;
+  border: 3px solid #8bac0f;
+  z-index: 100;
+  transition: transform 0.15s;
+  text-align: center;
+  letter-spacing: 2px;
+}
+.toast.show {
+  transform: translate(-50%, -50%) scale(1);
+}
+
+/* 详情弹窗 */
+.detail-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(15,56,15,0.85);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 90;
+  padding: 16px;
+}
+.detail-overlay.show { display: flex; }
+.detail-box {
+  background: #9bbc0f;
+  border: 4px solid #306230;
+  padding: 16px;
+  max-width: 400px;
+  width: 100%;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+.detail-close {
+  background: #306230;
+  color: #9bbc0f;
+  border: 2px solid #0f380f;
+  padding: 4px 12px;
+  font-family: monospace;
+  font-size: 12px;
+  cursor: pointer;
+  float: right;
+}
+.detail-title {
+  font-size: 14px;
+  margin-bottom: 8px;
+  color: #306230;
+}
+.detail-content {
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.detail-meta {
+  margin-top: 8px;
+  font-size: 11px;
+  color: #306230;
+}
+
+@media (max-width: 480px) {
+  .header { font-size: 16px; }
+  .mood-btn { width: 34px; height: 34px; font-size: 10px; }
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  修行日记吧
+  <div class="header-sub">PRACTICE DIARY</div>
+</div>
+
+<div class="container">
+  <div class="stats-bar">
+    <div class="stat-item">
+      <div class="stat-value" id="totalDays">0</div>
+      <div class="stat-label">修行天数</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-value" id="totalEntries">0</div>
+      <div class="stat-label">日记数</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-value" id="streak">0</div>
+      <div class="stat-label">连续天</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-value" id="totalMin">0</div>
+      <div class="stat-label">总分钟</div>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" data-tab="write">记录</button>
+    <button class="tab" data-tab="list">日记</button>
+    <button class="tab" data-tab="achieve">成就</button>
+  </div>
+
+  <!-- 写日记 -->
+  <div class="write-panel active" id="writePanel">
+    <div class="mood-selector">
+      <button class="mood-btn" data-mood="peace">平静</button>
+      <button class="mood-btn" data-mood="joy">喜悦</button>
+      <button class="mood-btn" data-mood="focus">专注</button>
+      <button class="mood-btn" data-mood="tired">疲惫</button>
+      <button class="mood-btn" data-mood="confused">迷茫</button>
+      <button class="mood-btn" data-mood="awaken">顿悟</button>
+    </div>
+    <div class="practice-type">
+      <button class="type-btn" data-type="meditation">打坐</button>
+      <button class="type-btn" data-type="reading">读经</button>
+      <button class="type-btn" data-type="chanting">诵经</button>
+      <button class="type-btn" data-type="walking">行禅</button>
+      <button class="type-btn" data-type="qigong">气功</button>
+      <button class="type-btn" data-type="yoga">瑜伽</button>
+      <button class="type-btn" data-type="writing">抄经</button>
+      <button class="type-btn" data-type="other">其他</button>
+    </div>
+    <div class="duration-row">
+      修行时长:
+      <input type="number" class="duration-input" id="durationInput" value="30" min="1" max="999">
+      分钟
+    </div>
+    <textarea class="diary-input" id="diaryInput" placeholder="记录今日修行感悟...&#10;&#10;心之所向 素履以往"></textarea>
+    <button class="save-btn" onclick="saveDiary()">保存日记</button>
+  </div>
+
+  <!-- 日记列表 -->
+  <div class="list-panel" id="listPanel">
+  </div>
+
+  <!-- 成就 -->
+  <div class="achieve-panel" id="achievePanel">
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<div class="detail-overlay" id="detailOverlay">
+  <div class="detail-box">
+    <button class="detail-close" onclick="closeDetail()">X</button>
+    <div class="detail-title" id="detailTitle"></div>
+    <div class="detail-content" id="detailContent"></div>
+    <div class="detail-meta" id="detailMeta"></div>
+  </div>
+</div>
+
+<script>
+// === Soul Bridge ===
+(function(){
+  function getWsUrl(){
+    try{ const s=localStorage.getItem('pixelos_ws_url'); if(s) return s; }catch(e){}
+    if(location.hostname.includes('github.io')) return 'wss://your-server.com/ws';
+    const p=location.protocol==='https:'?'wss:':'ws:';
+    return p+'//'+location.hostname+':3000/ws';
+  }
+  let ws, reconnectTimer;
+  function connect(){
+    ws=new WebSocket(getWsUrl());
+    ws.onopen=()=>console.log('[SoulBridge] Connected');
+    ws.onmessage=(e)=>{try{const d=JSON.parse(e.data);if(d.type==='soul_interact')handleSoulCommand(d.command);}catch(err){}};
+    ws.onclose=()=>{reconnectTimer=setTimeout(connect,3000);};
+  }
+  function handleSoulCommand(cmd){
+    console.log('[SoulBridge] Command:',cmd);
+  }
+  window.soulBridge={send:(data)=>{if(ws?.readyState===1)ws.send(JSON.stringify(data));}};
+  connect();
+  window.addEventListener('message',(e)=>{
+    if(e.data?.type==='parent_camera_frame') window._latestCameraFrame=e.data.frame;
+    if(e.data?.type==='soul_interact') handleSoulCommand(e.data.command);
+  });
+})();
+
+// === Audio ===
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+function beep(freq, dur, type='square') {
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.type = type;
+  osc.frequency.value = freq;
+  gain.gain.value = 0.08;
+  gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+  osc.start();
+  osc.stop(audioCtx.currentTime + dur);
+}
+function sfxSave() { beep(523,0.1); setTimeout(()=>beep(659,0.1),100); setTimeout(()=>beep(784,0.15),200); }
+function sfxClick() { beep(440,0.05); }
+function sfxAchieve() { beep(523,0.1); setTimeout(()=>beep(659,0.1),120); setTimeout(()=>beep(784,0.1),240); setTimeout(()=>beep(1047,0.2),360); }
+function sfxDelete() { beep(330,0.1); setTimeout(()=>beep(220,0.15),100); }
+
+// === Data ===
+const STORAGE_KEY = 'xiuxing_diary_data';
+const moodNames = { peace:'平静', joy:'喜悦', focus:'专注', tired:'疲惫', confused:'迷茫', awaken:'顿悟' };
+const typeNames = { meditation:'打坐', reading:'读经', chanting:'诵经', walking:'行禅', qigong:'气功', yoga:'瑜伽', writing:'抄经', other:'其他' };
+
+function loadData() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; } catch(e) { return []; }
+}
+function saveData(data) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+}
+
+let selectedMood = '';
+let selectedTypes = [];
+
+// === Tab Switch ===
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    sfxClick();
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    const target = tab.dataset.tab;
+    document.getElementById('writePanel').classList.toggle('active', target === 'write');
+    document.getElementById('listPanel').classList.toggle('active', target === 'list');
+    document.getElementById('achievePanel').classList.toggle('active', target === 'achieve');
+    if (target === 'list') renderList();
+    if (target === 'achieve') renderAchievements();
+  });
+});
+
+// === Mood ===
+document.querySelectorAll('.mood-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    sfxClick();
+    document.querySelectorAll('.mood-btn').forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+    selectedMood = btn.dataset.mood;
+  });
+});
+
+// === Practice Type ===
+document.querySelectorAll('.type-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    sfxClick();
+    btn.classList.toggle('selected');
+    const t = btn.dataset.type;
+    if (selectedTypes.includes(t)) {
+      selectedTypes = selectedTypes.filter(x => x !== t);
+    } else {
+      selectedTypes.push(t);
+    }
+  });
+});
+
+// === Save ===
+function saveDiary() {
+  const text = document.getElementById('diaryInput').value.trim();
+  const duration = parseInt(document.getElementById('durationInput').value) || 0;
+  if (!text && !selectedMood && selectedTypes.length === 0) {
+    showToast('请记录些什么吧');
+    return;
+  }
+  const entry = {
+    id: Date.now(),
+    date: new Date().toISOString(),
+    mood: selectedMood,
+    types: [...selectedTypes],
+    duration: duration,
+    text: text
+  };
+  const data = loadData();
+  data.unshift(entry);
+  saveData(data);
+  sfxSave();
+  showToast('日记已保存');
+  // reset
+  document.getElementById('diaryInput').value = '';
+  document.getElementById('durationInput').value = '30';
+  selectedMood = '';
+  selectedTypes = [];
+  document.querySelectorAll('.mood-btn').forEach(b => b.classList.remove('selected'));
+  document.querySelectorAll('.type-btn').forEach(b => b.classList.remove('selected'));
+  updateStats();
+  checkAchievements(data);
+}
+
+// === List ===
+function renderList() {
+  const panel = document.getElementById('listPanel');
+  const data = loadData();
+  if (data.length === 0) {
+    panel.innerHTML = '<div class="empty-state"><div class="pixel-lotus">    *\n   ***\n  *****\n ***+***\n*********\n  | | |\n  -----</div><div>尚无日记</div><div>开始记录你的修行吧</div></div>';
+    return;
+  }
+  panel.innerHTML = data.map((e, i) => {
+    const d = new Date(e.date);
+    const dateStr = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+    const timeStr = String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+    const moodStr = e.mood ? moodNames[e.mood] || e.mood : '';
+    const tags = (e.types || []).map(t => '<span class="entry-tag">' + (typeNames[t]||t) + '</span>').join('');
+    const preview = (e.text || '').substring(0, 60) + ((e.text||'').length > 60 ? '...' : '');
+    return '<div class="diary-entry" onclick="showDetail(' + i + ')">' +
+      '<div class="entry-header"><span>' + dateStr + ' ' + timeStr + '</span><span class="entry-mood">' + moodStr +
+      '</span><button class="entry-delete" onclick="event.stopPropagation();deleteEntry(' + i + ')">DEL</button></div>' +
+      (tags ? '<div class="entry-tags">' + tags + '</div>' : '') +
+      '<div class="entry-text">' + escHtml(preview) + '</div>' +
+      (e.duration ? '<div class="entry-duration">' + e.duration + ' min</div>' : '') +
+      '</div>';
+  }).join('');
+}
+
+function deleteEntry(idx) {
+  sfxDelete();
+  const data = loadData();
+  data.splice(idx, 1);
+  saveData(data);
+  renderList();
+  updateStats();
+}
+
+function showDetail(idx) {
+  sfxClick();
+  const data = loadData();
+  const e = data[idx];
+  if (!e) return;
+  const d = new Date(e.date);
+  const dateStr = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0') + ' ' + String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+  const moodStr = e.mood ? moodNames[e.mood] || '' : '';
+  const typesStr = (e.types || []).map(t => typeNames[t]||t).join(' / ');
+  document.getElementById('detailTitle').textContent = dateStr;
+  document.getElementById('detailContent').textContent = e.text || '(无内容)';
+  document.getElementById('detailMeta').textContent = [moodStr, typesStr, e.duration ? e.duration + '分钟' : ''].filter(Boolean).join(' | ');
+  document.getElementById('detailOverlay').classList.add('show');
+}
+function closeDetail() {
+  sfxClick();
+  document.getElementById('detailOverlay').classList.remove('show');
+}
+document.getElementById('detailOverlay').addEventListener('click', function(e) {
+  if (e.target === this) closeDetail();
+});
+
+function escHtml(s) {
+  const div = document.createElement('div');
+  div.textContent = s;
+  return div.innerHTML;
+}
+
+// === Stats ===
+function updateStats() {
+  const data = loadData();
+  const days = new Set(data.map(e => new Date(e.date).toDateString()));
+  document.getElementById('totalDays').textContent = days.size;
+  document.getElementById('totalEntries').textContent = data.length;
+  document.getElementById('totalMin').textContent = data.reduce((s, e) => s + (e.duration || 0), 0);
+
+  // streak
+  let streak = 0;
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  let check = new Date(today);
+  while (true) {
+    if (days.has(check.toDateString())) {
+      streak++;
+      check.setDate(check.getDate() - 1);
+    } else {
+      break;
+    }
+  }
+  document.getElementById('streak').textContent = streak;
+}
+
+// === Achievements ===
+const achievements = [
+  { id:'first', name:'初心', desc:'写下第一篇修行日记', check: d => d.length >= 1, icon:'初' },
+  { id:'week', name:'七日精进', desc:'累计写7篇日记', check: d => d.length >= 7, icon:'七' },
+  { id:'month', name:'月修', desc:'累计写30篇日记', check: d => d.length >= 30, icon:'月' },
+  { id:'streak3', name:'三日不辍', desc:'连续3天记录', check: (d,s) => s >= 3, icon:'连' },
+  { id:'streak7', name:'周周精进', desc:'连续7天记录', check: (d,s) => s >= 7, icon:'周' },
+  { id:'hour', name:'一时修行', desc:'单次修行超过60分钟', check: d => d.some(e => e.duration >= 60), icon:'时' },
+  { id:'alltype', name:'百法具足', desc:'尝试所有修行类型', check: d => { const t=new Set(); d.forEach(e=>(e.types||[]).forEach(x=>t.add(x))); return t.size >= 8; }, icon:'全' },
+  { id:'awaken', name:'明心见性', desc:'记录一次顿悟心境', check: d => d.some(e => e.mood === 'awaken'), icon:'悟' },
+  { id:'hundred', name:'百日筑基', desc:'累计写100篇日记', check: d => d.length >= 100, icon:'百' },
+  { id:'total1000', name:'千分修行', desc:'累计修行超过1000分钟', check: d => d.reduce((s,e)=>s+(e.duration||0),0) >= 1000, icon:'千' },
+];
+
+function getStreak() {
+  const data = loadData();
+  const days = new Set(data.map(e => new Date(e.date).toDateString()));
+  let streak = 0;
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  let check = new Date(today);
+  while (days.has(check.toDateString())) {
+    streak++;
+    check.setDate(check.getDate() - 1);
+  }
+  return streak;
+}
+
+function renderAchievements() {
+  const data = loadData();
+  const streak = getStreak();
+  const panel = document.getElementById('achievePanel');
+  panel.innerHTML = achievements.map(a => {
+    const unlocked = a.check(data, streak);
+    return '<div class="achieve-item' + (unlocked ? '' : ' locked') + '">' +
+      '<div class="achieve-icon">' + a.icon + '</div>' +
+      '<div class="achieve-info"><div class="achieve-name">' + a.name + '</div>' +
+      '<div class="achieve-desc">' + a.desc + '</div></div></div>';
+  }).join('');
+}
+
+function checkAchievements(data) {
+  const streak = getStreak();
+  let unlocked = [];
+  try { unlocked = JSON.parse(localStorage.getItem('xiuxing_unlocked') || '[]'); } catch(e) {}
+  achievements.forEach(a => {
+    if (!unlocked.includes(a.id) && a.check(data, streak)) {
+      unlocked.push(a.id);
+      setTimeout(() => {
+        sfxAchieve();
+        showToast('成就解锁: ' + a.name);
+      }, 600);
+    }
+  });
+  localStorage.setItem('xiuxing_unlocked', JSON.stringify(unlocked));
+}
+
+// === Toast ===
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 1500);
+}
+
+// === Init ===
+updateStats();
+</script>
+</body>
+</html>
