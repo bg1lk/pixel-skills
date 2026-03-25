@@ -387,8 +387,47 @@ const histCtx = histCanvas.getContext('2d');
 const captureCanvas = document.createElement('canvas');
 const captureCtx = captureCanvas.getContext('2d', { willReadFrequently: true });
 
+// ===== PARENT CAMERA BRIDGE (PixelOS iframe) =====
+let usingBridge = false;
+const bridgeImg = new Image();
+window.addEventListener('message', (e) => {
+  if (e.data?.type === 'parent_camera_frame' && e.data.frame) {
+    if (!usingBridge) {
+      usingBridge = true;
+      addLog('safe-log', '[摄像头] 使用PixelOS桥接摄像头');
+      document.getElementById('camLabel').textContent = 'CAM BRIDGE';
+      document.getElementById('camRec').style.display = 'block';
+    }
+    bridgeImg.src = 'data:image/jpeg;base64,' + e.data.frame;
+  }
+});
+bridgeImg.onload = function() {
+  if (captureCanvas.width !== bridgeImg.width || captureCanvas.height !== bridgeImg.height) {
+    captureCanvas.width = bridgeImg.width || 320;
+    captureCanvas.height = bridgeImg.height || 240;
+    diffCanvas.width = captureCanvas.width;
+    diffCanvas.height = captureCanvas.height;
+  }
+  captureCtx.drawImage(bridgeImg, 0, 0, captureCanvas.width, captureCanvas.height);
+  video.style.display = 'none';
+};
+
 // ===== CAMERA =====
 async function startCamera() {
+  // 在 iframe 中优先等待 bridge 帧
+  if (window !== window.top) {
+    addLog('', '[摄像头] 等待PixelOS桥接...');
+    const got = await new Promise(r => {
+      if (usingBridge) return r(true);
+      const t = setTimeout(() => r(false), 2000);
+      const check = setInterval(() => { if (usingBridge) { clearTimeout(t); clearInterval(check); r(true); } }, 100);
+    });
+    if (got) {
+      addLog('safe-log', '[摄像头] 桥接成功');
+      return true;
+    }
+    addLog('', '[摄像头] 桥接超时，尝试直接获取...');
+  }
   try {
     stream = await navigator.mediaDevices.getUserMedia({
       video: { facingMode: 'environment', width: { ideal: 320 }, height: { ideal: 240 } },
@@ -406,7 +445,6 @@ async function startCamera() {
     return true;
   } catch(e) {
     addLog('alert-log', '[错误] 摄像头启动失败: ' + e.message);
-    // Try front camera as fallback
     try {
       stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: 'user', width: { ideal: 320 }, height: { ideal: 240 } },
@@ -424,13 +462,7 @@ async function startCamera() {
       return true;
     } catch(e2) {
       addLog('alert-log', '[错误] 无法访问任何摄像头');
-      // If in iframe, offer to open in new window (file:// iframe blocks camera)
-      if (window !== window.top) {
-        addLog('alert-log', '[提示] iframe 中摄像头受限，正在新窗口打开...');
-        window.open(location.href, '_blank');
-      } else {
-        addLog('', '[提示] 请在浏览器设置中允许摄像头权限');
-      }
+      addLog('', '[提示] 请在浏览器设置中允许摄像头权限');
       return false;
     }
   }
@@ -461,9 +493,9 @@ const PIXEL_THRESHOLD = 20; // per-pixel change threshold
 const LARGE_CHANGE_THRESHOLD = 30; // large change = likely intruder, don't absorb into bg
 
 function detectMotion() {
-  if (!monitoring || !stream) return;
+  if (!monitoring || (!stream && !usingBridge)) return;
 
-  captureCtx.drawImage(video, 0, 0, captureCanvas.width, captureCanvas.height);
+  if (!usingBridge) captureCtx.drawImage(video, 0, 0, captureCanvas.width, captureCanvas.height);
   const currentFrame = captureCtx.getImageData(0, 0, captureCanvas.width, captureCanvas.height);
   // CamCore: normalize light for stability across lighting changes
   CamCore.normalize(currentFrame);
