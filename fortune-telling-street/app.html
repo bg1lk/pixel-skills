@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>街边算卦</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;overflow:hidden;background:#0f380f;font-family:'Courier New',monospace;color:#9bbc0f;user-select:none;-webkit-user-select:none;touch-action:none}
+
+.game{display:flex;flex-direction:column;height:100%;padding:8px}
+
+.hdr{display:flex;justify-content:space-between;align-items:center;padding:4px 8px;border:2px solid #306230;background:#0f380f;margin-bottom:6px}
+.hdr .title{font-size:14px;font-weight:bold;letter-spacing:2px;color:#8bac0f}
+.hdr .coins{font-size:13px;color:#9bbc0f}
+
+.stats{display:flex;gap:12px;padding:4px 8px;font-size:11px;color:#8bac0f;border:1px solid #306230;margin-bottom:6px}
+
+.main{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;position:relative;border:2px solid #306230;background:#0f380f;overflow:hidden}
+
+#scene{image-rendering:pixelated;image-rendering:crisp-edges;max-width:100%;max-height:100%}
+
+.dialog{position:absolute;bottom:8px;left:8px;right:8px;background:#306230;border:2px solid #8bac0f;padding:8px 12px;font-size:12px;color:#9bbc0f;min-height:50px;line-height:1.5;display:none}
+.dialog .speaker{font-size:10px;color:#8bac0f;font-weight:bold;margin-bottom:2px}
+
+.msg{text-align:center;font-size:12px;color:#8bac0f;padding:6px;min-height:24px;letter-spacing:1px}
+
+.ftr{display:flex;justify-content:space-between;padding:4px 8px;font-size:10px;color:#306230;border-top:1px solid #306230;margin-top:4px}
+
+.coin-pop{position:absolute;font-size:20px;color:#9bbc0f;font-weight:bold;pointer-events:none;z-index:10;animation:coinFloat 1.2s ease-out forwards}
+@keyframes coinFloat{0%{opacity:1;transform:translateY(0)}100%{opacity:0;transform:translateY(-40px)}}
+
+@keyframes coinSpin{0%{transform:rotateY(0)}25%{transform:rotateY(90deg)}50%{transform:rotateY(180deg)}75%{transform:rotateY(270deg)}100%{transform:rotateY(360deg)}}
+</style>
+</head>
+<body>
+<div class="game">
+  <div class="hdr">
+    <span class="title">街 边 算 卦</span>
+    <span class="coins" id="totalCoins">银两: 0文</span>
+  </div>
+  <div class="stats">
+    <span>今日: <b id="todayCount">0</b>卦</span>
+    <span>收入: <b id="todayEarnings">0</b>文</span>
+    <span id="statusText">摆摊中...</span>
+  </div>
+  <div class="main" id="mainArea">
+    <canvas id="scene" width="280" height="220"></canvas>
+    <div class="msg" id="msgArea">等待有缘人...</div>
+    <div class="dialog" id="dialog">
+      <div class="speaker" id="speaker"></div>
+      <div id="dialogText"></div>
+    </div>
+  </div>
+  <div class="ftr">
+    <span>小D的卦摊</span>
+    <span id="clock"></span>
+  </div>
+</div>
+
+<script>
+// ==================== AUDIO ====================
+const AudioCtx = window.AudioContext || window.webkitAudioContext;
+let actx = null;
+function getCtx() { if (!actx) actx = new AudioCtx(); return actx; }
+
+function beepCoin() {
+  try {
+    const c = getCtx();
+    [523, 784, 1047].reduce((t, f) => {
+      const o = c.createOscillator(), g = c.createGain();
+      o.type = 'square'; o.frequency.setValueAtTime(f, t);
+      g.gain.setValueAtTime(0.04, t); g.gain.linearRampToValueAtTime(0, t + 0.1);
+      o.connect(g).connect(c.destination); o.start(t); o.stop(t + 0.12);
+      return t + 0.08;
+    }, c.currentTime);
+  } catch(e) {}
+}
+
+function beepShake() {
+  try {
+    const c = getCtx();
+    for (let i = 0; i < 6; i++) {
+      const t = c.currentTime + i * 0.07;
+      const o = c.createOscillator(), g = c.createGain();
+      o.type = 'triangle';
+      o.frequency.setValueAtTime(200 + Math.random() * 300, t);
+      g.gain.setValueAtTime(0.05, t); g.gain.linearRampToValueAtTime(0, t + 0.05);
+      o.connect(g).connect(c.destination); o.start(t); o.stop(t + 0.06);
+    }
+  } catch(e) {}
+}
+
+function beepReveal() {
+  try {
+    const c = getCtx();
+    const notes = [392, 523, 659, 784];
+    let t = c.currentTime;
+    notes.forEach(f => {
+      const o = c.createOscillator(), g = c.createGain();
+      o.type = 'sine'; o.frequency.setValueAtTime(f, t);
+      g.gain.setValueAtTime(0.05, t); g.gain.linearRampToValueAtTime(0, t + 0.2);
+      o.connect(g).connect(c.destination); o.start(t); o.stop(t + 0.25);
+      t += 0.15;
+    });
+  } catch(e) {}
+}
+
+function beepCustomer() {
+  try {
+    const c = getCtx();
+    [[330,0.12],[440,0.12],[523,0.18]].reduce((t,[f,d]) => {
+      const o = c.createOscillator(), g = c.createGain();
+      o.type = 'triangle'; o.frequency.setValueAtTime(f, t);
+      g.gain.setValueAtTime(0.04, t); g.gain.linearRampToValueAtTime(0, t+d);
+      o.connect(g).connect(c.destination); o.start(t); o.stop(t+d);
+      return t + d * 0.8;
+    }, c.currentTime);
+  } catch(e) {}
+}
+
+// ==================== GAME STATE ====================
+const CUSTOMERS = [
+  { name: '书生', sprite: 'scholar', questions: ['今年科举能中否？', '我与她的姻缘如何？', '出远门吉凶如何？'] },
+  { name: '商人', sprite: 'merchant', questions: ['这批货能赚钱吗？', '合伙人可信否？', '何时是发财之日？'] },
+  { name: '老妇', sprite: 'oldlady', questions: ['我儿远行何时归？', '家宅是否安宁？', '老身今年可安康？'] },
+  { name: '武夫', sprite: 'warrior', questions: ['此次出征可会凯旋？', '该往东走还是往西？', '我的对手厉害吗？'] },
+  { name: '少女', sprite: 'girl', questions: ['我的姻缘在何方？', '今年会有贵人相助吗？', '该学琴还是学画？'] },
+  { name: '道友', sprite: 'daoist', questions: ['我这功法修炼对了吗？', '何处有灵气充沛之地？', '道兄看我面相如何？'] },
+  { name: '农夫', sprite: 'farmer', questions: ['今年收成如何？', '该种稻还是种麦？', '井水何时才能出？'] },
+  { name: '小孩', sprite: 'child', questions: ['我长大能当大侠吗？', '我的小狗跑哪去了？', '道士哥哥你几岁了？'] },
+];
+
+const HEXAGRAMS = [
+  { name: '乾', sym: '☰', meaning: '天行健，君子以自强不息' },
+  { name: '坤', sym: '☷', meaning: '地势坤，君子以厚德载物' },
+  { name: '震', sym: '☳', meaning: '洊雷震，君子以恐惧修省' },
+  { name: '巽', sym: '☴', meaning: '随风巽，君子以申命行事' },
+  { name: '坎', sym: '☵', meaning: '水洊至，习坎，君子以常德行' },
+  { name: '离', sym: '☲', meaning: '明两作离，大人以继明照四方' },
+  { name: '艮', sym: '☶', meaning: '兼山艮，君子以思不出其位' },
+  { name: '兑', sym: '☱', meaning: '丽泽兑，君子以朋友讲习' },
+];
+
+const ADVICES = [
+  '顺其自然，水到渠成。',
+  '切莫心急，静待花开。',
+  '贵人在东方，财运在南方。',
+  '三日之内必有转机。',
+  '此事宜缓不宜急。',
+  '心诚则灵，信则有，不信则无。',
+  '退一步海阔天空。',
+  '万事俱备，只欠东风。',
+  '塞翁失马，焉知非福。',
+  '吉人自有天相。',
+  '动中取静，静中生慧。',
+  '明日再来，贫道为你细算。',
+  '道生一，一生二，凡事不可太贪。',
+  '有舍才有得，放下即自在。',
+  '此卦大吉，施主放心去做。',
+  '小心小人暗中作梗。',
+];
+
+const state = {
+  phase: 'idle',    // idle, arriving, asking, shaking, revealing, advising, leaving
+  customer: null,
+  question: '',
+  hexagram: null,
+  advice: '',
+  coins: [],        // copper coin positions for animation
+  shakeFrame: 0,
+  shakeTotal: 0,
+  todayCount: 0,
+  todayEarnings: 0,
+  totalCoins: 0,
+  customerX: 280,
+  customerTargetX: 170,
+  idleTimer: 0,
+  textIndex: 0,
+  textFull: '',
+  textTimer: null,
+};
+
+const canvas = document.getElementById('scene');
+const ctx = canvas.getContext('2d');
+const dialogEl = document.getElementById('dialog');
+const speakerEl = document.getElementById('speaker');
+const dialogTextEl = document.getElementById('dialogText');
+const msgEl = document.getElementById('msgArea');
+
+// ==================== PIXEL DRAWING ====================
+function px(x, y, w, h, color) {
+  ctx.fillStyle = color;
+  ctx.fillRect(x, y, w || 4, h || 4);
+}
+
+function drawStall() {
+  // Ground
+  ctx.fillStyle = '#306230';
+  ctx.fillRect(0, 180, 280, 40);
+
+  // Stall mat / cloth on ground
+  ctx.fillStyle = '#8bac0f';
+  ctx.fillRect(20, 165, 100, 20);
+  ctx.fillStyle = '#306230';
+  ctx.strokeStyle = '#9bbc0f';
+  ctx.lineWidth = 1;
+  // Mat pattern
+  for (let i = 0; i < 5; i++) {
+    ctx.fillStyle = i % 2 === 0 ? '#8bac0f' : '#9bbc0f';
+    ctx.fillRect(20 + i * 20, 165, 20, 20);
+  }
+
+  // Banner pole
+  ctx.fillStyle = '#9bbc0f';
+  ctx.fillRect(10, 60, 4, 120);
+
+  // Banner / flag
+  ctx.fillStyle = '#306230';
+  ctx.fillRect(14, 62, 40, 80);
+  ctx.fillStyle = '#8bac0f';
+  ctx.fillRect(16, 64, 36, 76);
+  // Text on banner (simplified)
+  ctx.fillStyle = '#0f380f';
+  ctx.font = '10px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('铁', 34, 80);
+  ctx.fillText('口', 34, 94);
+  ctx.fillText('直', 34, 108);
+  ctx.fillText('断', 34, 122);
+
+  // Stool for customer
+  ctx.fillStyle = '#306230';
+  ctx.fillRect(155, 170, 30, 4);
+  ctx.fillRect(157, 174, 4, 10);
+  ctx.fillRect(179, 174, 4, 10);
+
+  // Small table
+  ctx.fillStyle = '#8bac0f';
+  ctx.fillRect(80, 150, 50, 6);
+  ctx.fillStyle = '#306230';
+  ctx.fillRect(85, 156, 4, 14);
+  ctx.fillRect(121, 156, 4, 14);
+
+  // Copper coins on table (3 coins)
+  drawCopperCoin(88, 143);
+  drawCopperCoin(100, 141);
+  drawCopperCoin(112, 143);
+
+  // Sign board
+  ctx.fillStyle = '#306230';
+  ctx.fillRect(60, 50, 60, 24);
+  ctx.fillStyle = '#9bbc0f';
+  ctx.fillRect(62, 52, 56, 20);
+  ctx.fillStyle = '#0f380f';
+  ctx.font = 'bold 11px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('算卦 5文', 90, 66);
+}
+
+function drawCopperCoin(x, y) {
+  ctx.fillStyle = '#9bbc0f';
+  ctx.beginPath();
+  ctx.arc(x, y, 5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#0f380f';
+  ctx.fillRect(x - 2, y - 2, 4, 4);
+}
+
+function drawXiaoD() {
+  const bx = 65, by = 105;
+  // Body (sitting behind table)
+  ctx.fillStyle = '#9bbc0f';
+  // Head
+  ctx.fillRect(bx, by, 16, 16);
+  // Hair top
+  ctx.fillStyle = '#306230';
+  ctx.fillRect(bx, by, 16, 5);
+  // Eyes
+  ctx.fillStyle = '#0f380f';
+  ctx.fillRect(bx + 3, by + 7, 3, 3);
+  ctx.fillRect(bx + 10, by + 7, 3, 3);
+  // Mouth (slight smile)
+  ctx.fillRect(bx + 5, by + 12, 6, 1);
+  // Robe
+  ctx.fillStyle = '#8bac0f';
+  ctx.fillRect(bx - 2, by + 16, 20, 28);
+  // Robe detail
+  ctx.fillStyle = '#306230';
+  ctx.fillRect(bx + 7, by + 16, 2, 28);
+  // Hair bun
+  ctx.fillStyle = '#306230';
+  ctx.fillRect(bx + 4, by - 6, 8, 7);
+  ctx.fillRect(bx + 5, by - 8, 6, 3);
+}
+
+function drawCustomer(x) {
+  if (!state.customer) return;
+  const by = 120;
+  const s = state.customer.sprite;
+  // Generic customer shape, color varies
+  const colors = {
+    scholar: { hair: '#0f380f', robe: '#9bbc0f', hat: true },
+    merchant: { hair: '#306230', robe: '#8bac0f', hat: false },
+    oldlady: { hair: '#8bac0f', robe: '#306230', hat: false },
+    warrior: { hair: '#0f380f', robe: '#306230', hat: false },
+    girl: { hair: '#306230', robe: '#9bbc0f', hat: false },
+    daoist: { hair: '#0f380f', robe: '#8bac0f', hat: true },
+    farmer: { hair: '#306230', robe: '#8bac0f', hat: false },
+    child: { hair: '#0f380f', robe: '#9bbc0f', hat: false },
+  };
+  const c = colors[s] || colors.scholar;
+
+  // Head
+  ctx.fillStyle = '#9bbc0f';
+  ctx.fillRect(x, by, 14, 14);
+  // Hair
+  ctx.fillStyle = c.hair;
+  ctx.fillRect(x, by, 14, 5);
+  if (c.hat) {
+    ctx.fillRect(x - 2, by - 3, 18, 4);
+  }
+  // Eyes
+  ctx.fillStyle = '#0f380f';
+  ctx.fillRect(x + 2, by + 6, 3, 3);
+  ctx.fillRect(x + 9, by + 6, 3, 3);
+  // Body
+  ctx.fillStyle = c.robe;
+  ctx.fillRect(x - 1, by + 14, 16, 24);
+  // Legs (if standing)
+  if (state.phase === 'arriving' || state.phase === 'leaving') {
+    const legOff = Math.floor(Date.now() / 200) % 2 === 0 ? 0 : 2;
+    ctx.fillStyle = '#306230';
+    ctx.fillRect(x + 1 + legOff, by + 38, 5, 8);
+    ctx.fillRect(x + 9 - legOff, by + 38, 5, 8);
+  } else {
+    // Sitting on stool
+    ctx.fillStyle = '#306230';
+    ctx.fillRect(x + 1, by + 34, 5, 6);
+    ctx.fillRect(x + 9, by + 34, 5, 6);
+  }
+}
+
+function drawShakingCoins() {
+  if (state.phase !== 'shaking') return;
+  const progress = state.shakeFrame / state.shakeTotal;
+  for (let i = 0; i < 3; i++) {
+    const cx = 95 + i * 15;
+    const baseY = 100;
+    const bounce = Math.abs(Math.sin((progress * 8 + i * 1.2) * Math.PI)) * 30;
+    const y = baseY - bounce;
+    const flip = Math.sin((progress * 12 + i * 2) * Math.PI);
+    // Coin
+    ctx.fillStyle = '#9bbc0f';
+    const w = Math.max(2, Math.abs(flip) * 10);
+    ctx.fillRect(cx - w / 2, y, w, 10);
+    if (w > 4) {
+      ctx.fillStyle = '#0f380f';
+      ctx.fillRect(cx - 1, y + 3, 2, 4);
+    }
+  }
+}
+
+function drawHexagram() {
+  if (state.phase !== 'revealing' && state.phase !== 'advising') return;
+  if (!state.hexagram) return;
+  // Draw hexagram symbol
+  ctx.fillStyle = '#9bbc0f';
+  ctx.font = 'bold 28px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText(state.hexagram.sym, 140, 85);
+  ctx.font = 'bold 14px monospace';
+  ctx.fillText(state.hexagram.name + '卦', 140, 105);
+}
+
+function draw() {
+  ctx.fillStyle = '#0f380f';
+  ctx.fillRect(0, 0, 280, 220);
+
+  // Sky dots (stars if evening)
+  const h = new Date().getHours();
+  if (h >= 18 || h < 6) {
+    for (let i = 0; i < 8; i++) {
+      const sx = (i * 37 + 13) % 270;
+      const sy = (i * 23 + 7) % 50;
+      ctx.fillStyle = (Date.now() / 500 + i) % 2 > 1 ? '#8bac0f' : '#306230';
+      ctx.fillRect(sx, sy, 2, 2);
+    }
+  }
+
+  // Background: simple buildings
+  ctx.fillStyle = '#306230';
+  ctx.fillRect(200, 80, 40, 100);
+  ctx.fillRect(245, 100, 35, 80);
+  ctx.fillRect(0, 90, 8, 90);
+  // Roofs
+  ctx.fillStyle = '#8bac0f';
+  ctx.fillRect(195, 75, 50, 6);
+  ctx.fillRect(240, 95, 45, 6);
+
+  // Tree
+  ctx.fillStyle = '#306230';
+  ctx.fillRect(240, 130, 6, 40);
+  ctx.fillStyle = '#8bac0f';
+  ctx.fillRect(230, 110, 26, 22);
+
+  drawStall();
+  drawXiaoD();
+
+  if (state.customer) {
+    drawCustomer(Math.floor(state.customerX));
+  }
+
+  drawShakingCoins();
+  drawHexagram();
+}
+
+// ==================== TYPEWRITER ====================
+function typeText(speaker, text, cb) {
+  dialogEl.style.display = 'block';
+  speakerEl.textContent = speaker;
+  state.textFull = text;
+  state.textIndex = 0;
+  dialogTextEl.textContent = '';
+  clearInterval(state.textTimer);
+  state.textTimer = setInterval(() => {
+    state.textIndex++;
+    dialogTextEl.textContent = state.textFull.slice(0, state.textIndex);
+    if (state.textIndex >= state.textFull.length) {
+      clearInterval(state.textTimer);
+      if (cb) setTimeout(cb, 1500);
+    }
+  }, 60);
+}
+
+function hideDialog() {
+  dialogEl.style.display = 'none';
+  clearInterval(state.textTimer);
+}
+
+// ==================== GAME FLOW ====================
+function newCustomer() {
+  const ci = Math.floor(Math.random() * CUSTOMERS.length);
+  state.customer = CUSTOMERS[ci];
+  state.question = state.customer.questions[Math.floor(Math.random() * state.customer.questions.length)];
+  state.customerX = 280;
+  state.customerTargetX = 160;
+  state.phase = 'arriving';
+  msgEl.textContent = state.customer.name + '走来了...';
+  beepCustomer();
+  document.getElementById('statusText').textContent = '有客来!';
+}
+
+function startAsking() {
+  state.phase = 'asking';
+  typeText(state.customer.name, state.question, () => {
+    startShaking();
+  });
+}
+
+function startShaking() {
+  state.phase = 'shaking';
+  state.shakeFrame = 0;
+  state.shakeTotal = 90; // ~1.5 seconds at 60fps
+  hideDialog();
+  msgEl.textContent = '摇卦中...';
+  beepShake();
+  document.getElementById('statusText').textContent = '摇卦中';
+}
+
+function showResult() {
+  state.phase = 'revealing';
+  state.hexagram = HEXAGRAMS[Math.floor(Math.random() * HEXAGRAMS.length)];
+  state.advice = ADVICES[Math.floor(Math.random() * ADVICES.length)];
+  beepReveal();
+  msgEl.textContent = state.hexagram.sym + ' ' + state.hexagram.name + '卦';
+  typeText('小D', state.hexagram.meaning, () => {
+    giveAdvice();
+  });
+}
+
+function giveAdvice() {
+  state.phase = 'advising';
+  typeText('小D', state.advice, () => {
+    collectPayment();
+  });
+}
+
+function collectPayment() {
+  const reward = 3 + Math.floor(Math.random() * 8);
+  state.todayCount++;
+  state.todayEarnings += reward;
+  state.totalCoins += reward;
+  document.getElementById('todayCount').textContent = state.todayCount;
+  document.getElementById('todayEarnings').textContent = state.todayEarnings;
+  document.getElementById('totalCoins').textContent = '银两: ' + state.totalCoins + '文';
+  beepCoin();
+
+  // Float coin popup
+  const pop = document.createElement('div');
+  pop.className = 'coin-pop';
+  pop.textContent = '+' + reward + '文';
+  pop.style.left = '50%'; pop.style.top = '40%';
+  document.getElementById('mainArea').appendChild(pop);
+  setTimeout(() => pop.remove(), 1200);
+
+  hideDialog();
+  msgEl.textContent = state.customer.name + '付了' + reward + '文铜钱';
+
+  // Customer leaves
+  setTimeout(() => {
+    state.phase = 'leaving';
+    document.getElementById('statusText').textContent = '客人离去';
+  }, 1500);
+}
+
+function customerLeft() {
+  state.customer = null;
+  state.phase = 'idle';
+  state.idleTimer = 0;
+  hideDialog();
+  msgEl.textContent = '等待有缘人...';
+  document.getElementById('statusText').textContent = '摆摊中...';
+}
+
+// ==================== GAME LOOP ====================
+function update() {
+  if (state.phase === 'arriving') {
+    state.customerX -= 1.5;
+    if (state.customerX <= state.customerTargetX) {
+      state.customerX = state.customerTargetX;
+      startAsking();
+    }
+  }
+
+  if (state.phase === 'shaking') {
+    state.shakeFrame++;
+    if (state.shakeFrame >= state.shakeTotal) {
+      showResult();
+    }
+  }
+
+  if (state.phase === 'leaving') {
+    state.customerX += 2;
+    if (state.customerX > 300) {
+      customerLeft();
+    }
+  }
+
+  if (state.phase === 'idle') {
+    state.idleTimer++;
+    // Random new customer every ~5-15 seconds
+    const waitFrames = 300 + Math.floor(Math.random() * 600);
+    if (state.idleTimer > waitFrames) {
+      newCustomer();
+    }
+  }
+}
+
+function gameLoop() {
+  update();
+  draw();
+  requestAnimationFrame(gameLoop);
+}
+
+// ==================== CLICK TO INTERACT ====================
+canvas.addEventListener('click', () => {
+  try { getCtx(); } catch(e) {}
+  if (state.phase === 'idle') {
+    // Click to attract customer faster
+    state.idleTimer = 9999;
+  }
+});
+
+// ==================== CLOCK ====================
+function updateClock() {
+  const now = new Date();
+  document.getElementById('clock').textContent =
+    now.getHours().toString().padStart(2, '0') + ':' +
+    now.getMinutes().toString().padStart(2, '0');
+}
+setInterval(updateClock, 30000); updateClock();
+
+// ==================== INIT ====================
+function startGame() {
+  gameLoop();
+  setTimeout(newCustomer, 2000);
+}
+startGame();
+
+// ==================== SOUL BRIDGE ====================
+(function() {
+  const _app = 'fortune-telling-street';
+  window.addEventListener('message', e => {
+    if (!e.data || e.data.type !== 'soul_command') return;
+    const a = e.data.action;
+    if (a === 'get_status') {
+      window.parent.postMessage({type:'skill_status', app:_app, status: state.phase,
+        data:{ todayCount: state.todayCount, todayEarnings: state.todayEarnings, totalCoins: state.totalCoins,
+          currentCustomer: state.customer?.name || 'none', phase: state.phase }}, '*');
+    }
+    if (a === 'shake') {
+      if (state.phase === 'idle') state.idleTimer = 9999;
+    }
+    if (a === 'look') {
+      window.parent.postMessage({type:'skill_status', app:_app, status: state.phase,
+        data:{ todayCount: state.todayCount, customer: state.customer?.name || 'waiting' }}, '*');
+    }
+    if (a === 'say' && e.data.text) {
+      msgEl.textContent = e.data.text;
+    }
+  });
+  // Auto-start
+  setTimeout(() => { if (state.phase === 'idle') state.idleTimer = 9999; }, 3000);
+  // WS direct connection
+  let _ws=null;function _connectWS(){try{_ws=new WebSocket((()=>{const s=localStorage.getItem('daoist_ws');if(s)return s;if(location.hostname.includes('github.io'))return 'ws://localhost:3000/ws';const p=location.protocol==='https:'?'wss:':'ws:';return p+'//'+location.host+'/ws'})());_ws.onmessage=(evt)=>{try{const d=JSON.parse(evt.data);if(d.type==='soul_interact'&&d.app===_app&&d.command){window.dispatchEvent(new MessageEvent('message',{data:d.command.action?{type:'soul_command',...d.command}:d.command}));}}catch(e){}};_ws.onclose=()=>{_ws=null;setTimeout(_connectWS,5000)};_ws.onerror=()=>{}}catch(e){setTimeout(_connectWS,10000)}}_connectWS();
+  window.parent.postMessage({type:'skill_ready', app:_app}, '*');
+})();
+</script>
+</body>
+</html>

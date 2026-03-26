@@ -17,14 +17,6 @@
     "description": "随机决定器"
   },
   {
-    "id": "naruto-pet",
-    "name": "鸣人",
-    "icon": "N",
-    "color": "#ff6b35",
-    "path": "../naruto-pet/app.html",
-    "description": "鸣人像素桌宠"
-  },
-  {
     "id": "anime-filter",
     "name": "二次元",
     "icon": "A",
@@ -158,5 +150,21 @@
     "color": "#9b59b6",
     "path": "../music-box/app.html",
     "description": "听古曲·品道韵"
+  },
+  {
+    "id": "tea-brewing",
+    "name": "煮茶小屋",
+    "icon": "🍵",
+    "color": "#8bac0f",
+    "path": "../tea-brewing/app.html",
+    "description": "煮茶品茗·竹林小屋"
+  },
+  {
+    "id": "fortune-telling-street",
+    "name": "算卦摊",
+    "icon": "☰",
+    "color": "#9bbc0f",
+    "path": "../fortune-telling-street/app.html",
+    "description": "街边摆摊算命·铁口直断"
   }
 ]
